@@ -1,4 +1,6 @@
 import numpy as np
+from POLARIScore.config import LOGGER
+from typing import Union, Dict, List, Tuple
 
 LIGHT_SPEED = 299792458
 """Velocity of the light in m/s"""
@@ -29,6 +31,47 @@ CONVERT_INTENSITY_TO_KELVIN = lambda I,nu: I*LIGHT_SPEED**2 / (2.*BOLTZMANN_CONS
 CONVERT_NH_TO_EXTINCTION = lambda c: c/(2*0.94e21) #(Bohlin et al. 1978)
 CONVERT_EXTINCTION_TO_NH = lambda a: a*2*0.94e21
 
+CONVERT_massn_TO_n = lambda n_d,L_d,n,r_c: (n+np.sqrt(n**2-(2*L_d/r_c)*(n_d**2-n*n_d)))/2
+def CONVERT_massn_TO_n_coldens(N:Union[np.ndarray[float],float], L_d:Union[np.ndarray[float],float], n:Union[np.ndarray[float],float], r_c:Union[np.ndarray[float],float]
+                               , filter:Union[None,float]=22.2, is_density=False):
+    """
+    Args:
+        N: column density (particles/cm^-2)
+        L_d: size of the diffuse medium along l.o.s (pc) if 'is_density' is False else is the diffuse density (particles/cm^-3)
+        n: mass weighted density along l.o.s (particles/cm^-3)
+        r_c: radius of the dense core (pc)
+        filter: if not None, set the threshold of log10 column density where the conversion will be made.
+    """
+    #bad code
+    if type(N) is np.ndarray or type(N) is list:
+        N = np.array(N, dtype=np.float64)
+        r_c = np.array(r_c, dtype=np.float64)
+        L_d = np.array(L_d, dtype=np.float64)
+        n = np.array(n, dtype=np.float64)
+
+    if filter is not None:
+        log10_N = np.log10(N)
+        factor = 1.-(1/(1+np.exp(-5.*(log10_N-filter))))
+        #print(factor[np.argsort(log10_N)])
+    else:
+        factor = np.ones_like(N)
+
+    r_c = PC_TO_CM*r_c
+    L_d = L_d if is_density else PC_TO_CM*L_d 
+    L_c = 2*r_c
+    if is_density:
+        n_d = L_d
+        n_c = n_d * ((1+np.sqrt(1-4*N/(L_c*n_d)*(1-n/n_d)))/2)
+    else:   
+        d = N**2+L_c**2-4*(L_c*L_d+L_c**2)*N*(N-n*L_d)
+        n_c = (N+np.sqrt(d))/(2*(L_c+L_d)*L_c)
+    mask = np.isnan(n_c)
+    n_c[mask] = n[mask]
+
+    n_c = n_c*factor+n*(1-factor)
+    LOGGER.warn(f"{np.sum(mask)}/{len(N)} cores densities are replaced with mass average density, bcs discriminant is < 0")
+    return n_c
+
 from scipy.stats import lognorm
 def plot_lognorm(ax, mean, std, amp=1., x_min=1e-2, x_max=1e3, n_points=100, 
                  color='red', label=None, lw=1, ls="--"):
@@ -41,7 +84,7 @@ def plot_lognorm(ax, mean, std, amp=1., x_min=1e-2, x_max=1e3, n_points=100,
 def dcmf_func(M, amp, mu, sigma, alpha, cutoff):
         pdf_low = lognorm.pdf(M, s=sigma, scale=np.abs(mu))
 
-        pdf_high = M**(-2.3)
+        pdf_high = M**(-alpha)
         join_mass = cutoff
         scale_factor = (pdf_low[np.argmin(np.abs(M - join_mass))] /
                         pdf_high[np.argmin(np.abs(M - join_mass))])
@@ -80,7 +123,7 @@ def plot_imf_chabrier(ax, color='black', x_min=1e-2, x_max=1e3, n_points=100,
     pdf_high *= amp_scaled
 
     ax.plot(x[x <= join_mass], pdf_low[x <= join_mass],
-            ls='--', color=color, label='IMF (Chabrier, 2005)')
+            ls='--', color=color, label='IMF (Chabrier, 2003)')
     ax.plot(x[x > join_mass], pdf_high[x > join_mass],
             ls='--', color=color)
 

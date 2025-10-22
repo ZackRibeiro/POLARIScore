@@ -4,6 +4,7 @@ import numpy as np
 from scipy.stats import lognorm
 from scipy.optimize import curve_fit
 from POLARIScore.utils.utils import plot_function
+from POLARIScore.utils.physics_utils import CONVERT_massn_TO_n
 
 
 CORES_PATH = "/home/zack/Documents/POLARIScore/data/sims/orion_cores/catalog_search_results.json"
@@ -14,7 +15,8 @@ def plot_sim_dcmf(ax=None,factor=1.,fit=False):
     with open(CORES_PATH) as file:
         cores = json.load(file)
     c_masses = np.array(list(cores["mass"].values()))
-    c_alphvir = np.array(list(cores["alpha_vir"].values()))
+    #c_alphvir = np.array(list(cores["alpha_vir"].values()))
+    #c_masses = c_masses[c_alphvir <= 0.5]
 
     ax_was_none = ax is None
 
@@ -75,6 +77,12 @@ def plot_sim_dcmf(ax=None,factor=1.,fit=False):
 
 if __name__ == "__main__":
 
-    plot_sim_dcmf()
+    #plot_sim_dcmf()
+    n_d = 100 #cm^-3
+    L_d = 5 #pc
+    r_c = 0.1#pc
+    fct = lambda n,r : CONVERT_massn_TO_n(n_d,L_d,n,r)/n
+
+    plot_function(fct, lims=[1e3,1e5,0.03,0.3], logspace=True)
 
     plt.show()

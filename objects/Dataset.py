@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 import shutil
 from matplotlib.widgets import Slider
-from typing import Dict, List, Union, Tuple, Literal
+from typing import Any, Dict, List, Union, Tuple, Literal, Callable
 import ast
 import re
 from POLARIScore.utils.utils import NumpyEncoder, numpy_decoder
@@ -327,7 +327,15 @@ class Dataset():
             os.mkdir(batch_path)
         with open(os.path.join(batch_path,'data.json'), 'w') as file:
             json.dump(self.data, file, indent=4, cls=NumpyEncoder)
-    
+
+    def compute_over(self,function:Callable[[np.ndarray], Any], channel:str='cdens'):
+        batch = self.get()
+        map_index = self.get_element_index(channel)
+        result = []
+        for i,b in enumerate(batch):
+            result.append(function(np.array(b[map_index]).flatten()))
+        return result
+
     def save_diagnostic(self,channels:Union[str,List[str],None]='cdens')->Dict:
         """
         Save & return a diagnostic for each image in the dataset.

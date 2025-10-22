@@ -21,6 +21,8 @@ from typing import Dict, List, Tuple, Union
 from scipy.stats import lognorm
 from scipy.optimize import curve_fit
 from POLARIScore.scripts.plotORIONsimDCMF import plot_sim_dcmf
+from POLARIScore.utils.batch_utils import compute_smoothness
+from POLARIScore.utils.physics_utils import CONVERT_massn_TO_n_coldens
 
 def _crop(wcs, lims):
     ra_min, ra_max, dec_min, dec_max = lims
@@ -224,7 +226,7 @@ class Observation():
                     "peak_n": float(properties[13+offset_index])*1e4*2,
                     "average_n": float(properties[14+offset_index])*1e4*2,
                     "mass": float(properties[6+offset_index]),
-                    "radius_pc": float(properties[5+offset_index]),
+                    "radius_pc": float(properties[4+offset_index]),
                     "bonnorebert": float(properties[16+offset_index]),
                     "comment": properties[18+offset_index] if len(properties) > (18+offset_index) else "" 
                 }
@@ -399,7 +401,7 @@ class Observation():
 
         return fig, ax
 
-    def plot_validity_with_model(self, dataset_name:str="batch_highres", ax=None, patch_size:Tuple[int,int]=(128, 128), nan_value:float=-1.0, overlap:float=0.5):
+    def plot_validity_with_model(self, dataset_name:str="batch_highres", ax=None, c_x:Callable[[np.ndarray],float]=np.min, c_y:Callable[[np.ndarray], float]=np.max, logspace=True, patch_size:Tuple[int,int]=(128, 128), nan_value:float=None, overlap:float=0.5):
 
         if ax is None:
             fig, ax = plt.subplots()
@@ -409,10 +411,11 @@ class Observation():
 
         input_matrix = self.data
         input_tensor = input_matrix.astype(np.float32)
-        nan_mask = np.isnan(input_matrix)
-        if nan_value < 0:
-            nan_value = float(np.nanmin(self.data))
-        input_tensor[nan_mask] = nan_value
+        if nan_value is not None:
+            nan_mask = np.isnan(input_matrix)
+            if nan_value < 0:
+                nan_value = float(np.nanmin(self.data))
+            input_tensor[nan_mask] = nan_value
 
         height, width = input_tensor.shape
         patch_height, patch_width = patch_size
@@ -422,29 +425,33 @@ class Observation():
         i_range = range(0, height - patch_height + 1, stride_height)
         j_range = range(0, width - patch_width + 1, stride_width)
 
-        means_obs = []
-        stds_obs = []
+        qx_obs = []
+        qy_obs = []
 
         for i0,i in enumerate(i_range):
             for j0,j in enumerate(j_range):
-                patch = input_tensor[i:i+patch_height, j:j+patch_width]                
-                patch_mean = np.mean(patch)
-                log10_patch = np.log10(patch)
-                patch_std = np.std(log10_patch)
-    
-                means_obs.append(patch_mean)
-                stds_obs.append(patch_std)
+                patch = input_tensor[i:i+patch_height, j:j+patch_width].flatten()
+                if(np.isinf(patch).any() or np.isnan(patch).any()):
+                    continue  
+                qx_obs.append(c_x(patch))
+                qy_obs.append(c_y(patch))
 
         ds = getDataset(dataset_name)
-        diagnostic = ds.save_diagnostic(channels="cdens").values()
-        means_ds = [d["mean"] for d in diagnostic]
-        stds_ds = [d["std_log10"] for d in diagnostic]
+        qx_batch = ds.compute_over(c_x)
+        qy_batch = ds.compute_over(c_y)
 
-        ax.scatter(stds_obs, np.log10(means_obs), label="Observation")
-        ax.scatter(stds_ds, np.log10(means_ds), label="Dataset")
+        if logspace:
+            qx_batch = np.log10(qx_batch)
+            qy_batch = np.log10(qy_batch)
+            qx_obs = np.log10(qx_obs)
+            qy_obs = np.log10(qy_obs)
 
-        ax.set_xlabel(r"$\sigma_{log_{10}(N)}$")
-        ax.set_ylabel(r"$log_{10}(<N_{col}>)$")
+
+        ax.scatter(qx_obs, qy_obs, label="Observation", marker="+")
+        ax.scatter(qx_batch, qy_batch, label="Dataset", marker="+")
+
+        #ax.set_xlabel(r"$\sigma_{log_{10}(N)}$")
+        #ax.set_ylabel(r"$log_{10}(<N_{col}>)$")
 
         ax.legend()
 
@@ -468,13 +475,14 @@ class Observation():
             region_mask = (ra >= ra_min) & (ra <= ra_max) & (dec >= dec_min) & (dec <= dec_max)
             mask = mask & region_mask
         predicted_densities = predicted_densities[mask]
+        column_densities = np.array(self.get_predicted_density_at_cores(column_density=True))[mask]
+        predicted_densities = CONVERT_massn_TO_n_coldens(column_densities,10,predicted_densities,np.array([c["radius_pc"] for c in self.get_cores()])[mask],is_density=False)
         derived_densities = derived_densities[mask]
         global_indexes = global_indexes[mask]
         predicted_densities = np.log10(predicted_densities)
         derived_densities = np.log10(derived_densities)
         if return_ncol:
-            column_densities = np.array(self.get_predicted_density_at_cores(column_density=True))
-            column_densities = np.log10(column_densities[mask])
+            column_densities = np.log10(column_densities)
             sorted_indexes = np.argsort(column_densities)
             global_indexes = global_indexes[sorted_indexes]
             if return_indexes:
@@ -543,8 +551,10 @@ class Observation():
 
         derived_cores = self.get_cores()
         predicted_densities = np.array(self.get_predicted_density_at_cores(), dtype=np.float64)
+        column_densities = np.array(self.get_predicted_density_at_cores(column_density=True), dtype=np.float64)
         derived_densities =  np.array([c["average_n"] for c in self.get_cores()], dtype=np.float64)
         mask = (~np.isnan(predicted_densities)) & (predicted_densities > 0) & (derived_densities > 0)
+        column_densities = column_densities[mask]
 
         extinctions = []
         derived_radius = []
@@ -554,6 +564,7 @@ class Observation():
         extinctions = np.array(extinctions)[mask]
         derived_radius = np.array(derived_radius, dtype=np.float64)[mask]
         predicted_densities = predicted_densities[mask]
+        predicted_densities = CONVERT_massn_TO_n_coldens(column_densities,10,predicted_densities,derived_radius, is_density=False)
         derived_densities = derived_densities[mask]
 
         def _get_dcmf(masses:np.ndarray):
@@ -572,8 +583,7 @@ class Observation():
             for n, r_pc in zip(densities, radius):
                 r_cm = r_pc * pc_to_cm
                 volume = (4/3) * np.pi * (r_cm**3)
-                artificial_factor = 1. #!!!~1.35, Why can't find the same mass as them ? Bcs they use a diff distribution (like gaussian) ?
-                mass = mu * m_H *n* volume*artificial_factor
+                mass = mu * m_H *n* volume
                 mass_Msun = mass / Msun
                 rslt_masses.append(mass_Msun)
             rslt_masses = np.array(rslt_masses, dtype=np.float64)
@@ -605,7 +615,7 @@ class Observation():
             predicted_bin_centers = 10**predicted_bin_centers
             ax.plot(predicted_bin_centers, predicted_dcmf, drawstyle="steps-mid", color="red", label=f"{self.name} (Neural Network)")
             ax.scatter(predicted_bin_centers, predicted_dcmf, color="red")
-            popt, _ = curve_fit(dcmf_func, predicted_bin_centers[predicted_bin_centers>0.03], predicted_dcmf[predicted_bin_centers>0.03],
+            popt, _ = curve_fit(dcmf_func, predicted_bin_centers[predicted_bin_centers>0.], predicted_dcmf[predicted_bin_centers>0.],
                         p0=[np.max(predicted_dcmf), 0.22, np.std(np.log(predicted_masses)), 2.3, 300.6])
 
             amp_fit, mu_fit, sigma_fit, alpha_fit ,cutoff_fit = popt
@@ -683,7 +693,6 @@ class Observation():
             fig = ax.figure
 
         predicted_densities, derived_densities, column_densities = self._get_cores_predicted_values(region=region, return_ncol=True)
-
         ax.grid()
 
         residuals = predicted_densities-derived_densities
@@ -799,5 +808,9 @@ if __name__ == "__main__":
     #fig, axes = obs.plot(norm=LogNorm(vmin=1e21, vmax= 1e24),plot_cores=(None, 10**22.2), force_col=True)
     #fig.savefig(FIGURE_FOLDER+"OrionB_Test.jpg")
     obs.plot_dcmf(bins=10)
-    #obs.plot_cores_error(mov_average=15)
+    #obs.plot_cores_hist()
+    #fig, ax = obs.plot_validity_with_model("batch_highres_2", patch_size=(512,512), c_x=compute_smoothness, c_y=lambda x: np.log10(np.mean(x)), logspace=False)
+    #ax.set_xlim([0,0.25])
+    #ax.set_ylim([20,24])
+    obs.plot_cores_error(mov_average=15)
     plt.show()

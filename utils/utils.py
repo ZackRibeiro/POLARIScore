@@ -14,6 +14,7 @@ try:
 except ImportError:
     gputil_available = False
 from POLARIScore.config import LOGGER
+import inspect
 
 def convert_pc_to_index(pc:float,nres:int,size:float,start:float=0.)->int:
     """
@@ -179,21 +180,43 @@ def dictsToString(dicts:List[Dict])->str:
         string = string + "\n"
     return string
 
-def plot_function(function:Callable, ax=None, res:int=100, lims:Tuple[float]=[0,1], logspace=False, scatter=False, **args):
+def plot_function(function:Callable, ax=None, res:int=100, lims:Tuple[float]=[0,1,0,1], logspace=False, scatter=False, contour=False, **args):
     if ax is None:
         fig, ax = plt.subplots()
     else:
         fig = ax.figure
-    X = np.linspace(lims[0],lims[1],res)
-    if logspace:
-        X = np.logspace(np.log10(lims[0]),np.log10(lims[1]),res)
-    Y = function(X)
+    n_args = len(inspect.signature(function).parameters)
 
-    ax.plot(X,Y,**args)
-    if scatter:
-        ax.scatter(X,Y,color="black")
-    ax.grid(True)
-    
+    if n_args == 1:
+        xmin, xmax = lims[:2]
+        X = np.logspace(np.log10(xmin), np.log10(xmax), res) if logspace else np.linspace(xmin, xmax, res)
+        Y = function(X)
+
+        ax.plot(X, Y, **args)
+        if scatter:
+            ax.scatter(X, Y, color="black")
+
+    elif n_args == 2:
+        xmin, xmax, ymin, ymax = lims
+        x = np.logspace(np.log10(xmin), np.log10(xmax), res) if logspace else np.linspace(xmin, xmax, res)
+        y = np.logspace(np.log10(ymin), np.log10(ymax), res) if logspace else np.linspace(ymin, ymax, res)
+        X, Y = np.meshgrid(x, y)
+        Z = function(X, Y)
+
+        if contour:
+            contourf = ax.contourf(X, Y, Z, levels=50, cmap=args.get("cmap", "viridis"))
+            fig.colorbar(contourf, ax=ax)
+        else:
+            im = ax.imshow(Z, extent=[xmin, xmax, ymin, ymax], origin="lower", cmap=args.get("cmap", "viridis"), aspect='auto')
+            fig.colorbar(im, ax=ax)
+        
+        if logspace:
+            ax.set_xscale("log")
+            ax.set_yscale("log")
+    else:
+        LOGGER.error("Function must take 1 or 2 arguments.")
+        raise ValueError("Function must take 1 or 2 arguments.")
+
     return fig, ax
 
 
