@@ -81,7 +81,7 @@ def plot_lognorm(ax, mean, std, amp=1., x_min=1e-2, x_max=1e3, n_points=100,
     ax.plot(x, amp*pdf, color=color, lw=lw, label=label, linestyle=ls)
     return ax
 
-def dcmf_func(M, amp, mu, sigma, alpha, cutoff):
+def dcmf_func(M, amp, mu, sigma, alpha, cutoff, logM=True):
         pdf_low = lognorm.pdf(M, s=sigma, scale=np.abs(mu))
 
         pdf_high = M**(-alpha)
@@ -97,20 +97,20 @@ def dcmf_func(M, amp, mu, sigma, alpha, cutoff):
         if type(M) is np.ndarray or type(M) is list:
             return np.concatenate((pdf_low[M <= cutoff],pdf_high[M > cutoff]),axis=0)*M
         else:
-          if M >  cutoff:
-              return pdf_high*M
+          if M > cutoff:
+              return pdf_high*M if logM else pdf_high
           else:
-              return pdf_low*M
+              return pdf_low*M if logM else pdf_low
 
 def plot_imf_chabrier(ax, color='black', x_min=1e-2, x_max=1e3, n_points=100,
-                      Mc=0.22, sigma_ln=1.31, alpha=2.3, amp=25.0):
+                      Mc=0.22, sigma_ln=1.31, alpha=2.3, amp=25.0, logM=True):
 
     x = np.logspace(np.log10(x_min), np.log10(x_max), n_points)
 
     pdf_low = lognorm.pdf(x, s=sigma_ln, scale=Mc)
     pdf_low = pdf_low * x * np.log(10)
 
-    pdf_high = x**(1 - alpha)
+    pdf_high = x**(1 - alpha) if logM else x**(-alpha)
 
     join_mass = 1.0
     scale_factor = (pdf_low[np.argmin(np.abs(x - join_mass))] /

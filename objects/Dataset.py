@@ -13,7 +13,7 @@ from matplotlib.widgets import Slider
 from typing import Any, Dict, List, Union, Tuple, Literal, Callable
 import ast
 import re
-from POLARIScore.utils.utils import NumpyEncoder, numpy_decoder
+from POLARIScore.utils.utils import NumpyEncoder, numpy_decoder, merge_dicts, split_dict
 
 BATCH_CAN_CONTAINS = ["cdens","vdens","cospectra","density","cdens_context","physize"]
 """ 
@@ -61,7 +61,7 @@ def getDataset(name:str)->"Dataset":
     return ds
 
 class Dataset():
-    """Datasets contains just the imgs paths for reduce the memory usage"""
+    """Datasets contains just the imgs paths for reducing the memory usage"""
     def __init__(self):
         self.batch:List[Union[str, List[str]]] = []
         """A batch is a list of file paths or a list of pairs(i.e list of list) of paths. 
@@ -71,7 +71,6 @@ class Dataset():
             'order', eg: 'order':['cdens','vdens','cospectra']
             'img_number': nbr of imgs
             'img_size': size of an image in parsec (can be a list of sizes)
-            'areas_explored': positions of the images in the simulation faces
             'scores': score for each image computed using score_fct
             'scores_fct', (make score_settings TODO)
             'random_rotate': Does the images were randomly rotated when the dataset was generated.
@@ -137,6 +136,7 @@ class Dataset():
         self.batch.append(imgs_path)
     
     def get(self, indexes:Union[List[int],int,None] = None):
+        """Returns a list of pairs if indexes is not a list of integers, else returns just the pair of images corresponding to the given index."""
         if len(self.batch) == 0:
             LOGGER.error("Can't load images in dataset because it's empty.")
             return
@@ -172,32 +172,10 @@ class Dataset():
         batch = np.array(self.batch)
         cut_index = int(cutoff * len(batch))
 
-        def split_dict(dic:Dict)->Tuple[Dict,Dict]:
-            dic1 = {}
-            dic2 = {} 
-            for k in dic.keys():
-                v = dic[k]
-                if type(v) is str:
-                    try:
-                        temp_v = ast.literal_eval(re.sub(r'\barray\(', 'np.array(', v))
-                        if temp_v is None:
-                            raise
-                        v = temp_v
-                    except:
-                        pass
-                if type(v) is list or type(v) is np.ndarray:
-                    dic1[k] = v[:cut_index]
-                    dic2[k] = v[cut_index:]
-                    continue
-                if not(k in dic1):
-                    dic1[k] = v
-                if not(k in dic2):
-                    dic2[k] = v
-            return (dic1, dic2)
-        b1_settings, b2_settings = split_dict(self.settings)
+        b1_settings, b2_settings = split_dict(self.settings, cut_index)
         b1_settings["order"] = self.settings["order"]
         b2_settings["order"] = self.settings["order"]
-        b1_data, b2_data = split_dict(self.data)
+        b1_data, b2_data = split_dict(self.data, cut_index)
                     
         b1 = Dataset()
         b1.batch = batch[:cut_index]
@@ -211,6 +189,75 @@ class Dataset():
         b2.name = self.name + "_b2"
 
         return (b1, b2)
+    
+    def merge(self, dataset:Union['Dataset',List['Dataset']],force:bool=False)->'Dataset':
+        """Merge the dataset with another dataset (or list of datasets).
+        Args:
+            dataset: the other dataset(s)
+            force: force the merging, like if a dataset have extra elements that others don't have, the extra channel will be removed.
+        Returns:
+            merged_dataset
+        """
+
+        def _merge(ds1, ds2):
+            LOGGER.log(f"Merging dataset {ds1.name} with dataset {ds2.name}")
+
+            result_ds = Dataset()
+
+            flag = False
+            o1 = ds1.settings['order']
+            o2 = ds2.settings['order']
+            for s in o2:
+                if not(s in o1):
+                    flag = True
+                    break
+            if len(o2) != len(o1):
+                flag = True
+                
+            assert force or not(flag), LOGGER.error("The datasets don't contain the same elements -> Merging cancelled.")
+
+            merged_order = []
+            for o in [x for x in o1+o2 if x in o1 and x in o2]:
+                if o not in merged_order:
+                    merged_order.append(o)
+
+            def _arrange_batch(ds:'Dataset'):
+                new_batch = []
+                sorted_indexes = None
+                for b in ds.batch:
+                    new_b = []
+                    order = []
+                    for i,img in enumerate(b):
+                        o = ds.settings['order'][i]
+                        if not(o in merged_order):
+                            continue
+                        new_b.append(img)
+                        order.append(o)
+                    if sorted_indexes is None:
+                        pos = {v: i for i, v in enumerate(merged_order)}
+                        sorted_indexes = sorted(range(len(order)), key=lambda i: pos.get(order[i], float('inf')))
+                    new_b = np.array(new_b)[sorted_indexes].tolist()
+                    new_batch.append(new_b)
+                return new_batch
+            
+            b1 = _arrange_batch(ds1)
+            b2 = _arrange_batch(ds2)
+            result_ds.batch = b1+b2
+
+            result_settings = merge_dicts(ds1.settings, ds2.settings)
+            result_settings['order'] = merged_order
+            result_ds.settings = result_settings
+
+            result_ds.data = merge_dicts(ds1.data, ds2.data)
+
+            return result_ds
+ 
+        datasets = dataset if type(dataset) is list else [dataset]
+        ds = self
+        for d in datasets:
+            assert isinstance(d, Dataset), LOGGER.error("There is an object that isn't a dataset in merge function.")
+            ds = _merge(ds, d)
+        return ds
     
     def clone(self, new_name:str)->'Dataset':
         ds = Dataset()
@@ -297,6 +344,16 @@ class Dataset():
 
         return ds
 
+    def compute_over(self,function:Callable[[np.ndarray], Any], channel:str='cdens'):
+        """Apply the 'function' to the dataset on a specific 'channel'"""
+        map_index = self.get_element_index(channel)
+        result = []
+        for i,_ in enumerate(self.batch):
+            result.append(function(np.array(self.get(i)[map_index]).flatten()))
+        return result
+
+    #-------SAVE-------
+
     def save_batch(self, batch:List[np.ndarray], i:int):
         """
         Save a batch, here this means a pair of images not a list of pairs.
@@ -327,14 +384,6 @@ class Dataset():
             os.mkdir(batch_path)
         with open(os.path.join(batch_path,'data.json'), 'w') as file:
             json.dump(self.data, file, indent=4, cls=NumpyEncoder)
-
-    def compute_over(self,function:Callable[[np.ndarray], Any], channel:str='cdens'):
-        batch = self.get()
-        map_index = self.get_element_index(channel)
-        result = []
-        for i,b in enumerate(batch):
-            result.append(function(np.array(b[map_index]).flatten()))
-        return result
 
     def save_diagnostic(self,channels:Union[str,List[str],None]='cdens')->Dict:
         """
@@ -387,8 +436,6 @@ class Dataset():
 
     def save(self,batch:Union[List[List[np.ndarray]],None]=None, name:Union[str,None]=None, force:bool=False)->bool:
 
-        batch = self.get() if batch is None else batch
-
         if not(os.path.exists(TRAINING_BATCH_FOLDER)):
             os.mkdir(TRAINING_BATCH_FOLDER)
 
@@ -410,13 +457,23 @@ class Dataset():
         self.save_data()
 
         order = self.settings["order"]
-        for i,img in enumerate(batch):
-            for j,o in enumerate(order):
-                np.save(os.path.join(batch_path,str(i)+"_"+o+".npy"), img[j])
+        if batch is not None:
+            for i,img in enumerate(batch):
+                for j,o in enumerate(order):
+                    np.save(os.path.join(batch_path,str(i)+"_"+o+".npy"), img[j])
+        else:
+            batch = self.batch
+            for i,_ in enumerate(self.batch):
+                img = self.get(i)
+                for j,o in enumerate(order):
+                    np.save(os.path.join(batch_path,str(i)+"_"+o+".npy"), img[j])
+                del img
 
         LOGGER.log(f"Dataset with {len(batch)} images saved.")
 
         return True
+
+    #-------PLOT-------
 
     def plot(self, enable_slider:bool=True, element_index:int=0):
 

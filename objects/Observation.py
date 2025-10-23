@@ -35,9 +35,7 @@ def _crop(wcs, lims):
     return (x_min,x_max,y_min,y_max)
 
 class Observation():
-    """
-    Observation object contains multiple tools to read observations and apply models on them.
-    """
+    """Observation object contains multiple tools to read observations and apply models on them."""
     def __init__(self,name:str,file_name:str):
 
         self.name:str = name
@@ -226,7 +224,7 @@ class Observation():
                     "peak_n": float(properties[13+offset_index])*1e4*2,
                     "average_n": float(properties[14+offset_index])*1e4*2,
                     "mass": float(properties[6+offset_index]),
-                    "radius_pc": float(properties[4+offset_index]),
+                    "radius_pc": float(properties[5+offset_index]),
                     "bonnorebert": float(properties[16+offset_index]),
                     "comment": properties[18+offset_index] if len(properties) > (18+offset_index) else "" 
                 }
@@ -256,6 +254,128 @@ class Observation():
         self.cores = cores
 
         return cores
+
+    def get_predicted_density_at_cores(self, column_density:bool=False)->List[float]:
+        """
+        By default, returns the predicted densities at cores position. If column_density is set to True, then it returns the column density instead.
+        """
+        if self.cores is None:
+            self.get_cores()
+        if self.cores is None:
+            LOGGER.error("No cores found")
+            return None
+        
+        densities = self.prediction
+        if column_density:
+            densities = self.data
+
+        if densities is None:
+            LOGGER.error("No predicted density found")
+            return None
+
+        coords = SkyCoord(
+            [core["ra"] for core in self.cores],
+            [core["dec"] for core in self.cores],
+            unit="deg"
+        )
+        x_pix, y_pix = skycoord_to_pixel(coords, self.wcs)
+
+        values = []
+        for x, y in zip(x_pix, y_pix):
+            x_int, y_int = int(round(x)), int(round(y))
+            if (0 <= y_int < densities.shape[0]) and (0 <= x_int < densities.shape[1]):
+                values.append(densities[y_int, x_int])
+            else:
+                values.append(np.nan)
+
+        for core, val in zip(self.cores, values):
+            core["data_value"] = val
+
+        return values
+        
+    def _get_cores_predicted_values(self, region:Union[Tuple[float,float,float,float],None]=None, return_ncol:bool=False, return_indexes:bool=False):
+        """
+        Args:
+            region: [ra_max, ra_min, dec_min, dec_max]
+            return_ncol: Return column density
+            return_indexes: Return indexes
+        """
+        predicted_densities = np.array(self.get_predicted_density_at_cores())
+        derived_densities =  np.array([c["average_n"] for c in self.get_cores()])
+        global_indexes = np.array(range(predicted_densities.shape[0]))
+        mask = (~np.isnan(predicted_densities)) & (predicted_densities > 0) & (derived_densities > 0)
+        if region is not None:
+            ra_max, ra_min, dec_min, dec_max = region
+            ra = np.array([c["ra"] for c in self.get_cores()])
+            dec = np.array([c["dec"] for c in self.get_cores()])
+            region_mask = (ra >= ra_min) & (ra <= ra_max) & (dec >= dec_min) & (dec <= dec_max)
+            mask = mask & region_mask
+        predicted_densities = predicted_densities[mask]
+        column_densities = np.array(self.get_predicted_density_at_cores(column_density=True))[mask]
+        predicted_densities = CONVERT_massn_TO_n_coldens(column_densities,10,predicted_densities,np.array([c["radius_pc"] for c in self.get_cores()])[mask],is_density=False)
+        derived_densities = derived_densities[mask]
+        global_indexes = global_indexes[mask]
+        predicted_densities = np.log10(predicted_densities)
+        derived_densities = np.log10(derived_densities)
+        if return_ncol:
+            column_densities = np.log10(column_densities)
+            sorted_indexes = np.argsort(column_densities)
+            global_indexes = global_indexes[sorted_indexes]
+            if return_indexes:
+                return (predicted_densities[sorted_indexes], derived_densities[sorted_indexes], column_densities[sorted_indexes], global_indexes)
+            return (predicted_densities[sorted_indexes], derived_densities[sorted_indexes], column_densities[sorted_indexes])
+        if return_indexes:
+            return (predicted_densities, derived_densities, global_indexes)
+        return (predicted_densities, derived_densities)
+
+    #-------PLOT-------
+
+    def plot(self, data:np.ndarray=None, norm=None, plot_cores:Union[bool,Tuple[Union[float,None],Union[float,None]]]=False, crop:Union[Tuple[float,float,float,float],None]=None, force_vol:bool=False, force_col:bool=False):
+        """
+        Plot observation.
+        Args:
+            data: by default column densities of the observation, but can be predicted densities...
+            norm: matplotlib norm
+            plot_cores: can be a bool or a Tuple of float. If this is a tuple, this sets the column densities limit where a core will be drawn
+            crop: [ra_min, ra_max, dec_min, dec_max]
+            force_vol: Force volume density labels.
+            force_col: Force column density labels.
+        """
+
+        if(plot_cores is not None):
+            plot_cores_lims = [0, 1e23]
+            if(type(plot_cores) is not bool):
+                if((type(plot_cores) is tuple or type(plot_cores) is list) and len(plot_cores) >= 2):
+                    plot_cores_lims = plot_cores
+                plot_cores = True
+                
+        
+        fig = plt.figure(figsize=(10,10))
+        ax = plt.subplot(projection=self.wcs)
+        data = self.data if data is None else data
+        flag_vol_density = False
+        label = r"$N_H(cm^{-2})$"
+        norm = norm if not(norm is None) else LogNorm()
+        if not(force_col) and (np.nanpercentile(data,50) < 1e10 or force_vol):
+            flag_vol_density = True
+            label=r"$n_H(cm^{-3})$"
+        im = ax.imshow(data, cmap="rainbow", norm=norm)
+        overlay = ax.get_coords_overlay('fk5')
+        overlay.grid(color='black', ls='dotted')
+        overlay[0].set_axislabel('Right Ascension (J2000)')
+        #overlay[1].set_axislabel('Declination (J2000)')
+        plt.colorbar(im, label=label)
+        fig.tight_layout()
+
+        if plot_cores:
+            self.plot_cores(ax, norm=norm, vol_density=flag_vol_density, lims=plot_cores_lims)
+
+        if not(crop is None):
+            x_min, x_max, y_min, y_max = _crop(self.wcs, crop)
+            ax.set_xlim((x_min, x_max))
+            ax.set_ylim((y_min, y_max))
+
+        return fig, ax
 
     def plot_cores(self,ax,cores:Union[List[Dict],None]=None,norm=None,vol_density:bool=False,show_text:bool=False, lims:Tuple[Union[None,float],Union[None,float]]=[None,None]):
         """
@@ -315,92 +435,6 @@ class Observation():
 
         return ax
     
-    def get_predicted_density_at_cores(self, column_density:bool=False)->List[float]:
-        """
-        By default, returns the predicted densities at cores position. If column_density is set to True, then it returns the column density instead.
-        """
-        if self.cores is None:
-            self.get_cores()
-        if self.cores is None:
-            LOGGER.error("No cores found")
-            return None
-        
-        densities = self.prediction
-        if column_density:
-            densities = self.data
-
-        if densities is None:
-            LOGGER.error("No predicted density found")
-            return None
-
-        coords = SkyCoord(
-            [core["ra"] for core in self.cores],
-            [core["dec"] for core in self.cores],
-            unit="deg"
-        )
-        x_pix, y_pix = skycoord_to_pixel(coords, self.wcs)
-
-        values = []
-        for x, y in zip(x_pix, y_pix):
-            x_int, y_int = int(round(x)), int(round(y))
-            if (0 <= y_int < densities.shape[0]) and (0 <= x_int < densities.shape[1]):
-                values.append(densities[y_int, x_int])
-            else:
-                values.append(np.nan)
-
-        for core, val in zip(self.cores, values):
-            core["data_value"] = val
-
-        return values
-        
-    
-    def plot(self, data:np.ndarray=None, norm=None, plot_cores:Union[bool,Tuple[Union[float,None],Union[float,None]]]=False, crop:Union[Tuple[float,float,float,float],None]=None, force_vol:bool=False, force_col:bool=False):
-        """
-        Plot observation.
-        Args:
-            data: by default column densities of the observation, but can be predicted densities...
-            norm: matplotlib norm
-            plot_cores: can be a bool or a Tuple of float. If this is a tuple, this sets the column densities limit where a core will be drawn
-            crop: [ra_min, ra_max, dec_min, dec_max]
-            force_vol: Force volume density labels.
-            force_col: Force column density labels.
-        """
-
-        if(plot_cores is not None):
-            plot_cores_lims = [0, 1e23]
-            if(type(plot_cores) is not bool):
-                if((type(plot_cores) is tuple or type(plot_cores) is list) and len(plot_cores) >= 2):
-                    plot_cores_lims = plot_cores
-                plot_cores = True
-                
-        
-        fig = plt.figure(figsize=(10,10))
-        ax = plt.subplot(projection=self.wcs)
-        data = self.data if data is None else data
-        flag_vol_density = False
-        label = r"$N_H(cm^{-2})$"
-        norm = norm if not(norm is None) else LogNorm()
-        if not(force_col) and (np.nanpercentile(data,50) < 1e10 or force_vol):
-            flag_vol_density = True
-            label=r"$n_H(cm^{-3})$"
-        im = ax.imshow(data, cmap="rainbow", norm=norm)
-        overlay = ax.get_coords_overlay('fk5')
-        overlay.grid(color='black', ls='dotted')
-        overlay[0].set_axislabel('Right Ascension (J2000)')
-        #overlay[1].set_axislabel('Declination (J2000)')
-        plt.colorbar(im, label=label)
-        fig.tight_layout()
-
-        if plot_cores:
-            self.plot_cores(ax, norm=norm, vol_density=flag_vol_density, lims=plot_cores_lims)
-
-        if not(crop is None):
-            x_min, x_max, y_min, y_max = _crop(self.wcs, crop)
-            ax.set_xlim((x_min, x_max))
-            ax.set_ylim((y_min, y_max))
-
-        return fig, ax
-
     def plot_validity_with_model(self, dataset_name:str="batch_highres", ax=None, c_x:Callable[[np.ndarray],float]=np.min, c_y:Callable[[np.ndarray], float]=np.max, logspace=True, patch_size:Tuple[int,int]=(128, 128), nan_value:float=None, overlap:float=0.5):
 
         if ax is None:
@@ -457,41 +491,6 @@ class Observation():
 
         return fig, ax
 
-    def _get_cores_predicted_values(self, region:Union[Tuple[float,float,float,float],None]=None, return_ncol:bool=False, return_indexes:bool=False):
-        """
-        Args:
-            region: [ra_max, ra_min, dec_min, dec_max]
-            return_ncol: Return column density
-            return_indexes: Return indexes
-        """
-        predicted_densities = np.array(self.get_predicted_density_at_cores())
-        derived_densities =  np.array([c["average_n"] for c in self.get_cores()])
-        global_indexes = np.array(range(predicted_densities.shape[0]))
-        mask = (~np.isnan(predicted_densities)) & (predicted_densities > 0) & (derived_densities > 0)
-        if region is not None:
-            ra_max, ra_min, dec_min, dec_max = region
-            ra = np.array([c["ra"] for c in self.get_cores()])
-            dec = np.array([c["dec"] for c in self.get_cores()])
-            region_mask = (ra >= ra_min) & (ra <= ra_max) & (dec >= dec_min) & (dec <= dec_max)
-            mask = mask & region_mask
-        predicted_densities = predicted_densities[mask]
-        column_densities = np.array(self.get_predicted_density_at_cores(column_density=True))[mask]
-        predicted_densities = CONVERT_massn_TO_n_coldens(column_densities,10,predicted_densities,np.array([c["radius_pc"] for c in self.get_cores()])[mask],is_density=False)
-        derived_densities = derived_densities[mask]
-        global_indexes = global_indexes[mask]
-        predicted_densities = np.log10(predicted_densities)
-        derived_densities = np.log10(derived_densities)
-        if return_ncol:
-            column_densities = np.log10(column_densities)
-            sorted_indexes = np.argsort(column_densities)
-            global_indexes = global_indexes[sorted_indexes]
-            if return_indexes:
-                return (predicted_densities[sorted_indexes], derived_densities[sorted_indexes], column_densities[sorted_indexes], global_indexes)
-            return (predicted_densities[sorted_indexes], derived_densities[sorted_indexes], column_densities[sorted_indexes])
-        if return_indexes:
-            return (predicted_densities, derived_densities, global_indexes)
-        return (predicted_densities, derived_densities)
-    
     def plot_cores_hist(self, ax=None, region:Union[Tuple[float,float,float,float],None]=None):
         """
         Args:
@@ -535,13 +534,15 @@ class Observation():
 
         return fig, ax
 
-    def plot_dcmf(self, ax=None, bins:int=10, ext_lims:Tuple[Union[float,None],Union[float,None]]=[None,None]):
+    def plot_dcmf(self, ax=None, bins:int=10, ext_lims:Tuple[Union[float,None],Union[float,None]]=[None,None], logM:bool=True, fit=True):
         """
         Plot the dense core mass function
         Args:
             ax: matplotlib axis
             bins: number of bins in the DCMF
             ext_lims: Choose only the dense cores between the two extinctions Av given.
+            logM: plot dN/dlogM or dN/dM.
+            fit: try to fit the dcmf by a lognormal with power law.
         """
 
         if ext_lims[0] is None:
@@ -568,13 +569,16 @@ class Observation():
         derived_densities = derived_densities[mask]
 
         def _get_dcmf(masses:np.ndarray):
-            logM = np.log10(masses[(extinctions >= ext_lims[0]) & (extinctions <= ext_lims[1])])
-            hist, bin_edges = np.histogram(logM, bins=bins)
+            m = masses[(extinctions >= ext_lims[0]) & (extinctions <= ext_lims[1])]
+            m = np.log10(m)
+            hist, bin_edges = np.histogram(m, bins=bins)
             bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
-            dcmf = hist / (bin_edges[1:] - bin_edges[:-1])
+            dcmf = hist
+            if logM:
+                dcmf = dcmf/ (bin_edges[1:] - bin_edges[:-1])
             return dcmf, bin_centers
         
-        def _compute_dcmf(radius,densities):
+        def _compute_mass(radius,densities):
             m_H = 1.67e-24  # g
             mu = 1.4        # mean molecular weight for H (not H2)
             pc_to_cm = PC_TO_CM
@@ -588,47 +592,51 @@ class Observation():
                 rslt_masses.append(mass_Msun)
             rslt_masses = np.array(rslt_masses, dtype=np.float64)
             return rslt_masses
+        
+        _dcmf_function = lambda M,amp,mu,sigma,alpha,cutoff: dcmf_func(M,amp,mu,sigma,alpha,cutoff, logM=logM)
 
         if ax is None:
             fig, ax = plt.subplots()
         else:
             fig = ax.figure()
 
-        derived_mass = _compute_dcmf(derived_radius,derived_densities)
+        derived_mass = _compute_mass(derived_radius,derived_densities)
         derived_dcmf, derived_bin_centers = _get_dcmf(derived_mass)
         derived_bin_centers = 10**derived_bin_centers
 
         ax.plot(derived_bin_centers, derived_dcmf, drawstyle="steps-mid", color="blue", label=f"{self.name} (Könyves et al, 2020)")
         ax.scatter(derived_bin_centers, derived_dcmf, color="blue")
-        popt, _ = curve_fit(dcmf_func, derived_bin_centers, derived_dcmf,
-                        p0=[np.max(derived_dcmf), 1.5, np.std(np.log(derived_mass)), 2.3, 1.6])
-        amp_fit, mu_fit, sigma_fit, alpha_fit ,cutoff_fit = popt
-        LOGGER.log(f"Best DCMF fit for estimated cores: amp={amp_fit:.2e}, mu={mu_fit:.3f}, sigma={sigma_fit:.3f}, alpha={alpha_fit}, cutoff={cutoff_fit}")
-        func = lambda X: dcmf_func(X, popt[0], popt[1], popt[2], popt[3], popt[4])
-        plot_function(func, ax=ax, scatter=False, logspace=True, lims= (0.01, 100), color="blue", linestyle="--")
+        if fit:
+            popt, _ = curve_fit(_dcmf_function, derived_bin_centers, derived_dcmf,
+                            p0=[np.max(derived_dcmf), 1.5, np.std(np.log(derived_mass)), 2.3, 1.6])
+            amp_fit, mu_fit, sigma_fit, alpha_fit ,cutoff_fit = popt
+            LOGGER.log(f"Best DCMF fit for estimated cores: amp={amp_fit:.2e}, mu={mu_fit:.3f}, sigma={sigma_fit:.3f}, alpha={alpha_fit}, cutoff={cutoff_fit}")
+            func = lambda X: _dcmf_function(X, popt[0], popt[1], popt[2], popt[3], popt[4])
+            plot_function(func, ax=ax, scatter=False, logspace=True, lims= (0.01, 100), color="blue", linestyle="--")
 
         LOGGER.log(f"DCMF with {len(derived_radius[(extinctions >= ext_lims[0]) & (extinctions <= ext_lims[1])])} cores.")
 
         if(self.prediction is not None):            
-            predicted_masses = np.array(_compute_dcmf(derived_radius, predicted_densities))
+            predicted_masses = np.array(_compute_mass(derived_radius, predicted_densities))
             predicted_dcmf, predicted_bin_centers = _get_dcmf(predicted_masses)
             predicted_bin_centers = 10**predicted_bin_centers
             ax.plot(predicted_bin_centers, predicted_dcmf, drawstyle="steps-mid", color="red", label=f"{self.name} (Neural Network)")
             ax.scatter(predicted_bin_centers, predicted_dcmf, color="red")
-            popt, _ = curve_fit(dcmf_func, predicted_bin_centers[predicted_bin_centers>0.], predicted_dcmf[predicted_bin_centers>0.],
-                        p0=[np.max(predicted_dcmf), 0.22, np.std(np.log(predicted_masses)), 2.3, 300.6])
 
-            amp_fit, mu_fit, sigma_fit, alpha_fit ,cutoff_fit = popt
-            LOGGER.log(f"Best DCMF fit for predicted cores: amp={amp_fit:.2e}, mu={mu_fit:.3f}, sigma={sigma_fit:.3f}, alpha={alpha_fit}, cutoff={cutoff_fit}")
-            func = lambda X: dcmf_func(X, popt[0], popt[1], popt[2], popt[3], popt[4])
-            plot_function(func, ax=ax, scatter=False, logspace=True, lims= (0.01, 100), color="red", linestyle="--")
+            if fit:
+                popt, _ = curve_fit(_dcmf_function, predicted_bin_centers[predicted_bin_centers>0.], predicted_dcmf[predicted_bin_centers>0.],
+                            p0=[np.max(predicted_dcmf), 0.22, np.std(np.log(predicted_masses)), 2.3, 1.6])
+                amp_fit, mu_fit, sigma_fit, alpha_fit ,cutoff_fit = popt
+                LOGGER.log(f"Best DCMF fit for predicted cores: amp={amp_fit:.2e}, mu={mu_fit:.3f}, sigma={sigma_fit:.3f}, alpha={alpha_fit}, cutoff={cutoff_fit}")
+                func = lambda X: _dcmf_function(X, popt[0], popt[1], popt[2], popt[3], popt[4])
+                plot_function(func, ax=ax, scatter=False, logspace=True, lims= (0.01, 100), color="red", linestyle="--")
 
-        plot_sim_dcmf(ax, factor=0.035)
-        plot_imf_chabrier(ax)
+        plot_sim_dcmf(ax, factor=0.035, logM=logM)
+        plot_imf_chabrier(ax, logM=logM)
         ax.set_xscale("log")
         ax.set_yscale("log")
         ax.set_xlabel(r"Mass [$M_\odot$]")
-        ax.set_ylabel(r"$dN/d\log M$")
+        ax.set_ylabel(r"$dN/d\log M$" if logM else r"$dN/dM$")
 
         ax.set_xlim([0.01, 100])
         ax.set_ylim([0.8,600])
@@ -637,7 +645,6 @@ class Observation():
 
         return fig, ax
 
-    
     def plot_cores_space(self, ax=None, region:Union[Tuple[float,float,float,float],None]=None):
         """
         Args:
@@ -709,6 +716,8 @@ class Observation():
         ax.legend()
 
         return fig, ax
+
+    #-------SAVE-------
 
     def serialize_cores(self, region:Union[Tuple[float,float,float,float],None]=None)->str:
         """Serialize the core properties into a file named 'cores.txt' within the observation folder."""
@@ -812,5 +821,5 @@ if __name__ == "__main__":
     #fig, ax = obs.plot_validity_with_model("batch_highres_2", patch_size=(512,512), c_x=compute_smoothness, c_y=lambda x: np.log10(np.mean(x)), logspace=False)
     #ax.set_xlim([0,0.25])
     #ax.set_ylim([20,24])
-    obs.plot_cores_error(mov_average=15)
+    #obs.plot_cores_error(mov_average=15)
     plt.show()

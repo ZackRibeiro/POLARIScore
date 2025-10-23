@@ -51,9 +51,7 @@ CONVBLOCK_OPTIONS = {
 
 
 class Trainer():
-    """
-    Allows training of models and experiments with them.
-    """
+    """Allows training of models and experiments with them."""
     def __init__(self,network=None,training_set:Dataset=None,validation_set:Dataset=None,model_name:str=None,segmentation:bool=False,auto_save:int=0):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         """device: gpu or cpu"""
@@ -363,6 +361,80 @@ class Trainer():
 
         return d_prediction
 
+    def get_prediction_batch(self,force_compute=False):
+        """
+        Args:
+            force_compute(bool): If trainer has already a prediction batch computed then if this is True, this will be computed again.
+        Returns:
+            prediction_batch:[(target_img1, prediction_img1), (target_img2, prediction_img2), ...]
+        """
+        if not(self.prediction_batch is None or force_compute):
+            return self.prediction_batch
+        
+        self.prediction_batch = self.predict(self.validation_set)
+    
+        return self.prediction_batch
+
+    def predict(self, dataset:Dataset, batch_number:int=1)->List[Tuple[List[np.ndarray],List[np.ndarray]]]:
+        """Apply the model on a dataset
+        Args:
+            dataset: the dataset
+            batch_number(int): How many pairs of images/arrays send to the gpu and computed at the same time.
+        Returns:
+            List: list of (targets,outputs) where targets and outputs are lists in the dataset order, use self.target_names to know what are the quantities.
+        """
+
+        self.model.eval()
+
+        result_batch = []
+
+        batch_size = len(dataset.batch)
+        minbatch_nbr = int(np.floor(batch_size/batch_number))
+        for b in range(minbatch_nbr if minbatch_nbr > 1 else 1):
+            #printProgressBar(b, minbatch_nbr, length=10, prefix=f"{b}/{minbatch_nbr}")
+            used_batch = dataset.get(indexes=list(range(batch_size))[b*batch_number:(b+1)*batch_number if minbatch_nbr > 1 else -1])
+            if batch_number == 1:
+                used_batch = [used_batch]
+            input_tensor, target_tensor = self.model.shape_batch(used_batch, dataset.get_element_index(self.target_names), dataset.get_element_index(self.input_names),
+                                                                target_names=self.target_names, input_names=self.input_names, norms=self.norms, segmentation=self.segmentation)
+            if not(type(input_tensor) is list):
+                input_tensor = [input_tensor]
+            if not(type(target_tensor) is list):
+                target_tensor = [target_tensor]
+            output = self._get_eval_model()(*input_tensor)
+            target_tensor = [self.model.shape_tensor(t, reverse=True, name=self.target_names[ti], norms=self.norms, segmentation=self.segmentation) for ti,t in enumerate(target_tensor)] 
+            output = output if type(output) is list else [output]
+            output = [self.model.shape_tensor(o, reverse=True, name=self.target_names[oi], norms=self.norms, segmentation=self.segmentation) for oi,o in enumerate(output)]
+            for i in range(len(target_tensor)):
+                l1 = target_tensor[i]
+                l2 = output[i]
+                result_batch.append((l1,l2))
+
+        return result_batch
+    
+    def predict_tensor(self, inputs:Union[np.ndarray,List[np.ndarray]], input_names:Union[str,List[str],None]=None, output_names:Union[str,List[str],None]=None, return_tensor:bool=False):
+        """
+        Apply a model to inputs
+        Args:
+            inputs: List of arrays for example [col_dens,spectra]
+            input_names: if not None, use the names to find a normalization if this is defined
+            output_names: if not None, use the names to find a normalization if this is defined
+        Returns:
+            List of output, for example [vol_dens]
+        """
+        
+        self.model.eval()
+
+        inputs = inputs if type(inputs) is list else [inputs]
+        input_tensors = [self.model.shape_tensor(inputs[i], name=input_names[i] if input_names else None) for i in range(len(inputs))]
+        outputs = self._get_eval_model()(*input_tensors)
+        outputs = outputs if type(outputs) is list else [outputs]
+        if return_tensor:
+            return outputs
+        return [self.model.shape_tensor(outputs[i], name=output_names[i] if output_names else None, reverse=True) for i in range(len(outputs), segmentation=self.segmentation)]
+
+    #-------PLOT-------
+
     def plot_losses(self, ax=None ,log10=True, save=False):
         """
         Plot training and validation losses.
@@ -403,20 +475,6 @@ class Trainer():
             self.save_fig(fig, fig_name='losses')
         
         return fig, ax
-
-    def get_prediction_batch(self,force_compute=False):
-        """
-        Args:
-            force_compute(bool): If trainer has already a prediction batch computed then if this is True, this will be computed again.
-        Returns:
-            prediction_batch:[(target_img1, prediction_img1), (target_img2, prediction_img2), ...]
-        """
-        if not(self.prediction_batch is None or force_compute):
-            return self.prediction_batch
-        
-        self.prediction_batch = self.predict(self.validation_set)
-    
-        return self.prediction_batch
 
     def plot_validation(self, inter=(None,None), number_per_row=8, same_limits=True, save=False):
         """
@@ -489,64 +547,6 @@ class Trainer():
 
         return fig, ax
     
-    def predict(self, dataset:Dataset, batch_number:int=1)->List[Tuple[List[np.ndarray],List[np.ndarray]]]:
-        """Apply the model on a dataset
-        Args:
-            dataset: the dataset
-            batch_number(int): How many pairs of images/arrays send to the gpu and computed at the same time.
-        Returns:
-            List: list of (targets,outputs) where targets and outputs are lists in the dataset order, use self.target_names to know what are the quantities.
-        """
-
-        self.model.eval()
-
-        result_batch = []
-
-        batch_size = len(dataset.batch)
-        minbatch_nbr = int(np.floor(batch_size/batch_number))
-        for b in range(minbatch_nbr if minbatch_nbr > 1 else 1):
-            #printProgressBar(b, minbatch_nbr, length=10, prefix=f"{b}/{minbatch_nbr}")
-            used_batch = dataset.get(indexes=list(range(batch_size))[b*batch_number:(b+1)*batch_number if minbatch_nbr > 1 else -1])
-            if batch_number == 1:
-                used_batch = [used_batch]
-            input_tensor, target_tensor = self.model.shape_batch(used_batch, dataset.get_element_index(self.target_names), dataset.get_element_index(self.input_names),
-                                                                target_names=self.target_names, input_names=self.input_names, norms=self.norms, segmentation=self.segmentation)
-            if not(type(input_tensor) is list):
-                input_tensor = [input_tensor]
-            if not(type(target_tensor) is list):
-                target_tensor = [target_tensor]
-            output = self._get_eval_model()(*input_tensor)
-            target_tensor = [self.model.shape_tensor(t, reverse=True, name=self.target_names[ti], norms=self.norms, segmentation=self.segmentation) for ti,t in enumerate(target_tensor)] 
-            output = output if type(output) is list else [output]
-            output = [self.model.shape_tensor(o, reverse=True, name=self.target_names[oi], norms=self.norms, segmentation=self.segmentation) for oi,o in enumerate(output)]
-            for i in range(len(target_tensor)):
-                l1 = target_tensor[i]
-                l2 = output[i]
-                result_batch.append((l1,l2))
-
-        return result_batch
-    
-    def predict_tensor(self, inputs:Union[np.ndarray,List[np.ndarray]], input_names:Union[str,List[str],None]=None, output_names:Union[str,List[str],None]=None, return_tensor:bool=False):
-        """
-        Apply a model to inputs
-        Args:
-            inputs: List of arrays for example [col_dens,spectra]
-            input_names: if not None, use the names to find a normalization if this is defined
-            output_names: if not None, use the names to find a normalization if this is defined
-        Returns:
-            List of output, for example [vol_dens]
-        """
-        
-        self.model.eval()
-
-        inputs = inputs if type(inputs) is list else [inputs]
-        input_tensors = [self.model.shape_tensor(inputs[i], name=input_names[i] if input_names else None) for i in range(len(inputs))]
-        outputs = self._get_eval_model()(*input_tensors)
-        outputs = outputs if type(outputs) is list else [outputs]
-        if return_tensor:
-            return outputs
-        return [self.model.shape_tensor(outputs[i], name=output_names[i] if output_names else None, reverse=True) for i in range(len(outputs), segmentation=self.segmentation)]
-
     def plot_sim_validation(self, simulation, plot_total=False, save=False):
         sim_col_dens = simulation._compute_c_density()
         sim_mass_dens = simulation._compute_v_density(method=compute_mass_weighted_density)
@@ -650,6 +650,8 @@ class Trainer():
         self.plot_losses(ax=ax3, save=save)
 
         plt.tight_layout()
+
+    #-------SAVE-------
 
     def save_fig(self, fig, fig_name='default'):
         if not(os.path.exists(MODEL_FOLDER)):

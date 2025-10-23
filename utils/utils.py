@@ -15,6 +15,7 @@ except ImportError:
     gputil_available = False
 from POLARIScore.config import LOGGER
 import inspect
+import ast, re
 
 def convert_pc_to_index(pc:float,nres:int,size:float,start:float=0.)->int:
     """
@@ -308,3 +309,61 @@ def numpy_decoder(obj):
     if "__ndarray__" in obj:
         return np.array(obj["data"], dtype=obj["dtype"]).reshape(obj["shape"])
     return obj
+
+def merge_dicts(dic1: Dict, dic2: Dict) -> Dict:
+    """Merge two dicts ('dic1' and 'dic2') into one."""
+    merged = {}
+    all_keys = set(dic1.keys()).union(dic2.keys())
+
+    for k in all_keys:
+        v1 = dic1.get(k)
+        v2 = dic2.get(k)
+        if isinstance(v1, str):
+            try:
+                temp_v1 = ast.literal_eval(re.sub(r'\barray\(', 'np.array(', v1))
+                if temp_v1 is not None:
+                    v1 = temp_v1
+            except:
+                pass
+        if isinstance(v2, str):
+            try:
+                temp_v2 = ast.literal_eval(re.sub(r'\barray\(', 'np.array(', v2))
+                if temp_v2 is not None:
+                    v2 = temp_v2
+            except:
+                pass
+
+        if isinstance(v1, (list, np.ndarray)) and isinstance(v2, (list, np.ndarray)):
+            merged[k] = np.concatenate((np.array(v1), np.array(v2)))
+        elif v1 is not None and v2 is None:
+            merged[k] = v1
+        elif v2 is not None and v1 is None:
+            merged[k] = v2
+        else:
+            merged[k] = v2 if v2 is not None else v1
+
+    return merged
+
+def split_dict(dic:Dict, cut_index:int)->Tuple[Dict,Dict]:
+    """Split a dict into two childrens by cutting it at 'cut_index'."""
+    dic1 = {}
+    dic2 = {} 
+    for k in dic.keys():
+        v = dic[k]
+        if type(v) is str:
+            try:
+                temp_v = ast.literal_eval(re.sub(r'\barray\(', 'np.array(', v))
+                if temp_v is None:
+                    raise
+                v = temp_v
+            except:
+                pass
+        if type(v) is list or type(v) is np.ndarray:
+            dic1[k] = v[:cut_index]
+            dic2[k] = v[cut_index:]
+            continue
+        if not(k in dic1):
+            dic1[k] = v
+        if not(k in dic2):
+            dic2[k] = v
+    return (dic1, dic2)
