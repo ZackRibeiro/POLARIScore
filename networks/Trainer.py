@@ -128,7 +128,10 @@ class Trainer():
                 self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate, momentum=0.5)
             self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', patience=50, factor=0.75, threshold=0.005)
 
-        self.loss_method = nn.MSELoss() if self.segmentation else nn.CrossEntropyLoss
+        self.loss_method = nn.MSELoss() if self.segmentation else nn.CrossEntropyLoss()
+        self.validation_loss_method:Union[Callable, None] = None
+        """If set to None, use the same loss method on validation and training."""
+
         self.training_losses:List[float] = []
         self.validation_losses:List[float] = []
         self.last_epoch:int = 0
@@ -155,6 +158,8 @@ class Trainer():
         elif self.optimizer_name in (str(type(torch.optim.SGD)),"SGD") or "SGD" in self.optimizer_name:
             self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate, momentum=0.5)
         self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', patience=50, factor=0.75, threshold=0.005)
+        if self.validation_loss_method is None:
+            self.validation_loss_method = self.loss_method
         return True
 
     def _infer_model(self, model, input):
@@ -219,6 +224,9 @@ class Trainer():
 
         minimimum_validation_loss = self.cache_threshold
 
+        if self.validation_loss_method is None:
+            self.validation_loss_method = self.loss_method
+
         for epoch in range(epoch_number):
             total_epoch += 1
             epoch_loss = 0
@@ -278,13 +286,13 @@ class Trainer():
                         validation_output = self._infer_model(eval_model, v_input_tensor)                        
                         v_loss = 0
                         try:
-                            v_loss = self.loss_method(validation_output,v_target_tensor).item()
+                            v_loss = self.validation_loss_method(validation_output,v_target_tensor).item()
                         except:
                             for tt in range(len(v_target_tensor)):
                                 if type(validation_output) is list:
-                                    v_loss += self.loss_method(validation_output[tt],v_target_tensor[tt]).item()
+                                    v_loss += self.validation_loss_method(validation_output[tt],v_target_tensor[tt]).item()
                                 else:
-                                    v_loss += self.loss_method(validation_output,v_target_tensor[tt]).item()
+                                    v_loss += self.validation_loss_method(validation_output,v_target_tensor[tt]).item()
                         val_total_loss += v_loss
                 val_total_loss /= minbatch_nbr if minbatch_nbr > 0 else 1
                 self.validation_losses.append((total_epoch,val_total_loss))

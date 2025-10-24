@@ -2,6 +2,7 @@ from .Trainer import Trainer, load_trainer
 import torch
 import math
 from POLARIScore.networks.architectures.nn_cINN import cINN
+import torch.nn as nn
 
 class INNTrainer(Trainer):
     """
@@ -13,6 +14,7 @@ class INNTrainer(Trainer):
             kwargs["network"] = cINN
         super(INNTrainer, self).__init__(**kwargs)
         self.loss_method = self.max_likelihood_loss
+        self.validation_loss_method = nn.MSELoss()
 
     @staticmethod
     def max_likelihood_loss(output, target):
@@ -34,7 +36,7 @@ class INNTrainer(Trainer):
         return output
     
     def _infer_model(self, model, input):
-        z = torch.randn(model.z_shape, device=input.device)
+        z = torch.randn(model.z_shape, device=input.device).unsqueeze(0)
         output = model.inverse(z, input)
         return output
     
