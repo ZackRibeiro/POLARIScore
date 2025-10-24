@@ -7,9 +7,7 @@ def linear_beta_schedule(timesteps, beta_start=0.0001, beta_end=0.02):
     return torch.linspace(beta_start, beta_end, timesteps)
 
 def cosine_beta_schedule(timesteps, s=0.008):
-    """
-    Proposed in: https://arxiv.org/abs/2102.09672
-    """
+    """Proposed in: https://arxiv.org/abs/2102.09672"""
     steps = timesteps + 1
     t = torch.linspace(0, timesteps, steps)
     alphas_cumprod = torch.cos(((t / timesteps) + s) / (1 + s) * math.pi * 0.5) ** 2

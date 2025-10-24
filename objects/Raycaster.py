@@ -8,7 +8,7 @@ class Raycaster():
     A raycaster travel through the simulation in a given direction/face and cast for each cell traveled a method and propagate the result to next cells. 
     This allows raytracing methods like simulation of CO spectrum. (work for Datacube simulation)
 
-    Todo: get all the data instead of needing simulation data cube
+    TODO: get all the data instead of needing simulation data cube
     """
     def __init__(self, simulation, method:Callable[[Any,Tuple[int,int,int],Tuple[int,int,int],Dict],Dict], starting_position:Tuple[int,int,int], axis:int=0, stop_pos:Tuple[int,int,int]=[0,0,0]):
         self.simulation = simulation

@@ -1,9 +1,5 @@
 import os
-import sys
 import time
-
-#parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-#sys.path.append(parent_dir)
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -12,6 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from POLARIScore.networks.architectures.nn_BaseModule import BaseModule
+from POLARIScore.networks.architectures.nn_cINN import cINN
 from POLARIScore.utils.batch_utils import *
 from POLARIScore.config import *
 import uuid
@@ -39,6 +36,7 @@ NETWORK_OPTIONS = {
     "PPV": PPV,
     "CAUNet": ContextAwareUNet,
     "JustKAN": JustKAN,
+    "cINN": cINN,
     "None": None
 }
 
@@ -159,6 +157,23 @@ class Trainer():
         self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', patience=50, factor=0.75, threshold=0.005)
         return True
 
+    def _infer_model(self, model, input):
+        """Used in inference"""
+        return model(*input)
+    
+    def _train_model(self, model, input, target):
+        """Used in training, e.g for INN this function is not the same as self._infer_model."""
+        return model(*input)
+    
+    def _get_eval_model(self, epoch:Union[int, None]=None):
+        if self.ema and self.ema_handler is not None and (epoch is None or epoch > self.ema_warmup):
+            ema_model =self.ema_handler.copy_ema_model(self.model)
+            #ema_model.eval()
+            eval_model = ema_model
+        else:
+            eval_model = self.model
+        return eval_model
+
     def train(self, epoch_number:int=50, batch_number:int=32, compute_validation:int=10, cache:bool=True, early_stopping:bool=True):
         """
         Train the model (check trainer variables for settings)
@@ -223,7 +238,7 @@ class Trainer():
 
                 if self.training_random_transform:
                     t_input, t_target = _random_transform(t_input, t_target)
-                output = self.model(*t_input)
+                output = self._train_model(model,t_input,t_target)
                 loss = 0
                 try:
                     loss = self.loss_method(output, t_target)
@@ -249,7 +264,6 @@ class Trainer():
             if compute_validation>0 and total_epoch % compute_validation == 0:
                 minbatch_nbr = int(np.floor(validation_batch_size/batch_number))
                 with torch.no_grad():
-                    #self.model.eval()
                     val_total_loss = 0
                     eval_model = self._get_eval_model(epoch=total_epoch)
                     for b in range(minbatch_nbr if minbatch_nbr > 1 else 1):
@@ -261,7 +275,7 @@ class Trainer():
                                                                                 target_names=self.target_names, input_names=self.input_names, norms=self.norms, segmentation=self.segmentation)
                         if not(type(v_input_tensor) is list):
                             v_input_tensor = [v_input_tensor]
-                        validation_output = eval_model(*v_input_tensor)
+                        validation_output = self._infer_model(eval_model, v_input_tensor)                        
                         v_loss = 0
                         try:
                             v_loss = self.loss_method(validation_output,v_target_tensor).item()
@@ -272,7 +286,6 @@ class Trainer():
                                 else:
                                     v_loss += self.loss_method(validation_output,v_target_tensor[tt]).item()
                         val_total_loss += v_loss
-                    #self.model.train()
                 val_total_loss /= minbatch_nbr if minbatch_nbr > 0 else 1
                 self.validation_losses.append((total_epoch,val_total_loss))
                 if early_stopping and self.early_stopping is not None:
@@ -297,15 +310,6 @@ class Trainer():
             
         self.last_epoch = total_epoch
         self.learning_rate = self.scheduler.get_last_lr()[0]
-
-    def _get_eval_model(self, epoch:Union[int, None]=None):
-        if self.ema and self.ema_handler is not None and (epoch is None or epoch > self.ema_warmup):
-            ema_model =self.ema_handler.copy_ema_model(self.model)
-            ema_model.eval()
-            eval_model = ema_model
-        else:
-            eval_model = self.model
-        return eval_model
 
     def create_baseline(self,n:int=1000, force_compute:bool=False, log:bool=True)->Tuple[List[float],List[float]]:
         """
@@ -401,7 +405,7 @@ class Trainer():
                 input_tensor = [input_tensor]
             if not(type(target_tensor) is list):
                 target_tensor = [target_tensor]
-            output = self._get_eval_model()(*input_tensor)
+            output = self._infer_model(self._get_eval_model, input_tensor)
             target_tensor = [self.model.shape_tensor(t, reverse=True, name=self.target_names[ti], norms=self.norms, segmentation=self.segmentation) for ti,t in enumerate(target_tensor)] 
             output = output if type(output) is list else [output]
             output = [self.model.shape_tensor(o, reverse=True, name=self.target_names[oi], norms=self.norms, segmentation=self.segmentation) for oi,o in enumerate(output)]
@@ -427,7 +431,7 @@ class Trainer():
 
         inputs = inputs if type(inputs) is list else [inputs]
         input_tensors = [self.model.shape_tensor(inputs[i], name=input_names[i] if input_names else None) for i in range(len(inputs))]
-        outputs = self._get_eval_model()(*input_tensors)
+        outputs = self._infer_model(self._get_eval_model(), input_tensors)
         outputs = outputs if type(outputs) is list else [outputs]
         if return_tensor:
             return outputs
@@ -741,7 +745,11 @@ class Trainer():
 
         return True
 
-def load_trainer(model_name, load_model=True):
+    @staticmethod
+    def load(model_name, load_model=True):
+        return load_trainer(model_name, load_model)
+
+def load_trainer(model_name, load_model=True, trainer_class=Trainer):
 
     folder_model_name = model_name
 
@@ -754,7 +762,7 @@ def load_trainer(model_name, load_model=True):
     with open(os.path.join(model_path,'settings.json')) as file:
         settings = json.load(file)
     
-    trainer = Trainer(model_name=settings["model_name"], segmentation=bool(settings["is_segmentation"]))
+    trainer = trainer_class(model_name=settings["model_name"], segmentation=bool(settings["is_segmentation"]))
     if "training_set" in settings and not(settings["training_set"] is None):
         try:
             trainer.training_set = getDataset(settings["training_set"])

@@ -546,7 +546,7 @@ class Observation():
         """
 
         if ext_lims[0] is None:
-            ext_lims[0] = 0.
+            ext_lims[0] = -1000
         if ext_lims[1] is None:
             ext_lims[1] = 1000.
 
@@ -568,8 +568,10 @@ class Observation():
         predicted_densities = CONVERT_massn_TO_n_coldens(column_densities,10,predicted_densities,derived_radius, is_density=False)
         derived_densities = derived_densities[mask]
 
+        global_mask = (extinctions >= ext_lims[0]) & (extinctions <= ext_lims[1])
+
         def _get_dcmf(masses:np.ndarray):
-            m = masses[(extinctions >= ext_lims[0]) & (extinctions <= ext_lims[1])]
+            m = masses[global_mask]
             m = np.log10(m)
             hist, bin_edges = np.histogram(m, bins=bins)
             bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
@@ -614,7 +616,7 @@ class Observation():
             func = lambda X: _dcmf_function(X, popt[0], popt[1], popt[2], popt[3], popt[4])
             plot_function(func, ax=ax, scatter=False, logspace=True, lims= (0.01, 100), color="blue", linestyle="--")
 
-        LOGGER.log(f"DCMF with {len(derived_radius[(extinctions >= ext_lims[0]) & (extinctions <= ext_lims[1])])} cores.")
+        LOGGER.log(f"DCMF with {len(derived_radius[global_mask])} cores.")
 
         if(self.prediction is not None):            
             predicted_masses = np.array(_compute_mass(derived_radius, predicted_densities))
