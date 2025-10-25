@@ -199,7 +199,7 @@ class Simulation_DC():
             self.volumic_density[axis] = method(self.data, axis=axis)
         return self.volumic_density[axis]
 
-    def generate_batch(self,name:str=None,method:Callable=compute_mass_weighted_density,what_to_compute:Dict={"cospectra":False,"density":False,"context":10.},number:int=8,size:Union[float,Tuple[float,float]]=0.,img_size:int=128,random_rotate:bool=True,limit_area:Tuple=([27,40,26,39],[26.4,40,22.5,44.3],[26.4,39,21,44.5]),nearest_size_factor:float=0.75)->bool:
+    def generate_batch(self,name:str=None,method:Callable=compute_mass_weighted_density,what_to_compute:Dict={"cospectra":False,"density":False,"context":10.},number:int=8,size:Union[float,Tuple[float,float]]=0.,img_size:int=128,random_rotate:bool=True,limit_area:Tuple=(None,None,None),nearest_size_factor:float=0.75,axis:Union[int,List[int]]=[0,1,2])->bool:
         """
         Generate a batch, i.e pairs of images (2D matrix) like [(col_dens_1, vol_dens_1),(col_dens_2, vol_dens_2)]
         using this simulation. This will take randoms positions images in simulation.
@@ -212,6 +212,7 @@ class Simulation_DC():
             random_rotate(bool, default: True): Randomly rotate 0°,90°,180°,270° for each region.
             limit_area(list): In which region of the simulation we'll pick the areas: ([for face1],[for face2],[for face3]) -> ([x_min,x_max,y_min,y_max],...) for each face.
             nearest_size_factor(float, default:0.75): If the new area picked is too close to an old area of a factor nearest_size_factor*area_size then we'll choose another area.
+            axis(list of ints or int): What faces of the simulation datacube will be used for generate the batch (e.g you may want to use 2 faces for training data and 1 face for validation data).
             what_to_compute(dict): keys descriptions (values are bools):<br /> 'co_spectra': compute the co spectra<br /> 'density': keep the density cube in the dataset<br /> 'context': generate a downsampled global region (default is all the sim face) with a channel for a crop mask: 1 if the random region contains the pos else 0.
         Returns:
             flag: if dataset was correctly generated.
@@ -219,7 +220,9 @@ class Simulation_DC():
 
         LOGGER.border("BATCH-GENERATING")
 
-        LOGGER.log(f"Generating {number} images using simulation {self.name}.")
+
+        axis = axis if type(axis) is list else [axis]
+        LOGGER.log(f"Generating {number} images using simulation {self.name} on faces {axis}.")
 
 
 
@@ -261,7 +264,7 @@ class Simulation_DC():
                 LOGGER.warn("Failed to generated all the requested random batches, nbr of imgs generated:"+str(img_generated))
                 break
 
-            face = int(np.floor(np.random.random()*3))
+            face = axis[int(np.floor(np.random.random()*len(axis)))]
             c_dens = column_density[face]
             v_dens = volume_density[face]
             if flag_cospectra:
@@ -271,7 +274,12 @@ class Simulation_DC():
             if limits is None:
                 limits = [0,self.global_size,0,self.global_size]
             center = np.array([limits[0]+(limits[1]-limits[0])*np.random.random(),limits[2]+(limits[3]-limits[2])*np.random.random()])
-
+            c_x, c_y = center
+            c_x = convert_pc_to_index(c_x, self.nres,self.size,start=self.axis[0][0])
+            c_y = convert_pc_to_index(c_y, self.nres,self.size,start=self.axis[0][0])
+            if(c_x < 0 or c_y < 0):
+                continue
+            
             s = img_size
             if type(size) is list:
                 size = np.min(size) + np.random.random()*(np.max(size)-np.min(size))
@@ -287,9 +295,6 @@ class Simulation_DC():
                     break
             if flag:
                 continue
-            c_x, c_y = center
-            c_x = convert_pc_to_index(c_x, self.nres,self.size,start=self.axis[0][0])
-            c_y = convert_pc_to_index(c_y, self.nres,self.size,start=self.axis[0][0])
 
             start_x = c_x - s // 2
             start_y = c_y - s // 2
@@ -626,13 +631,14 @@ def mergeSimu(sim_array:List[Simulation_DC])->Simulation_DC:
     return host
 
 import glob
-def openSimulation(name_root:str, global_size:float, use_cache:bool=True)->Simulation_DC:
+def openSimulation(name_root:str, global_size:float, use_cache:bool=True,cache_name="sim_memory")->Simulation_DC:
     """
     Open a datacube simulation
     Args:
         name_root(str): name of the simulation folder
         global_size(float): physical size of the global simulation (not the datacube) like the datacube can be 5pc long but the simulation was runned with a grid 66pc long.
         use_cache(bool): Use cache
+        cache_name(str): name of the cache file .npy containing the simulation.
     Returns:
         Simulation
     """
@@ -640,11 +646,11 @@ def openSimulation(name_root:str, global_size:float, use_cache:bool=True)->Simul
     LOGGER.log(f"Opening {len(files)} simulations")
     names = [f.split("/")[-1] for f in files]
     sims = []
-    if use_cache and os.path.exists(CACHES_FOLDER+"sim_memory"):
+    if use_cache and os.path.exists(CACHES_FOLDER+cache_name):
         LOGGER.log("Merged using cached data")
         sim = Simulation_DC(names[0], global_size, init=True)
         sim_len = int(len(names)**(1/3))
-        sim.data = np.memmap(CACHES_FOLDER+"sim_memory", dtype='float32', mode='r', shape=(sim.data.shape[0]*sim_len,sim.data.shape[1]*sim_len,sim.data.shape[2]*sim_len))
+        sim.data = np.memmap(CACHES_FOLDER+cache_name, dtype='float32', mode='r', shape=(sim.data.shape[0]*sim_len,sim.data.shape[1]*sim_len,sim.data.shape[2]*sim_len))
         sim.nres = sim.nres*sim_len
         sim.relative_size = sim.relative_size*sim_len
         sim.center = np.array([0.5,0.5,0.5])
@@ -658,7 +664,7 @@ def openSimulation(name_root:str, global_size:float, use_cache:bool=True)->Simul
         sims.append(Simulation_DC(n, global_size, init=True))
     sim = mergeSimu(sims)
     del sims
-    fp = np.memmap(CACHES_FOLDER+"np_memory", dtype='float32', mode='w+', shape=sim.data.shape)
+    fp = np.memmap(CACHES_FOLDER+cache_name, dtype='float32', mode='w+', shape=sim.data.shape)
     fp[:] = sim.data[:]
     sim.data = fp
     return sim
@@ -668,7 +674,7 @@ if __name__ == "__main__":
     #sim.init(loadTemp=True, loadVel=True)
     sim = openSimulation("orionMHD_lowB_multi", global_size=66.0948)
     #sim.plotSlice(axis=2, enable_slider=True)
-    sim.generate_batch(name="highres_2",number=1000,what_to_compute={"cospectra":False, "density":False,"context":10})
+    sim.generate_batch(name="highres_s1",size=0.,number=1000,what_to_compute={"cospectra":False, "density":False,"context":None})
     #sim.plot(derivate=2, axis=0)
     #plt.figure()
     #sim.plot_correlation(method=compute_mass_weighted_density, contour_levels=3)

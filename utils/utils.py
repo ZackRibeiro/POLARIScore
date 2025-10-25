@@ -27,7 +27,10 @@ def convert_pc_to_index(pc:float,nres:int,size:float,start:float=0.)->int:
     Returns:
         float: index
     """
-    return (int(np.floor((pc-start)/(size)*nres)))
+    idx = (pc-start)/(size)
+    if idx > 1 or idx < 0:
+        return -1
+    return (int(np.floor(idx*nres)))
 
 def compute_column_density(data_cube:np.ndarray,cell_size:float, axis:int=0)->np.ndarray:
     return np.sum(data_cube, axis=axis) * cell_size
@@ -340,7 +343,7 @@ def merge_dicts(dic1: Dict, dic2: Dict) -> Dict:
         elif v2 is not None and v1 is None:
             merged[k] = v2
         else:
-            merged[k] = v2 if v2 is not None else v1
+            merged[k] = v1+v2
 
     return merged
 

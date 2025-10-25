@@ -245,6 +245,16 @@ class Dataset():
             result_ds.batch = b1+b2
 
             result_settings = merge_dicts(ds1.settings, ds2.settings)
+            ds1_sname = ds1.settings["SIM_name"]
+            ds2_sname = ds2.settings["SIM_name"]
+            sname = ""
+            if ds1_sname in ds2_sname:
+                sname = ds2_sname
+            elif ds2_sname in ds1_sname:
+                sname = ds1_sname
+            else:
+                sname = ds1_sname+"+"+ds2_sname
+            result_settings["SIM_name"] = sname
             result_settings['order'] = merged_order
             result_ds.settings = result_settings
 
