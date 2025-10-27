@@ -8,11 +8,9 @@ class INNTrainer(Trainer):
     """
     Extension of Trainer class to train and use Invertible Neural Networks.
     """
-    def __init__(self, **kwargs):
+    def __init__(self, *args, **kwargs):
         """To know args and variables, please refers to '~.Trainer.__init__'"""
-        if kwargs["network"] is None:
-            kwargs["network"] = cINN
-        super(INNTrainer, self).__init__(**kwargs)
+        super(INNTrainer, self).__init__(*args, **kwargs)
         self.loss_method = self.max_likelihood_loss
         self.validation_loss_method = nn.MSELoss()
 
@@ -32,14 +30,54 @@ class INNTrainer(Trainer):
         return loss
 
     def _train_model(self, model, input, target):
+        if(type(input) is list):
+            input = input[0]
+        if(type(target) is list):
+            target = target[0]
         output = model(target,input) #target is true data, input is condition data
         return output
     
     def _infer_model(self, model, input):
-        z = torch.randn(model.z_shape, device=input.device).unsqueeze(0)
+        if(type(input) is list):
+            input = input[0]
+        B,_,_,_ = input.shape
+        C, H, W = model.z_shape
+        z = torch.randn((B, C, H, W), device=input.device)
         output = model.inverse(z, input)
         return output
     
     @staticmethod
     def load(model_name, load_model=True):
         return load_trainer(model_name, load_model, trainer_class=INNTrainer)
+    
+if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+    from POLARIScore.objects.Dataset import getDataset
+    from POLARIScore.config import DATA_NORMALIZATION_CDENS, DATA_NORMALIZATION_VDENS
+    ds1 = getDataset("batch_training_32px")
+    ds2 = getDataset("batch_validation_32px")
+
+
+    trainer = INNTrainer(cINN, ds1, ds2, model_name="cINN")
+    #trainer = INNTrainer.load("cINN")
+    #trainer.norms = {
+    #    "cdens": DATA_NORMALIZATION_CDENS,
+    #    "vdens": DATA_NORMALIZATION_VDENS,
+    #}
+    trainer.learning_rate = 1e-3
+    trainer.training_set = ds1
+    trainer.validation_set = ds2
+    trainer.network_settings["img_dim"] = 32
+    trainer.network_settings["base_filters"] = 32
+    trainer.network_settings["num_layers"] = 4
+    trainer.training_random_transform = True
+    trainer.optimizer_name = "Adam"
+    trainer.target_names = ["vdens"]
+    trainer.input_names = ["cdens"]
+    trainer.init()
+    trainer.train(500,batch_number=256,compute_validation=10,early_stopping=False)
+    trainer.save()
+    trainer.plot(save=True)
+    trainer.plot_validation(save=True)
+
+    plt.show()

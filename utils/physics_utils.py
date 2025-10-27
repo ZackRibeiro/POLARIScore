@@ -66,10 +66,15 @@ def CONVERT_massn_TO_n_coldens(N:Union[np.ndarray[float],float], L_d:Union[np.nd
         d = N**2+L_c**2-4*(L_c*L_d+L_c**2)*N*(N-n*L_d)
         n_c = (N+np.sqrt(d))/(2*(L_c+L_d)*L_c)
     mask = np.isnan(n_c)
-    n_c[mask] = n[mask]
+    if type(n) is list or type(n) is np.ndarray:
+        n_c[mask] = n[mask]
+        if np.sum(mask) > 0:
+            LOGGER.warn(f"{np.sum(mask)}/{len(N)} cores densities are replaced with mass average density, bcs discriminant is < 0")
+    else:
+        if mask.any():
+            return n
 
     n_c = n_c*factor+n*(1-factor)
-    LOGGER.warn(f"{np.sum(mask)}/{len(N)} cores densities are replaced with mass average density, bcs discriminant is < 0")
     return n_c
 
 from scipy.stats import lognorm
@@ -129,4 +134,5 @@ def plot_imf_chabrier(ax, color='black', x_min=1e-2, x_max=1e3, n_points=100,
 
     return ax
     
-    
+def density_gaussian(r, n0, sigma, r0):
+    return n0 * np.exp(-0.5 * ((r-r0) / sigma)**2)

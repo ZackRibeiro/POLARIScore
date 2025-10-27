@@ -27,8 +27,8 @@ def rebuild_batch(cdens:np.ndarray, vdens:np.ndarray):
         batch.append((cdens[i], vdens[i]))
     return batch
 
-def plot_batch(batch, b_name:str="",same_limits:bool=True, number_per_row:int=8):
-    batch_nbr = len(batch)
+def plot_batch(batch, b_name:str="",same_limits:bool=True, number_per_row:int=8, number:int=16):
+    batch_nbr = min(len(batch),number)
     fig, axes = plt.subplots(int(2*np.ceil(batch_nbr/number_per_row)),number_per_row)
     if number_per_row==1:
         axes = [[axes[0]],[axes[1]]]

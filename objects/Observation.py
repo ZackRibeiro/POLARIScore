@@ -23,6 +23,7 @@ from scipy.optimize import curve_fit
 from POLARIScore.scripts.plotORIONsimDCMF import plot_sim_dcmf
 from POLARIScore.utils.batch_utils import compute_smoothness
 from POLARIScore.utils.physics_utils import CONVERT_massn_TO_n_coldens
+from POLARIScore.objects.DenseCore import DenseCore
 
 def _crop(wcs, lims):
     ra_min, ra_max, dec_min, dec_max = lims
@@ -36,11 +37,14 @@ def _crop(wcs, lims):
 
 class Observation():
     """Observation object contains multiple tools to read observations and apply models on them."""
-    def __init__(self,name:str,file_name:str):
+    def __init__(self,name:str,file_name:str,distance:float=400.):
 
         self.name:str = name
         self.folder:str = os.path.join(OBSERVATIONS_FOLDER, name)
         """Path to the folder where the observation is stored"""
+
+        self.distance = distance
+        """Distance (in parsec) to the observation"""
 
         file_name = file_name.split(".fits")[0]+".fits"
         self.file:str = os.path.join(self.folder,file_name)
@@ -148,7 +152,7 @@ class Observation():
 
         return scale
 
-    def get_cores(self, force_compute:bool=False)->Union[List[Dict], None]:
+    def get_cores(self, force_compute:bool=False)->Union[List['DenseCore'], None]:
         """
         Get cores from files "observed_core_catalog.txt" and "derived_core_catalog.txt"
         Args:
@@ -251,8 +255,8 @@ class Observation():
                 cores.append(core)
                 break
 
+        cores = [DenseCore(self, c) for c in cores]
         self.cores = cores
-
         return cores
 
     def get_predicted_density_at_cores(self, column_density:bool=False)->List[float]:
@@ -274,8 +278,8 @@ class Observation():
             return None
 
         coords = SkyCoord(
-            [core["ra"] for core in self.cores],
-            [core["dec"] for core in self.cores],
+            [core.data["ra"] for core in self.cores],
+            [core.data["dec"] for core in self.cores],
             unit="deg"
         )
         x_pix, y_pix = skycoord_to_pixel(coords, self.wcs)
@@ -288,9 +292,6 @@ class Observation():
             else:
                 values.append(np.nan)
 
-        for core, val in zip(self.cores, values):
-            core["data_value"] = val
-
         return values
         
     def _get_cores_predicted_values(self, region:Union[Tuple[float,float,float,float],None]=None, return_ncol:bool=False, return_indexes:bool=False):
@@ -301,18 +302,18 @@ class Observation():
             return_indexes: Return indexes
         """
         predicted_densities = np.array(self.get_predicted_density_at_cores())
-        derived_densities =  np.array([c["average_n"] for c in self.get_cores()])
+        derived_densities =  np.array([c.data["average_n"] for c in self.get_cores()])
         global_indexes = np.array(range(predicted_densities.shape[0]))
         mask = (~np.isnan(predicted_densities)) & (predicted_densities > 0) & (derived_densities > 0)
         if region is not None:
             ra_max, ra_min, dec_min, dec_max = region
-            ra = np.array([c["ra"] for c in self.get_cores()])
-            dec = np.array([c["dec"] for c in self.get_cores()])
+            ra = np.array([c.data["ra"] for c in self.get_cores()])
+            dec = np.array([c.data["dec"] for c in self.get_cores()])
             region_mask = (ra >= ra_min) & (ra <= ra_max) & (dec >= dec_min) & (dec <= dec_max)
             mask = mask & region_mask
         predicted_densities = predicted_densities[mask]
         column_densities = np.array(self.get_predicted_density_at_cores(column_density=True))[mask]
-        predicted_densities = CONVERT_massn_TO_n_coldens(column_densities,10,predicted_densities,np.array([c["radius_pc"] for c in self.get_cores()])[mask],is_density=False)
+        predicted_densities = CONVERT_massn_TO_n_coldens(column_densities,10,predicted_densities,np.array([c.data["radius_pc"] for c in self.get_cores()])[mask],is_density=False)
         derived_densities = derived_densities[mask]
         global_indexes = global_indexes[mask]
         predicted_densities = np.log10(predicted_densities)
@@ -327,6 +328,16 @@ class Observation():
         if return_indexes:
             return (predicted_densities, derived_densities, global_indexes)
         return (predicted_densities, derived_densities)
+
+    def pc_to_pixels(self, pc):
+        """Convert a physical scale (pc) into pixel scale."""
+        try:
+            pixscale_deg = np.abs(self.wcs.pixel_scale_matrix.diagonal()).mean()
+        except AttributeError:
+            pixscale_deg = np.mean(np.abs(self.wcs.wcs.cdelt))
+        pixscale_rad = np.deg2rad(pixscale_deg)
+        pc_per_pix = self.distance * pixscale_rad
+        return pc / pc_per_pix
 
     #-------PLOT-------
 
@@ -389,9 +400,9 @@ class Observation():
             lims: A core is drawn only if his column density is in lims
         """
         if cores is None:
-            cores = self.cores
+            cores = [c.data for c in self.cores]
         if cores is None:
-            cores = self.get_cores()
+            cores = [c.data for c in self.get_cores()]
             if cores is None:
                 LOGGER.warn("Can't get the dense cores")
                 return
@@ -550,12 +561,18 @@ class Observation():
         if ext_lims[1] is None:
             ext_lims[1] = 1000.
 
-        derived_cores = self.get_cores()
+        cores = self.get_cores()
+
+        predicted_masses = np.array([c.compute_mass() for c in cores])
+        derived_cores = [c.data for c in cores]
         predicted_densities = np.array(self.get_predicted_density_at_cores(), dtype=np.float64)
         column_densities = np.array(self.get_predicted_density_at_cores(column_density=True), dtype=np.float64)
-        derived_densities =  np.array([c["average_n"] for c in self.get_cores()], dtype=np.float64)
-        mask = (~np.isnan(predicted_densities)) & (predicted_densities > 0) & (derived_densities > 0)
+        derived_densities =  np.array([c.data["average_n"] for c in cores], dtype=np.float64)
+        derived_masses = np.array([c.data["mass"] for c in cores], dtype=np.float64)
+        mask = (~np.isnan(predicted_densities)) & (predicted_densities > 0) & (derived_densities > 0) & (~np.isnan(predicted_masses))
         column_densities = column_densities[mask]
+        predicted_masses = predicted_masses[mask]
+        derived_masses = derived_masses[mask]
 
         extinctions = []
         derived_radius = []
@@ -602,15 +619,15 @@ class Observation():
         else:
             fig = ax.figure()
 
-        derived_mass = _compute_mass(derived_radius,derived_densities)
-        derived_dcmf, derived_bin_centers = _get_dcmf(derived_mass)
+        derived_masses = _compute_mass(derived_radius,derived_densities)
+        derived_dcmf, derived_bin_centers = _get_dcmf(derived_masses)
         derived_bin_centers = 10**derived_bin_centers
 
         ax.plot(derived_bin_centers, derived_dcmf, drawstyle="steps-mid", color="blue", label=f"{self.name} (Könyves et al, 2020)")
         ax.scatter(derived_bin_centers, derived_dcmf, color="blue")
         if fit:
             popt, _ = curve_fit(_dcmf_function, derived_bin_centers, derived_dcmf,
-                            p0=[np.max(derived_dcmf), 1.5, np.std(np.log(derived_mass)), 2.3, 1.6])
+                            p0=[np.max(derived_dcmf), 1.5, np.std(np.log(derived_masses)), 2.3, 1.6])
             amp_fit, mu_fit, sigma_fit, alpha_fit ,cutoff_fit = popt
             LOGGER.log(f"Best DCMF fit for estimated cores: amp={amp_fit:.2e}, mu={mu_fit:.3f}, sigma={sigma_fit:.3f}, alpha={alpha_fit}, cutoff={cutoff_fit}")
             func = lambda X: _dcmf_function(X, popt[0], popt[1], popt[2], popt[3], popt[4])
@@ -619,7 +636,7 @@ class Observation():
         LOGGER.log(f"DCMF with {len(derived_radius[global_mask])} cores.")
 
         if(self.prediction is not None):            
-            predicted_masses = np.array(_compute_mass(derived_radius, predicted_densities))
+            #predicted_masses = np.array(_compute_mass(derived_radius, predicted_densities))
             predicted_dcmf, predicted_bin_centers = _get_dcmf(predicted_masses)
             predicted_bin_centers = 10**predicted_bin_centers
             ax.plot(predicted_bin_centers, predicted_dcmf, drawstyle="steps-mid", color="red", label=f"{self.name} (Neural Network)")
@@ -627,13 +644,13 @@ class Observation():
 
             if fit:
                 popt, _ = curve_fit(_dcmf_function, predicted_bin_centers[predicted_bin_centers>0.], predicted_dcmf[predicted_bin_centers>0.],
-                            p0=[np.max(predicted_dcmf), 0.22, np.std(np.log(predicted_masses)), 2.3, 1.6])
+                            p0=[np.max(predicted_dcmf), 0.22, np.std(np.log(predicted_masses)), 2.3, 100.6])
                 amp_fit, mu_fit, sigma_fit, alpha_fit ,cutoff_fit = popt
                 LOGGER.log(f"Best DCMF fit for predicted cores: amp={amp_fit:.2e}, mu={mu_fit:.3f}, sigma={sigma_fit:.3f}, alpha={alpha_fit}, cutoff={cutoff_fit}")
                 func = lambda X: _dcmf_function(X, popt[0], popt[1], popt[2], popt[3], popt[4])
                 plot_function(func, ax=ax, scatter=False, logspace=True, lims= (0.01, 100), color="red", linestyle="--")
 
-        plot_sim_dcmf(ax, factor=0.035, logM=logM)
+        #plot_sim_dcmf(ax, factor=0.035, logM=logM)
         plot_imf_chabrier(ax, logM=logM)
         ax.set_xscale("log")
         ax.set_yscale("log")
@@ -723,7 +740,7 @@ class Observation():
 
     def serialize_cores(self, region:Union[Tuple[float,float,float,float],None]=None)->str:
         """Serialize the core properties into a file named 'cores.txt' within the observation folder."""
-        cores = self.get_cores()
+        cores = [c.data for c in self.get_cores()]
         if cores is None:
             LOGGER.error("Cant serialize, there is no cores.")
             return
@@ -814,14 +831,36 @@ if __name__ == "__main__":
 
     #script_data_and_figures("Taurus_L1495", normcol=[0.5e21,3e22], normvol=[1e1,2.5e4], save_fig=True, plot_cores=False, show=True)
 
+    from POLARIScore.networks.Trainer import load_trainer, plot_models_accuracy
     obs = Observation("OrionB","column_density_map")
     obs.load()
+    #obs.get_cores()[25].plot()
+    for i,c in enumerate(obs.get_cores()):
+        try:
+            fig, axes = c.plot(save_path=FIGURE_FOLDER + "/cores/")
+        except:
+            continue
+        plt.close(fig)
+    #from POLARIScore.objects.Dataset import getDataset
+    #trainer = load_trainer("UNet")
+    #trainer2 = load_trainer("General_UNet")
+    #trainer.validation_set = getDataset("batch_validation")
+    #plot_models_accuracy([trainer,trainer2], bins=[0,3,6,8])
+    #trainer.plot_validation_spatial_error()
+    #trainer.plot_validation(number=8)
+    #obs.plot(data=obs.prediction,norm=LogNorm(vmin=1e2, vmax= 1e6),plot_cores=True)
+    #obs.predict(trainer,patch_size=(128,128), overlap=0.5, downsample_factor=obs.find_scale(3.30474,128,400), nan_value=-1., apply_baseline=True)
+    #obs.save()
     #fig, axes = obs.plot(norm=LogNorm(vmin=1e21, vmax= 1e24),plot_cores=(None, 10**22.2), force_col=True)
     #fig.savefig(FIGURE_FOLDER+"OrionB_Test.jpg")
-    obs.plot_dcmf(bins=10)
+    #obs.plot_dcmf(bins=10)
+    #obs.plot(obs.prediction)
     #obs.plot_cores_hist()
     #fig, ax = obs.plot_validity_with_model("batch_highres_2", patch_size=(512,512), c_x=compute_smoothness, c_y=lambda x: np.log10(np.mean(x)), logspace=False)
     #ax.set_xlim([0,0.25])
     #ax.set_ylim([20,24])
+    #obs.plot_dcmf()
     #obs.plot_cores_error(mov_average=15)
+    #obs.plot_validity_with_model("batch_training", patch_size=(512,512), c_x=lambda x: np.std(np.log10(x)), c_y=lambda x: np.log10(np.mean(x)), logspace=False)
+    #obs.plot_validity_with_model("batch_highres_2", patch_size=(512,512), c_x=lambda x: np.std(np.log10(x)), c_y=lambda x: np.log10(np.mean(x)), logspace=False)
     plt.show()

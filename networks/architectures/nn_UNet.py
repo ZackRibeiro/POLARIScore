@@ -68,7 +68,7 @@ class DoubleConvBlock(nn.Module):
         return self.conv(x)
     
 class ResConvBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, is3D, init_method=init.kaiming_uniform_):
+    def __init__(self, in_channels, out_channels, is3D=False, init_method=init.kaiming_uniform_):
         super(ResConvBlock, self).__init__()
         self.init_method = init_method
         c = nn.Conv2d

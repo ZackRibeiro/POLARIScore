@@ -120,7 +120,7 @@ class Trainer():
         """Baseline : (...predictions, ...residuals)"""
 
         if not(self.network is None):
-            self.network_settings["segmentation"] = self.segmentation
+            #self.network_settings["segmentation"] = self.segmentation
             self.model = network(**self.network_settings).to(self.device)
             if self.optimizer_name in (str(type(torch.optim.Adam)),"Adam"):
                 self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
@@ -128,7 +128,7 @@ class Trainer():
                 self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate, momentum=0.5)
             self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', patience=50, factor=0.75, threshold=0.005)
 
-        self.loss_method = nn.MSELoss() if self.segmentation else nn.CrossEntropyLoss()
+        self.loss_method = nn.MSELoss() if not(self.segmentation) else nn.CrossEntropyLoss()
         self.validation_loss_method:Union[Callable, None] = None
         """If set to None, use the same loss method on validation and training."""
 
@@ -246,7 +246,7 @@ class Trainer():
 
                 if self.training_random_transform:
                     t_input, t_target = _random_transform(t_input, t_target)
-                output = self._train_model(model,t_input,t_target)
+                output = self._train_model(self.model,t_input,t_target)
                 loss = 0
                 try:
                     loss = self.loss_method(output, t_target)
@@ -300,7 +300,7 @@ class Trainer():
                     self.early_stopping(val_total_loss, epoch=total_epoch)
             if early_stopping and self.early_stopping is not None:
                 if self.early_stopping.early_stop:
-                    LOGGER.warn("Early stop at epoch: {total_epoch}.")
+                    LOGGER.warn(f"Early stop at epoch: {total_epoch}.")
                     break
 
             if self.auto_save > 0 and total_epoch % self.auto_save == 0:
@@ -413,7 +413,7 @@ class Trainer():
                 input_tensor = [input_tensor]
             if not(type(target_tensor) is list):
                 target_tensor = [target_tensor]
-            output = self._infer_model(self._get_eval_model, input_tensor)
+            output = self._infer_model(self._get_eval_model(), input_tensor)
             target_tensor = [self.model.shape_tensor(t, reverse=True, name=self.target_names[ti], norms=self.norms, segmentation=self.segmentation) for ti,t in enumerate(target_tensor)] 
             output = output if type(output) is list else [output]
             output = [self.model.shape_tensor(o, reverse=True, name=self.target_names[oi], norms=self.norms, segmentation=self.segmentation) for oi,o in enumerate(output)]
@@ -443,7 +443,7 @@ class Trainer():
         outputs = outputs if type(outputs) is list else [outputs]
         if return_tensor:
             return outputs
-        return [self.model.shape_tensor(outputs[i], name=output_names[i] if output_names else None, reverse=True) for i in range(len(outputs), segmentation=self.segmentation)]
+        return [self.model.shape_tensor(outputs[i], name=output_names[i] if output_names else None, reverse=True, segmentation=self.segmentation) for i in range(len(outputs))]
 
     #-------PLOT-------
 
@@ -488,11 +488,11 @@ class Trainer():
         
         return fig, ax
 
-    def plot_validation(self, inter=(None,None), number_per_row=8, same_limits=True, save=False):
+    def plot_validation(self, inter=(None,None), number_per_row=8, number=16, same_limits=True, save=False):
         """
         Show target and model prediction images
         """
-        fig, axes = plot_batch(self.get_prediction_batch()[0 if inter[0] is None else inter[0]: -1 if inter[1] is None else inter[1]], same_limits=same_limits, number_per_row=number_per_row)
+        fig, axes = plot_batch(self.get_prediction_batch()[0 if inter[0] is None else inter[0]: -1 if inter[1] is None else inter[1]], same_limits=same_limits, number_per_row=number_per_row, number=number)
         if save:
             self.save_fig(fig, fig_name='validation')
 
@@ -559,6 +559,7 @@ class Trainer():
 
         return fig, ax
     
+    @DeprecationWarning
     def plot_sim_validation(self, simulation, plot_total=False, save=False):
         sim_col_dens = simulation._compute_c_density()
         sim_mass_dens = simulation._compute_v_density(method=compute_mass_weighted_density)
@@ -598,8 +599,8 @@ class Trainer():
         else:
             fig = None
     
-    def plot_validation_spatial_error(self,number_per_row=4,log=True,save=False):
-        batch = self.get_prediction_batch()
+    def plot_validation_spatial_error(self,number_per_row=4,number=8,log=True,save=False):
+        batch = self.get_prediction_batch()[:number]
         if log:
             error = (np.log10(np.array([b[0] for b in batch]))-np.array(np.log10([b[1] for b in batch])))
         else:
@@ -770,7 +771,7 @@ def load_trainer(model_name, load_model=True, trainer_class=Trainer):
     with open(os.path.join(model_path,'settings.json')) as file:
         settings = json.load(file)
     
-    trainer = trainer_class(model_name=settings["model_name"], segmentation=bool(settings["is_segmentation"]))
+    trainer = trainer_class(model_name=settings["model_name"], segmentation=bool(settings["is_segmentation"] if "is_segmentation" in settings else False))
     if "training_set" in settings and not(settings["training_set"] is None):
         try:
             trainer.training_set = getDataset(settings["training_set"])
@@ -930,7 +931,7 @@ def plot_models_accuracy(trainers=[], ax=None, sigmas=(0., 1., 20), show_errors=
                 acc_mean = all_bin_means[:, b]
                 acc_std = all_bin_stds[:, b]
                 style = linestyles[b % len(linestyles)] if use_linestyles else '-'
-                color = 'black' if use_linestyles else plt.cm.viridis(b / (n_bins - 1))
+                color = 'black' if use_linestyles else plt.cm.tab20b((i*(n_bins-1)+b)/len(trainers)/(n_bins - 1))
                 label = f"{t.model_name} - bin {b+1}"
 
                 if show_errors:
@@ -1151,37 +1152,37 @@ if __name__ == "__main__":
         t2 = target[1]
         return torch.mean((o1 - t1) ** 2)+0.1*torch.mean((o2 - t2) ** 2)
     
-    ds = getDataset("batch_highres_2")
+    ds1 = getDataset("batch_training")
     #ds = ds.downsample(channel_names=["cospectra"], target_depths=[128], methods=["mean"])
-    ds1, ds2 = ds.split(cutoff=0.8)
+    ds2 = getDataset("batch_validation")
 
-
-    trainer = Trainer(UneK, ds1, ds2, model_name="UneK")
+    """
+    #trainer = Trainer(UNet, ds1, ds2, model_name="General_UNet_6")
+    #trainer = load_trainer("General_UNet")
     #trainer.norms = {
     #    "cdens": DATA_NORMALIZATION_CDENS,
     #    "vdens": DATA_NORMALIZATION_VDENS,
     #}
-    #trainer = load_trainer("cached_model")
-    #trainer.training_set = ds1
-    #trainer.validation_set = ds2
-    #trainer.network_settings["base_filters"] = 64
-    #trainer.network_settings["num_layers"] = 4
-    #trainer.network_settings["convBlock"] = DoubleConvBlock
-    #trainer.training_random_transform = True
-    #trainer.optimizer_name = "Adam"
-    #trainer.target_names = ["vdens"]
-    #trainer.input_names = ["cdens"]
+    trainer.training_set = ds1
+    trainer.validation_set = ds2
+    #trainer.network_settings["base_filters"] = 48
+    #trainer.network_settings["num_layers"] = 6
+    #trainer.network_settings["convBlock"] = ResConvBlock
+    trainer.training_random_transform = True
+    trainer.optimizer_name = "Adam"
+    trainer.target_names = ["vdens"]
+    trainer.input_names = ["cdens"]
     #trainer.init()
-    #trainer.train(1000,batch_number=4,compute_validation=10)
+    #trainer.train(1000,batch_number=16,compute_validation=10,early_stopping=False)
     #trainer.save()
-    #trainer.plot(save=True)
-    #trainer.plot_validation(save=True)
+    trainer.plot(save=True)
+    trainer.plot_validation(save=True)
     #plot_models_accuracy([load_trainer("UneK"),load_trainer("UNet")], sigmas=(0,1,20), bins=[0,2,4,8], use_linestyles=True) 
-
-    """How to create and use baseline on a model
-    #trainer = load_trainer("UneK_highres_fingercrossed")  
-    #trainer.validation_set = ds2  
+    """
+    
+    #How to create and use baseline on a model
     #trainer.plot()
+    trainer = load_trainer("General_UNet")
     trainer.create_baseline()
 
     batch = trainer.get_prediction_batch()
@@ -1193,9 +1194,9 @@ if __name__ == "__main__":
     trainer.prediction_batch = reconstructed_batch
     #trainer.plot()
     #trainer.plot_validation()
+    trainer.plot_validation()
+    trainer.plot_validation_spatial_error()
     fig, ax=  trainer.plot_residuals()
-    fig.savefig(os.path.join(FIGURE_FOLDER,"unek_residuals_fitted.jpg"))
-
-    """
+    #fig.savefig(os.path.join(FIGURE_FOLDER,"unek_residuals_fitted.jpg"))
 
     plt.show()

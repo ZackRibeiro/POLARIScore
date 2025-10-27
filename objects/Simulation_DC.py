@@ -281,16 +281,16 @@ class Simulation_DC():
                 continue
             
             s = img_size
-            if type(size) is list:
-                size = np.min(size) + np.random.random()*(np.max(size)-np.min(size))
-            s = max(convert_pc_to_index(size, self.nres, self.size), img_size)
-            size = self.from_index_to_scale(s)/PC_TO_CM
-
+            i_size = size
+            if type(i_size) is list:
+                i_size = np.min(size) + np.random.random()*(np.max(size)-np.min(size))
+            s = max(convert_pc_to_index(i_size, self.nres, self.size, clip=False)+1, img_size)
+            i_size = self.from_index_to_scale(s)/PC_TO_CM
 
             #Verify if the region is already covered by a previous generated image
             flag = False
             for point in areas_explored[face]:
-                if np.linalg.norm(center-point) < nearest_size_factor * size:
+                if np.linalg.norm(center-point) < nearest_size_factor * i_size:
                     flag = True
                     break
             if flag:
@@ -354,9 +354,9 @@ class Simulation_DC():
             if flag_context:
                 assert column_density[face].shape[0]//s, LOGGER.error("Datacube dimension need to be divisible by size asked to generate context.")
                 context_size = what_to_compute["context"] if type(what_to_compute["context"]) is float or type(what_to_compute["context"]) is int else size
-                if(context_size < size*2):
-                    context_size = size*2
-                context_size_idx = convert_pc_to_index(context_size, self.nres,self.size)
+                if(context_size < i_size*2):
+                    context_size = i_size*2
+                context_size_idx = convert_pc_to_index(context_size, self.nres,self.size, clip=False)+1
                 context_cdens = column_density[face].copy()
                 context_x1,context_y1,context_x2,context_y2 = find_context(canvas=context_cdens, region=(start_x,start_y,end_x,end_y), context_size=context_size_idx)
                 #crop to context
@@ -672,25 +672,11 @@ def openSimulation(name_root:str, global_size:float, use_cache:bool=True,cache_n
 if __name__ == "__main__":
     #sim = Simulation_DC(name="orionMHD_lowB_0.39_512", global_size=66.0948, init=True)
     #sim.init(loadTemp=True, loadVel=True)
-    sim = openSimulation("orionMHD_lowB_multi", global_size=66.0948)
+    sim = openSimulation("orionMHDt2_lowB_multi", global_size=66.0948, cache_name="sim_memory_2")
     #sim.plotSlice(axis=2, enable_slider=True)
-    sim.generate_batch(name="highres_s1",size=0.,number=1000,what_to_compute={"cospectra":False, "density":False,"context":None})
+    sim.generate_batch(name="highres_sim2_32px_val",number=10000, img_size=32,what_to_compute={"cospectra":False, "density":False,"context":None},axis=[2])
     #sim.plot(derivate=2, axis=0)
     #plt.figure()
     #sim.plot_correlation(method=compute_mass_weighted_density, contour_levels=3)
-    
-    #sim.generate_batch(name="orionMHD_lowB_0.39_512_13CO_max",method=compute_max_density,what_to_compute = {"cospectra":True}, number = 1000, img_size=128, nearest_size_factor=0.75)
-    #from Dataset import getDataset
-    #ds = getDataset("batch_highres_twochannels")
-    #pair = ds.get(1)
-    #indexes = ds.get_element_index(["vdens","vdensdiffuse","vdensdense","cdens"])
-     
-    #norm = LogNorm(vmin=np.min(pair[indexes[0]]),vmax=np.max(pair[indexes[0]]))
-    #plt.figure()
-    #plt.imshow(pair[indexes[0]], norm= LogNorm())
-    #plt.figure()
-    #plt.imshow(pair[indexes[1]], norm= LogNorm())
-    #plt.figure()
-    #plt.imshow(pair[indexes[2]], norm= LogNorm())
 
     plt.show()

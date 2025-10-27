@@ -121,12 +121,13 @@ class Dataset():
             self.name = name
         batch, order = _open_batch(name)
         self.batch.extend(batch)
-        self.settings["order"] = order
 
         settings = {}
         with open(os.path.join( os.path.join(TRAINING_BATCH_FOLDER,name),'settings.json')) as file:
             settings = json.load(file, object_hook=numpy_decoder)
 
+        self.settings = settings            
+        self.settings["order"] = order
         if "areas_explored" in settings:
             self.settings["areas_explored"] = eval(settings["areas_explored"].replace('array', 'np.array')) if type(settings["areas_explored"]) is str else settings["areas_explored"]
         if "img_size" in settings:
@@ -198,7 +199,6 @@ class Dataset():
         Returns:
             merged_dataset
         """
-
         def _merge(ds1, ds2):
             LOGGER.log(f"Merging dataset {ds1.name} with dataset {ds2.name}")
 
@@ -724,7 +724,10 @@ if __name__ == "__main__":
     #sim.init(loadTemp=True, loadVel=True)
     #sim.plot(axis=1)
 
-    ds = getDataset("batch_highres")
+    ds = getDataset("batch_highres_sim1_32px")
+    ds2 = getDataset("batch_highres_sim2_32px")
+    merged_ds = ds.merge(ds2)
+    merged_ds.save()
     #ds.plot_map(map_index=0, element_index=4, enable_slider=0, show_title=False)
     #fig, ax = ds.plot_correlation(PDF=True, contour_levels=[0.38,0.69,0.95])
     #ds.plot_correlation(PDF=True, contour_levels=[0.38,0.69,0.95])

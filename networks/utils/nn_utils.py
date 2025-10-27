@@ -54,7 +54,7 @@ def compute_accuracy(label:np.ndarray, pred:np.ndarray, sigma:float=.1, log10:bo
         if mask.sum() > 0:
             acc_bin = corrects_flat[mask].sum() / mask.sum()
         else:
-            acc_bin = 1.
+            acc_bin = np.nan
         bin_acc.append(acc_bin)
 
     return bin_acc
@@ -72,6 +72,9 @@ def compute_batch_accuracy(batch:List[Tuple[np.ndarray,np.ndarray]], sigma:float
     acc = []
     for label, pred in batch:
         acc.append(compute_accuracy(label, pred, sigma, log10, bins=bins, col_dens=col_dens))
-    if type(acc[0]) is list and bins is not None:
-        return [(np.mean([a[i] for a in acc]),np.std([a[i] for a in acc])) for i in range(len(bins)-1)]
-    return (np.mean(acc),np.std(acc))
+    if isinstance(acc[0], list) and bins is not None:
+        return [
+            (np.nanmean([a[i] for a in acc]), np.nanstd([a[i] for a in acc]))
+            for i in range(len(bins) - 1)
+        ]
+    return (np.nanmean(acc), np.nanstd(acc))

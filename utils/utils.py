@@ -17,7 +17,7 @@ from POLARIScore.config import LOGGER
 import inspect
 import ast, re
 
-def convert_pc_to_index(pc:float,nres:int,size:float,start:float=0.)->int:
+def convert_pc_to_index(pc:float,nres:int,size:float,start:float=0.,clip=True)->int:
     """
     Args:
         pc(float): value in parsec unit
@@ -28,7 +28,7 @@ def convert_pc_to_index(pc:float,nres:int,size:float,start:float=0.)->int:
         float: index
     """
     idx = (pc-start)/(size)
-    if idx > 1 or idx < 0:
+    if (idx > 1 or idx < 0) and clip:
         return -1
     return (int(np.floor(idx*nres)))
 
@@ -336,14 +336,21 @@ def merge_dicts(dic1: Dict, dic2: Dict) -> Dict:
             except:
                 pass
 
-        if isinstance(v1, (list, np.ndarray)) and isinstance(v2, (list, np.ndarray)):
-            merged[k] = np.concatenate((np.array(v1), np.array(v2)))
-        elif v1 is not None and v2 is None:
+        try:
+            if(isinstance(v1, list)):
+                v1 = np.array(v1)
+            if(isinstance(v2, list)):
+                v2 = np.array(v2)
+            if isinstance(v1, np.ndarray) and isinstance(v2, np.ndarray) and len(v1.shape) <= 1 and len(v2.shape) <= 1:
+                merged[k] = np.concatenate((v1, v2))
+            elif v1 is not None and v2 is None:
+                merged[k] = v1
+            elif v2 is not None and v1 is None:
+                merged[k] = v2
+            else:
+                merged[k] = v1+v2
+        except:
             merged[k] = v1
-        elif v2 is not None and v1 is None:
-            merged[k] = v2
-        else:
-            merged[k] = v1+v2
 
     return merged
 
