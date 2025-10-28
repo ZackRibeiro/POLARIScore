@@ -807,13 +807,13 @@ def load_trainer(model_name, load_model=True, trainer_class=Trainer):
     if load_model:
         model = trainer.network(**trainer.network_settings)
         try:
-            model.load_state_dict(torch.load(os.path.join(model_path,trainer.model_name+".pth"), map_location=trainer.device))
+            model.load_state_dict(torch.load(os.path.join(model_path,trainer.model_name+".pth"), map_location=trainer.device), strict=False)
         except FileNotFoundError:
             try:
-                model.load_state_dict(torch.load(os.path.join(model_path,folder_model_name+".pth"), map_location=trainer.device))
+                model.load_state_dict(torch.load(os.path.join(model_path,folder_model_name+".pth"), map_location=trainer.device), strict=False)
             except FileNotFoundError:
                 print(os.path.join(model_path,trainer.model_name+f"_epoch{trainer.last_epoch}.pth"))
-                model.load_state_dict(torch.load(os.path.join(model_path,trainer.model_name+f"_epoch{trainer.last_epoch}.pth"), map_location=trainer.device))
+                model.load_state_dict(torch.load(os.path.join(model_path,trainer.model_name+f"_epoch{trainer.last_epoch}.pth"), map_location=trainer.device), strict=False)
         model.to(trainer.device)
         trainer.init(model=model)
         if os.path.exists(ema_state_path):

@@ -20,9 +20,7 @@ class INNTrainer(Trainer):
         z, log_det_J = output
         if z.dim() > 2:
             z = z.view(z.size(0), -1)
-        nll = 0.5 * torch.sum(z ** 2, dim=1) - log_det_J
-
-        # normalization term
+        nll = 0.5 * torch.sum(z ** 2, dim=[1]) - (log_det_J)
         const = 0.5 * z.size(1) * math.log(2 * math.pi)
         nll += const
 
@@ -53,31 +51,48 @@ class INNTrainer(Trainer):
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
     from POLARIScore.objects.Dataset import getDataset
-    from POLARIScore.config import DATA_NORMALIZATION_CDENS, DATA_NORMALIZATION_VDENS
-    ds1 = getDataset("batch_training_32px")
-    ds2 = getDataset("batch_validation_32px")
+    from POLARIScore.config import DATA_NORMALIZATION_CDENS, DATA_NORMALIZATION_VDENS, DATA_NORMALIZATION_CDENS_TORCH, DATA_NORMALIZATION_VDENS_TORCH
+    ds1 = getDataset("batch_highres_2_b1")
+    ds2 = getDataset("batch_highres_2_b2")
+
+    def classic_log_mse(output, target):
+        output_phys = DATA_NORMALIZATION_VDENS_TORCH[1](output)
+        target_phys = DATA_NORMALIZATION_VDENS_TORCH[1](target)
+        output_log = torch.log(output_phys)
+        target_log = torch.log(target_phys)
+        mse = torch.mean((output_log - target_log) ** 2)
+        return mse
 
 
-    trainer = INNTrainer(cINN, ds1, ds2, model_name="cINN")
-    #trainer = INNTrainer.load("cINN")
-    #trainer.norms = {
-    #    "cdens": DATA_NORMALIZATION_CDENS,
-    #    "vdens": DATA_NORMALIZATION_VDENS,
-    #}
+    trainer = INNTrainer(cINN, ds1, ds2, model_name="cINN_2")
+    #trainer = load_trainer("cINN", trainer_class=INNTrainer)
+    trainer.norms = {
+        "cdens": DATA_NORMALIZATION_CDENS,
+        "vdens": DATA_NORMALIZATION_VDENS,
+    }
+    #trainer.ema = True
+    trainer.validation_loss_method = classic_log_mse
+    #trainer.ema_warmup = 100
     trainer.learning_rate = 1e-3
     trainer.training_set = ds1
     trainer.validation_set = ds2
-    trainer.network_settings["img_dim"] = 32
+    trainer.network_settings["img_dim"] = 128
     trainer.network_settings["base_filters"] = 32
     trainer.network_settings["num_layers"] = 4
+    trainer.network_settings["coupling_block_per_layer"] = 4
     trainer.training_random_transform = True
     trainer.optimizer_name = "Adam"
     trainer.target_names = ["vdens"]
     trainer.input_names = ["cdens"]
     trainer.init()
-    trainer.train(500,batch_number=256,compute_validation=10,early_stopping=False)
+
+    #unet_encoder = load_trainer("UNet").model.encoders
+    #trainer.model.encoder.encoders = unet_encoder
+
+    trainer.train(500,batch_number=8,compute_validation=10,early_stopping=False)
     trainer.save()
     trainer.plot(save=True)
+    trainer.validation_set = ds1
     trainer.plot_validation(save=True)
 
     plt.show()

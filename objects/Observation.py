@@ -17,7 +17,7 @@ import astropy.units as u
 import re
 from POLARIScore.networks.Trainer import Trainer
 from POLARIScore.objects.Dataset import getDataset
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Tuple, Union, Literal
 from scipy.stats import lognorm
 from scipy.optimize import curve_fit
 from POLARIScore.scripts.plotORIONsimDCMF import plot_sim_dcmf
@@ -545,7 +545,7 @@ class Observation():
 
         return fig, ax
 
-    def plot_dcmf(self, ax=None, bins:int=10, ext_lims:Tuple[Union[float,None],Union[float,None]]=[None,None], logM:bool=True, fit=True):
+    def plot_dcmf(self, ax=None, bins:int=10, ext_lims:Tuple[Union[float,None],Union[float,None]]=[None,None], logM:bool=True, fit=True, method:Literal['constant','gaussian']="gaussian"):
         """
         Plot the dense core mass function
         Args:
@@ -554,6 +554,7 @@ class Observation():
             ext_lims: Choose only the dense cores between the two extinctions Av given.
             logM: plot dN/dlogM or dN/dM.
             fit: try to fit the dcmf by a lognormal with power law.
+            method: method used to compute the core mass.
         """
 
         if ext_lims[0] is None:
@@ -563,7 +564,7 @@ class Observation():
 
         cores = self.get_cores()
 
-        predicted_masses = np.array([c.compute_mass() for c in cores])
+        predicted_masses = np.array([c.compute_mass(method=method) for c in cores])
         derived_cores = [c.data for c in cores]
         predicted_densities = np.array(self.get_predicted_density_at_cores(), dtype=np.float64)
         column_densities = np.array(self.get_predicted_density_at_cores(column_density=True), dtype=np.float64)
@@ -780,8 +781,8 @@ class Observation():
         LOGGER.log(f"Observation prediction {self.name} saved")
         np.save(path,self.prediction)
 
-    def load(self)->np.ndarray:
-        path = os.path.join(CACHES_FOLDER,self.name.split(".npy")[0]+".npy")
+    def load(self,suffix="")->np.ndarray:
+        path = os.path.join(CACHES_FOLDER,self.name.split(".npy")[0]+suffix+".npy")
         if not(os.path.exists(path)):
             return
         self.prediction = np.load(path) 
@@ -833,14 +834,14 @@ if __name__ == "__main__":
 
     from POLARIScore.networks.Trainer import load_trainer, plot_models_accuracy
     obs = Observation("OrionB","column_density_map")
-    obs.load()
+    obs.load(suffix="_generalunet")
     #obs.get_cores()[25].plot()
-    for i,c in enumerate(obs.get_cores()):
-        try:
-            fig, axes = c.plot(save_path=FIGURE_FOLDER + "/cores/")
-        except:
-            continue
-        plt.close(fig)
+    #for i,c in enumerate(obs.get_cores()):
+    #    try:
+    #        fig, axes = c.plot(save_path=FIGURE_FOLDER + "/cores/")
+    #    except:
+    #        continue
+    #    plt.close(fig)
     #from POLARIScore.objects.Dataset import getDataset
     #trainer = load_trainer("UNet")
     #trainer2 = load_trainer("General_UNet")
@@ -859,7 +860,7 @@ if __name__ == "__main__":
     #fig, ax = obs.plot_validity_with_model("batch_highres_2", patch_size=(512,512), c_x=compute_smoothness, c_y=lambda x: np.log10(np.mean(x)), logspace=False)
     #ax.set_xlim([0,0.25])
     #ax.set_ylim([20,24])
-    #obs.plot_dcmf()
+    obs.plot_dcmf(method="gaussian")
     #obs.plot_cores_error(mov_average=15)
     #obs.plot_validity_with_model("batch_training", patch_size=(512,512), c_x=lambda x: np.std(np.log10(x)), c_y=lambda x: np.log10(np.mean(x)), logspace=False)
     #obs.plot_validity_with_model("batch_highres_2", patch_size=(512,512), c_x=lambda x: np.std(np.log10(x)), c_y=lambda x: np.log10(np.mean(x)), logspace=False)

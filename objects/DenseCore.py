@@ -26,8 +26,8 @@ class DenseCore():
         densities = self.obs.prediction
         x_pix, y_pix = skycoord_to_pixel(self.coord, self.wcs)
 
-        x_int, y_int = int(round(x_pix)), int(round(y_pix))
-        if (0 <= y_int < self.prediction.shape[0]) and (0 <= x_int < self.prediction.shape[1]):
+        x_int, y_int = int(round(float(x_pix))), int(round(float(y_pix)))
+        if (0 <= y_int < self.obs.prediction.shape[0]) and (0 <= x_int < self.obs.prediction.shape[1]):
             return densities[y_int, x_int]
         else:
             return np.nan
