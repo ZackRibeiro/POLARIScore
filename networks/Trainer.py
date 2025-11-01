@@ -157,7 +157,8 @@ class Trainer():
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
         elif self.optimizer_name in (str(type(torch.optim.SGD)),"SGD") or "SGD" in self.optimizer_name:
             self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate, momentum=0.5)
-        self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', patience=50, factor=0.75, threshold=0.005)
+        if self.scheduler is not None:
+            self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', patience=50, factor=0.75, threshold=0.005)
         if self.validation_loss_method is None:
             self.validation_loss_method = self.loss_method
         return True
@@ -438,12 +439,14 @@ class Trainer():
         self.model.eval()
 
         inputs = inputs if type(inputs) is list else [inputs]
-        input_tensors = [self.model.shape_tensor(inputs[i], name=input_names[i] if input_names else None) for i in range(len(inputs))]
+        input_names = input_names if type(input_names) is list else [input_names]
+        output_names = output_names if type(output_names) is list else [output_names]
+        input_tensors = [self.model.shape_tensor(inputs[i], name=input_names[i] if input_names else None, norms=self.norms) for i in range(len(inputs))]
         outputs = self._infer_model(self._get_eval_model(), input_tensors)
         outputs = outputs if type(outputs) is list else [outputs]
         if return_tensor:
             return outputs
-        return [self.model.shape_tensor(outputs[i], name=output_names[i] if output_names else None, reverse=True, segmentation=self.segmentation) for i in range(len(outputs))]
+        return [self.model.shape_tensor(outputs[i], name=output_names[i] if output_names else None, reverse=True, segmentation=self.segmentation, norms=self.norms) for i in range(len(outputs))]
 
     #-------PLOT-------
 

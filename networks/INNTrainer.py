@@ -1,5 +1,6 @@
 from .Trainer import Trainer, load_trainer
 import torch
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 import math
 from POLARIScore.networks.architectures.nn_cINN import cINN
 import torch.nn as nn
@@ -32,7 +33,15 @@ class INNTrainer(Trainer):
             input = input[0]
         if(type(target) is list):
             target = target[0]
-        output = model(target,input) #target is true data, input is condition data
+
+        #To test if the model is indeed invertible
+        #with torch.no_grad():
+        #    z, _ = model(target, input)
+        #    y_rec = model.inverse(z, input)  
+        #    recon_mse = torch.mean((y_rec - target)**2).item()
+        #    print("Reconstruction MSE:", recon_mse)
+            
+        output = model(target,input)
         return output
     
     def _infer_model(self, model, input):
@@ -42,7 +51,9 @@ class INNTrainer(Trainer):
         C, H, W = model.z_shape
         z = torch.randn((B, C, H, W), device=input.device)
         output = model.inverse(z, input)
+
         return output
+    
     
     @staticmethod
     def load(model_name, load_model=True):
@@ -52,8 +63,8 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
     from POLARIScore.objects.Dataset import getDataset
     from POLARIScore.config import DATA_NORMALIZATION_CDENS, DATA_NORMALIZATION_VDENS, DATA_NORMALIZATION_CDENS_TORCH, DATA_NORMALIZATION_VDENS_TORCH
-    ds1 = getDataset("batch_highres_2_b1")
-    ds2 = getDataset("batch_highres_2_b2")
+    ds1 = getDataset("batch_training")
+    ds2 = getDataset("batch_validation")
 
     def classic_log_mse(output, target):
         output_phys = DATA_NORMALIZATION_VDENS_TORCH[1](output)
@@ -64,35 +75,37 @@ if __name__ == "__main__":
         return mse
 
 
-    trainer = INNTrainer(cINN, ds1, ds2, model_name="cINN_2")
-    #trainer = load_trainer("cINN", trainer_class=INNTrainer)
+    #trainer = INNTrainer(cINN, ds1, ds2, model_name="cINN_5")
+    trainer = load_trainer("cINN_5", trainer_class=INNTrainer)
     trainer.norms = {
         "cdens": DATA_NORMALIZATION_CDENS,
         "vdens": DATA_NORMALIZATION_VDENS,
     }
     #trainer.ema = True
     trainer.validation_loss_method = classic_log_mse
-    #trainer.ema_warmup = 100
+    #trainer.ema_warmup = 200
     trainer.learning_rate = 1e-3
     trainer.training_set = ds1
     trainer.validation_set = ds2
     trainer.network_settings["img_dim"] = 128
-    trainer.network_settings["base_filters"] = 32
-    trainer.network_settings["num_layers"] = 4
-    trainer.network_settings["coupling_block_per_layer"] = 4
+    trainer.network_settings["base_filters"] = 64
+    trainer.network_settings["num_layers"] = 3
+    trainer.network_settings["coupling_block_per_layer"] = 3
     trainer.training_random_transform = True
     trainer.optimizer_name = "Adam"
     trainer.target_names = ["vdens"]
     trainer.input_names = ["cdens"]
-    trainer.init()
+    trainer.auto_save = 250
+    trainer.scheduler = ReduceLROnPlateau(trainer.optimizer, 'min', patience=10, factor=0.1, threshold=0.0001)
+    #trainer.init()
 
     #unet_encoder = load_trainer("UNet").model.encoders
     #trainer.model.encoder.encoders = unet_encoder
 
-    trainer.train(500,batch_number=8,compute_validation=10,early_stopping=False)
+    trainer.train(1000,batch_number=8,compute_validation=10,early_stopping=False)
     trainer.save()
     trainer.plot(save=True)
     trainer.validation_set = ds1
-    trainer.plot_validation(save=True)
+    trainer.plot_validation(save=True, number=8, number_per_row=4)
 
     plt.show()

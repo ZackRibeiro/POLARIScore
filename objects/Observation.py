@@ -113,7 +113,7 @@ class Observation():
                     continue
                 
                 #Work only for 1 output: col density
-                output_patch = model_trainer.predict_tensor(patch)[0]
+                output_patch = model_trainer.predict_tensor(patch, input_names="cdens", output_names="vdens")[0]
                 if apply_baseline:
                     output_patch = model_trainer.apply_baseline(output_patch, log=False)
                 
@@ -369,7 +369,7 @@ class Observation():
         norm = norm if not(norm is None) else LogNorm()
         if not(force_col) and (np.nanpercentile(data,50) < 1e10 or force_vol):
             flag_vol_density = True
-            label=r"$n_H(cm^{-3})$"
+            label=r"$<n_H>_m(cm^{-3})$"
         im = ax.imshow(data, cmap="rainbow", norm=norm)
         overlay = ax.get_coords_overlay('fk5')
         overlay.grid(color='black', ls='dotted')
@@ -833,8 +833,24 @@ if __name__ == "__main__":
     #script_data_and_figures("Taurus_L1495", normcol=[0.5e21,3e22], normvol=[1e1,2.5e4], save_fig=True, plot_cores=False, show=True)
 
     from POLARIScore.networks.Trainer import load_trainer, plot_models_accuracy
+    from POLARIScore.networks.INNTrainer import INNTrainer
+    from POLARIScore.config import DATA_NORMALIZATION_CDENS, DATA_NORMALIZATION_VDENS
     obs = Observation("OrionB","column_density_map")
-    obs.load(suffix="_generalunet")
+    #trainer = load_trainer("General_UNet")
+    #trainer = load_trainer("cINN_3", trainer_class=INNTrainer)
+    #trainer.norms = {
+    #    "cdens": DATA_NORMALIZATION_CDENS,
+    #    "vdens": DATA_NORMALIZATION_VDENS,
+    #}
+    #obs.predict(trainer,patch_size=(128,128), overlap=0., downsample_factor=obs.find_scale(3.30474,128,400), nan_value=-1., apply_baseline=False)
+    #obs.save()
+    obs.load(suffix="_cinn")
+    obs.plot(data=obs.prediction, norm=LogNorm(vmin=1e2, vmax= 1e5))
+    obs.load(suffix="_unet")
+    obs.plot(data=obs.prediction, norm=LogNorm(vmin=1e2, vmax= 1e5))
+    #obs.plot(data=obs.prediction)
+    #obs.plot_dcmf(method="constant")
+
     #obs.get_cores()[25].plot()
     #for i,c in enumerate(obs.get_cores()):
     #    try:
@@ -843,14 +859,12 @@ if __name__ == "__main__":
     #        continue
     #    plt.close(fig)
     #from POLARIScore.objects.Dataset import getDataset
-    #trainer = load_trainer("UNet")
     #trainer2 = load_trainer("General_UNet")
     #trainer.validation_set = getDataset("batch_validation")
     #plot_models_accuracy([trainer,trainer2], bins=[0,3,6,8])
     #trainer.plot_validation_spatial_error()
     #trainer.plot_validation(number=8)
     #obs.plot(data=obs.prediction,norm=LogNorm(vmin=1e2, vmax= 1e6),plot_cores=True)
-    #obs.predict(trainer,patch_size=(128,128), overlap=0.5, downsample_factor=obs.find_scale(3.30474,128,400), nan_value=-1., apply_baseline=True)
     #obs.save()
     #fig, axes = obs.plot(norm=LogNorm(vmin=1e21, vmax= 1e24),plot_cores=(None, 10**22.2), force_col=True)
     #fig.savefig(FIGURE_FOLDER+"OrionB_Test.jpg")
@@ -860,7 +874,7 @@ if __name__ == "__main__":
     #fig, ax = obs.plot_validity_with_model("batch_highres_2", patch_size=(512,512), c_x=compute_smoothness, c_y=lambda x: np.log10(np.mean(x)), logspace=False)
     #ax.set_xlim([0,0.25])
     #ax.set_ylim([20,24])
-    obs.plot_dcmf(method="gaussian")
+    #obs.plot_dcmf(method="gaussian")
     #obs.plot_cores_error(mov_average=15)
     #obs.plot_validity_with_model("batch_training", patch_size=(512,512), c_x=lambda x: np.std(np.log10(x)), c_y=lambda x: np.log10(np.mean(x)), logspace=False)
     #obs.plot_validity_with_model("batch_highres_2", patch_size=(512,512), c_x=lambda x: np.std(np.log10(x)), c_y=lambda x: np.log10(np.mean(x)), logspace=False)
