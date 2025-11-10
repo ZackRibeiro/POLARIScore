@@ -245,15 +245,19 @@ class UNet(BaseModule):
 
         assert (self.is3D and len(x.shape) > 4) or (not(self.is3D) and len(x.shape) < 5), LOGGER.error(f"U-Net is defined as {'3D' if self.is3D else '2D'} but input has {len(x.shape)-2} dimensions")
 
+        self._plot_tensor(x, name="input")
+
         # Encoder forward pass
         enc_features = []
         for i in range(self.num_layers):
             x = self.encoders[i](x)
+            self._plot_tensor(x, subfolder=f"encoder_layer_{str(i)}")
             enc_features.append(x)
             x = self.pool(x)
         
         # Bottleneck
         x = self.bottleneck(x)
+        #self._plot_tensor(x, subfolder="bottleneck")
         
         # Decoder forward pass
         decoded_x = []
@@ -264,6 +268,7 @@ class UNet(BaseModule):
                 enc_feat = enc_features[-(i+1)]
                 if self.attention:
                     enc_feat = self.attentions[j][i](xj, enc_feat)
+                    self._plot_tensor(enc_feat, subfolder=f"attention_out_{str(j)}_{str(i)}")
                     
                 skip_feats = [xj, enc_feat]
                 if i+2 <= self.num_layers and self.deeperskips:
@@ -274,6 +279,7 @@ class UNet(BaseModule):
             
                 xj = torch.cat(skip_feats, dim=1)
                 xj = self.decoders[j][i](xj)
+                self._plot_tensor(xj, subfolder=f"decoder_out_{str(j)}_{str(i)}")
             decoded_x.append(xj)
         
         # Output
@@ -281,7 +287,8 @@ class UNet(BaseModule):
             return [self.final_conv[j](decoded_x[j]) for j in range(self.out_channels)]
         else:
             return self.final_conv[0](decoded_x[0])
-    
+
+            
 if __name__ == "__main__":
     model = UNet(is3D=True)
     x = torch.randn(1, 1, 128, 128, 128)

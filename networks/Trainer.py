@@ -1155,9 +1155,13 @@ if __name__ == "__main__":
         t2 = target[1]
         return torch.mean((o1 - t1) ** 2)+0.1*torch.mean((o2 - t2) ** 2)
     
-    ds1 = getDataset("batch_training")
+    ds = getDataset("batch_highres_2")
+    ds1, ds2 = ds.split(0.8)
+    trainer = load_trainer("UNet")
+    trainer.model.plot_features(ds2.get(3)[0], os.path.join(EXPORT_FOLDER,"model_features"))
+
     #ds = ds.downsample(channel_names=["cospectra"], target_depths=[128], methods=["mean"])
-    ds2 = getDataset("batch_validation")
+    #ds2 = getDataset("batch_validation")
 
     """
     #trainer = Trainer(UNet, ds1, ds2, model_name="General_UNet_6")
@@ -1183,6 +1187,7 @@ if __name__ == "__main__":
     #plot_models_accuracy([load_trainer("UneK"),load_trainer("UNet")], sigmas=(0,1,20), bins=[0,2,4,8], use_linestyles=True) 
     """
     
+    """
     #How to create and use baseline on a model
     #trainer.plot()
     trainer = load_trainer("General_UNet")
@@ -1201,5 +1206,6 @@ if __name__ == "__main__":
     trainer.plot_validation_spatial_error()
     fig, ax=  trainer.plot_residuals()
     #fig.savefig(os.path.join(FIGURE_FOLDER,"unek_residuals_fitted.jpg"))
-
+    """
+    
     plt.show()

@@ -7,12 +7,67 @@ parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(parent_dir)
 from POLARIScore.config import LOGGER
 from typing import Union, List
+import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
 
 class BaseModule(nn.Module):
     def __init__(self, **args):
         super(BaseModule, self).__init__(**args)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self._plot = None
         self.to(self.device)
+
+    def _plot_tensor(self, tensor:torch.tensor, subfolder:Union[str, None]=None, name:str="feature"):
+        if self._plot is None:
+            return
+        folder_path = self._plot
+        if subfolder is not None:
+            folder_path = os.path.join(folder_path, subfolder)
+        if not(os.path.exists(folder_path)):
+            os.mkdir(folder_path)
+
+        np_tensor = tensor.clone().squeeze(0).cpu().detach().numpy()
+        for c in range(np_tensor.shape[0]):
+            fig, ax = plt.subplots()
+            try:
+                ch_tensor = np_tensor[c]
+                vmin = np.nanpercentile(ch_tensor, 0)
+                vmax = np.nanpercentile(ch_tensor, 100)
+                if vmin <= 0:
+                    vmin = np.nanmin(ch_tensor[ch_tensor > 0])
+                levels = np.linspace(vmin, vmax, 20)
+                img_plt = ax.imshow(ch_tensor, cmap="rainbow", vmin=vmin, vmax=vmax, origin="lower")
+                plt.colorbar(img_plt, ax=ax, label=r"intensity")
+                contour_plt = ax.contour(ch_tensor, levels=levels, colors="black", origin="lower", linewidths=0.1)
+
+                path = os.path.join(folder_path, name+"_"+str(c)+".jpg")
+                plt.savefig(path, dpi=300)
+            except:
+                pass
+            plt.close(fig)
+            del fig
+        del np_tensor
+
+    def plot_features(self, x:Union[np.ndarray, torch.tensor], save_path:str):
+        """Plot and saves all features created by using input x into the network.
+        Args:
+            x: Tensor input, ndarray will be transformed into torch tensors.
+            save_path: Folder save path
+        """
+
+        if isinstance(x, np.ndarray):
+            x = self.shape_tensor(x)
+
+        self._plot = save_path
+        if not(type(save_path) is str):
+            LOGGER.error("Save path need to be a string.")
+            return
+        if not(os.path.exists(save_path)):
+            LOGGER.error(f"Root path need to exists: {save_path}")
+            return
+        LOGGER.log(f"Plotting & Saving features of neural network in {save_path}")
+        self._plot_tensor(self.forward(x), name="output")
+        self._plot = None
 
     def shape_tensor(self, tensor:Union[np.ndarray,torch.tensor], name=None, reverse=False, **args):
         """

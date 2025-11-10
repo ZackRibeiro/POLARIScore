@@ -2,6 +2,8 @@ import numpy as np
 from typing import Tuple, List, Union, Literal, Callable
 from POLARIScore.config import LOGGER
 from POLARIScore.utils.batch_utils import compute_smoothness
+from skimage import measure
+
 
 def count_nonan(matrix:np.ndarray)->int:
     """Returns the number of non nan in a matrix"""
@@ -79,3 +81,26 @@ def find_context(canvas:np.ndarray, region:Tuple[int,int,int,int], context_size:
     context_y2 = min(context_y1 + context_size, canvas.shape[1])
 
     return context_x1, context_y1, context_x2, context_y2
+
+def get_clumps(array, threshold=85):
+    """Return regions/clumps perimeters and areas in an image. (Unit: px) """
+    threshold = np.nanpercentile(array, threshold)
+    mask = array > threshold
+
+    labels = measure.label(mask, connectivity=2)
+    props = measure.regionprops(labels)
+
+    areas = []
+    perimeters = []
+    for region in props:
+        A = region.area
+        P = measure.perimeter(region.image)
+        if A > 5:
+            areas.append(A)
+            perimeters.append(P)
+
+    areas = np.array(areas)
+    perimeters = np.array(perimeters)
+    
+    return perimeters, areas
+    

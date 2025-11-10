@@ -8,6 +8,7 @@ from POLARIScore.config import *
 import matplotlib.pyplot as plt 
 import numpy as np
 from POLARIScore.utils.utils import *
+from POLARIScore.utils.observation_utils import get_clumps
 from matplotlib.colors import LogNorm
 import torch
 import torch.nn.functional as F
@@ -545,6 +546,157 @@ class Observation():
 
         return fig, ax
 
+    def plot_cores_baseline(self, ax=None, suffixes=None, derived_cores=False, density_correction=True, x_coldens=False, invert_xy=False, mov_average:int=0, fit=False ):
+
+        if ax is None:
+            fig, ax = plt.subplots()
+        else:
+            fig = ax.figure
+
+        if suffixes is not None:
+            suffixes = suffixes if type(suffixes) is list else [suffixes]
+        else:
+            suffixes = [""]
+
+        colors = FIGURE_CMAP(np.linspace(FIGURE_CMAP_MIN, FIGURE_CMAP_MAX, len(suffixes)))
+
+        def _make_baseline(densities, label, color):
+            if x_coldens:
+                col_densities = np.array([c.get_center_density(column_density=True) for c in cores])
+            x = np.array(range(len(densities)))
+
+            mask = (~np.isnan(densities)) & (~np.isinf(densities)) & (densities > 0.)
+            densities = densities[mask]
+            x = x[mask]
+            if x_coldens:
+                col_densities = col_densities[mask]
+                sorted_indexes = np.argsort(col_densities)
+                x = col_densities[sorted_indexes]
+                densities = densities[sorted_indexes]
+
+            if invert_xy:
+                temp = x
+                x = densities
+                densities = temp
+            if fit and x_coldens:
+                def _fit_function(x, a, b):
+                    return x**a*np.exp(b)
+                def _fit_function_inv(x, a, b, alpha):
+                    return np.log(a*x**np.abs(alpha)+np.abs(b))
+
+                binned_x, binned_y = bin_mean(x, densities, dx=0.1,min_per_bin=3)
+
+                if invert_xy:
+                    popt, _ = curve_fit(_fit_function_inv, binned_x, np.log(binned_y), p0=[(np.max(densities)-np.min(densities))/(np.max(x)-np.min(x)), np.min(densities), 0.5],
+                                        bounds=([0, 1e21, 0],[np.inf, 1e22, 1]))
+                    fit_a, fit_b, fit_alpha = popt
+                    func = lambda X: np.exp(_fit_function_inv(X, fit_a, fit_b, fit_alpha))
+                    plot_function(func, ax=ax, scatter=False, logspace=True, lims= (np.min(x), np.max(x)), color=color, linestyle="--")
+                    c_mu = 2.3 #maybe 1.4
+                    c_mh = 1.67e-24
+                    c_cs = fit_a* ((c_mu*c_mh*6.674e-8)/np.pi)**(0.5)
+                    c_kb = 1.38e-16 
+                    c_T = c_cs**2*(c_mu*c_mh/c_kb)
+                    label = rf"{label}: T={c_T:.3}K, $\sum_{{i\neq c}} n_i l_i$={fit_b:.3} cm$^{{-2}}$, $\alpha$={fit_alpha:.3}"
+                else:
+                    popt, _ = curve_fit(_fit_function, binned_x, binned_y, p0=[1., 0.])
+                    fit_a, fit_b = popt
+                    func = lambda X: _fit_function(X, fit_a, fit_b)
+                    plot_function(func, ax=ax, scatter=False, logspace=True, lims= (np.min(x), np.max(x)), color=color, linestyle="--")
+                    label = label + f": {fit_a:.3}, {fit_b:.3}"
+            
+            if mov_average > 0:
+                x = moving_average(x, n=mov_average)
+                densities = moving_average(densities, n=mov_average)
+
+            #ax.plot(x, densities, lw=1., color=color)
+            ax.scatter(binned_x if fit else x, binned_y if fit else densities, marker="+", color=color, label=label)
+
+        for i,s in enumerate(suffixes):
+            self.load(suffix=s)
+            cores = self.get_cores()
+            if cores is None:
+                LOGGER.warn(f"No cores found in {s}.")
+                continue
+            densities = np.array([c.get_center_density(correction=density_correction) for c in cores])
+            _make_baseline(densities, s.replace("_",""), colors[i])
+        if derived_cores:
+            _make_baseline(np.array([c.data['average_n'] for c in cores]), "Konyves et al, 2020", "red")
+
+
+        ax.set_yscale("log")
+        ax.set_xlabel("Core index")
+        ax.set_ylabel("$n_H$ [cm^-3]" if density_correction else "$<n>_m$ [cm^-3]")
+        
+
+        if x_coldens:
+            ax.set_xscale("log")
+            ax.set_xlabel("$N_H$ [cm^-2]")
+            if invert_xy:
+                ax.set_xlabel("$n_H$ [cm^-3]" if density_correction else "$<n>_m$ [cm^-3]")
+                ax.set_ylabel("$N_H$ [cm^-2]")
+        
+        ax.grid(which='both', axis='x')
+
+
+        ax.legend()
+
+        return fig, ax
+
+    def plot_fractal_dim(self, ax=None, suffixes=None,distance=None):
+        if ax is None:
+            fig, ax = plt.subplots()
+        else:
+            fig = ax.figure
+
+        if suffixes is not None:
+            suffixes = suffixes if type(suffixes) is list else [suffixes]
+        else:
+            suffixes = [""]
+
+        try:
+            pixscale_deg = np.abs(self.wcs.pixel_scale_matrix.diagonal()).mean()
+        except AttributeError:
+            cdelt = self.wcs.wcs.cdelt
+            pixscale_deg = np.mean(np.abs(cdelt))
+
+        if distance is None:
+            distance = self.distance
+        else:
+            self.distance = distance
+        pixscale_rad = np.deg2rad(pixscale_deg)
+        pc_per_pix = distance * pixscale_rad
+
+        colors = FIGURE_CMAP(np.linspace(FIGURE_CMAP_MIN, FIGURE_CMAP_MAX, len(suffixes)))
+
+        def _fit_function(x, a, b):
+            return a*x+b
+
+        for i,s in enumerate(suffixes):
+            label = s.replace("_","")
+            self.load(suffix=s)
+            P,A = get_clumps(self.prediction)
+            P = P * pc_per_pix
+            A = A * pc_per_pix**2
+
+            x = np.log(A)
+            y = np.log(P)
+            popt, _ = curve_fit(_fit_function, x, y, p0=[1., 0.])
+            fit_a, fit_b = popt
+            func = lambda X: np.exp(_fit_function(np.log(X), fit_a, fit_b))
+            plot_function(func, ax=ax, scatter=False, logspace=True, lims= (np.min(A), np.max(A)), color=colors[i], linestyle="--")
+            label = label + f", D={(fit_a*2):.3}"
+            ax.scatter(A, P, marker="+", color=colors[i], label=label)
+
+        ax.set_xlabel(r"Area [$\text{pc}^2$]")
+        ax.set_ylabel("Perimeter [pc]")
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.legend()
+
+        return fig, ax
+
+    
     def plot_dcmf(self, ax=None, bins:int=10, ext_lims:Tuple[Union[float,None],Union[float,None]]=[None,None], logM:bool=True, fit=True, method:Literal['constant','gaussian']="gaussian"):
         """
         Plot the dense core mass function
@@ -577,8 +729,8 @@ class Observation():
 
         extinctions = []
         derived_radius = []
-        for i in range(len(derived_cores)):
-            extinctions.append(CONVERT_NH_TO_EXTINCTION(derived_cores[i]['peak_ncol']))
+        for i in range(len(cores)):
+            extinctions.append(CONVERT_NH_TO_EXTINCTION(cores[i].get_center_density(column_density=True)))
             derived_radius.append(derived_cores[i]['radius_pc'])
         extinctions = np.array(extinctions)[mask]
         derived_radius = np.array(derived_radius, dtype=np.float64)[mask]
@@ -651,7 +803,7 @@ class Observation():
                 func = lambda X: _dcmf_function(X, popt[0], popt[1], popt[2], popt[3], popt[4])
                 plot_function(func, ax=ax, scatter=False, logspace=True, lims= (0.01, 100), color="red", linestyle="--")
 
-        #plot_sim_dcmf(ax, factor=0.035, logM=logM)
+        plot_sim_dcmf(ax, factor=0.035, logM=logM)
         plot_imf_chabrier(ax, logM=logM)
         ax.set_xscale("log")
         ax.set_yscale("log")
@@ -784,6 +936,7 @@ class Observation():
     def load(self,suffix="")->np.ndarray:
         path = os.path.join(CACHES_FOLDER,self.name.split(".npy")[0]+suffix+".npy")
         if not(os.path.exists(path)):
+            LOGGER.error(f"File: {path} doesn't exist -> Unable to load observation.")
             return
         self.prediction = np.load(path) 
         return self.prediction
@@ -836,6 +989,8 @@ if __name__ == "__main__":
     from POLARIScore.networks.INNTrainer import INNTrainer
     from POLARIScore.config import DATA_NORMALIZATION_CDENS, DATA_NORMALIZATION_VDENS
     obs = Observation("OrionB","column_density_map")
+    obs.plot_fractal_dim(suffixes=["_unet"])
+    
     #trainer = load_trainer("General_UNet")
     #trainer = load_trainer("cINN_3", trainer_class=INNTrainer)
     #trainer.norms = {
@@ -844,38 +999,28 @@ if __name__ == "__main__":
     #}
     #obs.predict(trainer,patch_size=(128,128), overlap=0., downsample_factor=obs.find_scale(3.30474,128,400), nan_value=-1., apply_baseline=False)
     #obs.save()
-    obs.load(suffix="_cinn")
-    obs.plot(data=obs.prediction, norm=LogNorm(vmin=1e2, vmax= 1e5))
-    obs.load(suffix="_unet")
-    obs.plot(data=obs.prediction, norm=LogNorm(vmin=1e2, vmax= 1e5))
-    #obs.plot(data=obs.prediction)
-    #obs.plot_dcmf(method="constant")
+    #obs.load(suffix="_cinn")
+    #obs.plot_cores_error(mov_average=10)
+    # obs.plot_dcmf(method="constant")
+    # obs.load(suffix="_unet")
+    # obs.plot_dcmf(method="constant")
+    #obs.load(suffix="_generalunet")
+    #obs.plot_cores_error(mov_average=10)
+    # obs.plot_dcmf(method="constant")
+    
+    #print(obs.get_cores()[200].data["name"])
+    #obs.plot_cores_baseline(suffixes=["_cinn","_unet","_generalunet"], derived_cores=True, density_correction=True, invert_xy=True, x_coldens=True, mov_average=5, fit=True)
 
     #obs.get_cores()[25].plot()
     #for i,c in enumerate(obs.get_cores()):
     #    try:
     #        fig, axes = c.plot(save_path=FIGURE_FOLDER + "/cores/")
+    #        fig2, axes = c.plot(save_path=FIGURE_FOLDER + "/cores/", cdens=True)
     #    except:
     #        continue
     #    plt.close(fig)
-    #from POLARIScore.objects.Dataset import getDataset
-    #trainer2 = load_trainer("General_UNet")
-    #trainer.validation_set = getDataset("batch_validation")
-    #plot_models_accuracy([trainer,trainer2], bins=[0,3,6,8])
-    #trainer.plot_validation_spatial_error()
-    #trainer.plot_validation(number=8)
-    #obs.plot(data=obs.prediction,norm=LogNorm(vmin=1e2, vmax= 1e6),plot_cores=True)
-    #obs.save()
-    #fig, axes = obs.plot(norm=LogNorm(vmin=1e21, vmax= 1e24),plot_cores=(None, 10**22.2), force_col=True)
-    #fig.savefig(FIGURE_FOLDER+"OrionB_Test.jpg")
-    #obs.plot_dcmf(bins=10)
-    #obs.plot(obs.prediction)
-    #obs.plot_cores_hist()
-    #fig, ax = obs.plot_validity_with_model("batch_highres_2", patch_size=(512,512), c_x=compute_smoothness, c_y=lambda x: np.log10(np.mean(x)), logspace=False)
-    #ax.set_xlim([0,0.25])
-    #ax.set_ylim([20,24])
-    #obs.plot_dcmf(method="gaussian")
-    #obs.plot_cores_error(mov_average=15)
+    #    plt.close(fig2)
+    
     #obs.plot_validity_with_model("batch_training", patch_size=(512,512), c_x=lambda x: np.std(np.log10(x)), c_y=lambda x: np.log10(np.mean(x)), logspace=False)
     #obs.plot_validity_with_model("batch_highres_2", patch_size=(512,512), c_x=lambda x: np.std(np.log10(x)), c_y=lambda x: np.log10(np.mean(x)), logspace=False)
     plt.show()

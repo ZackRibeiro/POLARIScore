@@ -15,25 +15,42 @@ from typing import Literal, Dict, Tuple, List, Union
 class DenseCore():
     def __init__(self, obs, data:Dict):
         self.obs = obs
-        self.data = data
+        """Observation instance which is host to the dense core"""
+        self.data:Dict = data
+        """Data of the dense core"""
         self.fit_settings = None
+        """Gaussian fit settings of the better slice"""
         self.wcs = obs.wcs
         self.coord = SkyCoord(data["ra"], data["dec"], unit="deg")
+        """Coordinates of the dense core in deg"""
 
-    def get_center_density(self):
-        """Get density predicted at the presumed center"""
-        assert self.obs.prediction is not None, LOGGER.error(f"No predicted density on the observation: f{self.obs.name}")
-        densities = self.obs.prediction
+    def get_center_density(self, correction=False, column_density=False):
+        """Get volume density predicted at the presumed 2D core center
+        Args:
+            correction(bool, default=False): Apply correction by making the assumption of two mediums: dense core and diffuse along the l.o.s
+            column_density(bool, default:False): Return the column density instead.
+        """
+        if column_density:
+            assert self.obs.data is not None, LOGGER.error(f"No column density on the observation: {self.obs.name}.")
+        else:
+            assert self.obs.prediction is not None, LOGGER.error(f"No predicted density on the observation: {self.obs.name}.")
+        densities = self.obs.data if column_density else self.obs.prediction
         x_pix, y_pix = skycoord_to_pixel(self.coord, self.wcs)
 
         x_int, y_int = int(round(float(x_pix))), int(round(float(y_pix)))
-        if (0 <= y_int < self.obs.prediction.shape[0]) and (0 <= x_int < self.obs.prediction.shape[1]):
-            return densities[y_int, x_int]
+        if (0 <= y_int < densities.shape[0]) and (0 <= x_int < densities.shape[1]):
+            rslt_density = densities[y_int, x_int]
+            if correction and not(column_density):
+                rslt_density = CONVERT_massn_TO_n_coldens(float(self.get_center_density(column_density=True)),10,float(rslt_density),float(self.data["radius_pc"]), is_density=False)
+            return rslt_density
         else:
             return np.nan
     
     def compute_mass(self, method:Literal["gaussian","constant"]="gaussian"):
-        """Compute mass of the core using predicted density."""
+        """Compute mass of the core using predicted density.
+        Args:
+            method(str,default='constant'): Method used to compute the mass, if constant then this is just the volume*density, if gaussian: this is a 3D isotrope gaussian. 
+        """
 
         assert self.obs.prediction is not None, LOGGER.error(f"No predicted density on the observation: f{self.obs.name}")
 
@@ -60,9 +77,9 @@ class DenseCore():
 
             if(self.data["peak_ncol"] < 1e22):
                 if fit_set[0] is not None:
-                    popt_v[0] = CONVERT_massn_TO_n_coldens(self.data["peak_ncol"],10,popt_v[0],self.data["radius_pc"], is_density=False)
+                    popt_v[0] = CONVERT_massn_TO_n_coldens(self.get_center_density(column_density=True),10,popt_v[0],self.data["radius_pc"], is_density=False)
                 if fit_set[1] is not None:
-                    popt_h[0] = CONVERT_massn_TO_n_coldens(self.data["peak_ncol"],10,popt_h[0],self.data["radius_pc"], is_density=False)
+                    popt_h[0] = CONVERT_massn_TO_n_coldens(self.get_center_density(column_density=True),10,popt_h[0],self.data["radius_pc"], is_density=False)
 
             def mass_integrand(r, n0, sigma, r0):
                 return 4 * np.pi * r**2 * n0 * np.exp(-0.5 * ((r-r0) / sigma)**2)
@@ -83,7 +100,7 @@ class DenseCore():
         elif method == "constant":
             r_cm = self.data["radius_pc"] * pc_to_cm
             volume = (4/3) * np.pi * (r_cm**3)
-            n = CONVERT_massn_TO_n_coldens(self.data["peak_ncol"],10,self.get_center_density(),self.data["radius_pc"], is_density=False)
+            n = CONVERT_massn_TO_n_coldens(float(self.get_center_density(column_density=True)),10,float(self.get_center_density()),float(self.data["radius_pc"]), is_density=False)
             mass = mu * m_H *n* volume
 
         return mass/Msun
@@ -155,9 +172,22 @@ class DenseCore():
 
         return self.fit_settings
 
-    def plot(self, env_size:float=1., cmap:str="rainbow", contour:bool=True, save_path:Union[None,str]=None, nearby_cores:bool=True, show_fit:bool=True):
-        assert self.obs.prediction is not None, LOGGER.error(f"No predicted density on the observation: f{self.obs.name}")
-        densities = self.obs.prediction
+    def plot(self, env_size:float=1., cmap:str="rainbow", cdens:bool=False, contour:bool=True, save_path:Union[None,str]=None, nearby_cores:bool=True, show_fit:bool=True):
+        """Plot the dense core environment with horizontal and vertical density slices.
+        Args:
+            env_size(float, default=1): size of the environment(of the image) in parsecs.
+            cmap: color of the map
+            cdens(bool, default=False): Instead of using predicted volume density, plot column density.
+            contour(bool, default=True): Add contours on the environment map.
+            save_path: If not None, save the figure in the given folder path.
+            nearby_cores(bool, default=True): Plot the nearby cores in the environment map as small white triangles.
+            show_fit(bool, default=True): Try to fit the vertical and horizontal slices of the dense core.
+        """
+        if not(cdens):
+            assert self.obs.prediction is not None, LOGGER.error(f"No predicted density on the observation: f{self.obs.name}")
+            densities = self.obs.prediction
+        else:
+            densities = self.obs.data
 
         x_center, y_center = skycoord_to_pixel(self.coord, self.wcs)
         region_half_px = self.obs.pc_to_pixels(env_size)
@@ -191,14 +221,14 @@ class DenseCore():
         ax_reg.set_ylabel("Dec [°:′:″]")
         ax_reg.invert_xaxis()
 
-        ax_reg.set_title(f"{self.data['name']} | ±{env_size} pc | r={self.data['radius_pc']} pc | $N_H=${self.data['peak_ncol']:.0e} | M={self.compute_mass():.2}")
+        ax_reg.set_title(f"{self.data['name']} | ±{env_size} pc | r={self.data['radius_pc']} pc | $N_H=${self.get_center_density(column_density=True):.0e} | M={self.compute_mass():.2}")
         vmin = np.nanpercentile(region, 0)
         vmax = np.nanpercentile(region, 100)
         if vmin <= 0:
             vmin = np.nanmin(region[region > 0])
         levels = np.logspace(np.log10(vmin), np.log10(vmax), 20)
         img_plt = ax_reg.imshow(region, cmap=cmap, norm=LogNorm(vmin=vmin, vmax=vmax), origin="lower")
-        plt.colorbar(img_plt, ax=ax_reg, label=r"$<n_H>_m$ [cm$^{-3}$]")
+        plt.colorbar(img_plt, ax=ax_reg, label=r"$N_H$ [cm$^{-2}$]" if cdens else r"$<n_H>_m$ [cm$^{-3}$]")
         if contour:
             contour_plt = ax_reg.contour(region, levels=levels, colors="black", origin="lower")
             
@@ -273,6 +303,6 @@ class DenseCore():
         ax_cut_h.legend(loc="best")
 
         if save_path is not None:
-            fig.savefig(save_path+f"core_{self.data['name']}.jpg", dpi=300)
+            fig.savefig(save_path+f"core_{self.data['name']}_{('cdens' if cdens else 'vdens')}.jpg", dpi=300)
 
         return fig, axes

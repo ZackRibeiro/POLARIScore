@@ -131,6 +131,47 @@ def moving_minimum(l, n=5, exclude_zeros=False):
         result.append(min(window))
     return np.array(result, dtype=object)
 
+def bin_mean(x, y, dx=None, nbins=None, logspace=True, stat='mean', min_per_bin=1):
+    x = np.asarray(x)
+    y = np.asarray(y)
+    mask = (~np.isnan(x)) & (~np.isnan(y)) & (x > 0) & (y > 0)
+    x = x[mask]
+    y = y[mask]
+
+    if logspace:
+        lx = np.log10(x)
+        if dx is not None:
+            bins = np.arange(np.min(lx), np.max(lx) + dx, dx)
+        else:
+            if nbins is None:
+                nbins = 20
+            bins = np.linspace(np.min(lx), np.max(lx), nbins + 1)
+        bin_centers = 10**(0.5 * (bins[1:] + bins[:-1]))
+        which_bin = np.digitize(lx, bins) - 1
+    else:
+        if dx is not None:
+            bins = np.arange(np.min(x), np.max(x) + dx, dx)
+        else:
+            if nbins is None:
+                nbins = 20
+            bins = np.linspace(np.min(x), np.max(x), nbins + 1)
+        bin_centers = 0.5 * (bins[1:] + bins[:-1])
+        which_bin = np.digitize(x, bins) - 1
+
+    x_binned, y_binned = [], []
+    for i in range(len(bin_centers)):
+        in_bin = which_bin == i
+        if np.sum(in_bin) >= min_per_bin:
+            if stat == 'mean':
+                x_binned.append(np.mean(x[in_bin]))
+                y_binned.append(np.mean(y[in_bin]))
+            elif stat == 'median':
+                x_binned.append(np.median(x[in_bin]))
+                y_binned.append(np.median(y[in_bin]))
+
+    return np.array(x_binned), np.array(y_binned)
+
+
 def applyBaseline(t,y,T,Y):
 
     last_t = 0
