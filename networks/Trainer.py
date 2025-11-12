@@ -8,13 +8,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from POLARIScore.networks.architectures.nn_BaseModule import BaseModule
+from POLARIScore.networks.architectures.nn_SAUNet import SizeAwareUNet
 from POLARIScore.networks.architectures.nn_cINN import cINN
 from POLARIScore.utils.batch_utils import *
 from POLARIScore.config import *
 import uuid
 from POLARIScore.networks.architectures.nn_UNet import *
 from POLARIScore.networks.architectures.nn_CAUNet import ContextAwareUNet
-from POLARIScore.networks.architectures.nn_FCN import FCN
 from POLARIScore.networks.architectures.nn_MultiNet import MultiNet
 from POLARIScore.networks.architectures.nn_PPV import PPV, Test
 from POLARIScore.networks.architectures.nn_KNet import *
@@ -29,11 +29,11 @@ from typing import List, Dict, Union, Tuple, Callable
 
 NETWORK_OPTIONS = {
     "UNet" : UNet,
-    "FCN" : FCN,
     "KNet" : KNet,
     "UneK": UneK,
     "MultiNet": MultiNet,
     "PPV": PPV,
+    "SAUnet": SizeAwareUNet,
     "CAUNet": ContextAwareUNet,
     "JustKAN": JustKAN,
     "cINN": cINN,
@@ -320,6 +320,44 @@ class Trainer():
         self.last_epoch = total_epoch
         self.learning_rate = self.scheduler.get_last_lr()[0]
 
+    def get_validation_error(self, n:int=100, conf_lvl=0.9, save=True):
+        LOGGER.log("Computing validation errors.")
+        batch = self.get_prediction_batch()
+        d_target = np.array([np.log10(b[0]) for b in batch]).flatten()
+        d_prediction = np.array([np.log10(b[1]) for b in batch]).flatten()
+        residuals = d_prediction-d_target
+        sorted_indexes = np.argsort(d_target)
+        d_prediction = d_prediction[sorted_indexes]
+        residuals = residuals[sorted_indexes]
+
+        quantiles = [(1-conf_lvl)/2, 1.-(1-conf_lvl)/2, 0.5]
+
+        bins = np.linspace(d_prediction.min(), d_prediction.max(), n+1)
+        bin_indices = np.digitize(d_prediction, bins) - 1
+        bin_centers = .5*(bins[:-1]+bins[1:])
+        qvals = {q: np.full(n, np.nan) for q in quantiles}
+
+        for i in range(n):
+            mask = bin_indices == i
+            if np.any(mask):
+                res_bin = residuals[mask]
+                for q in quantiles:
+                    qvals[q][i] = np.quantile(res_bin, q)
+
+        if save:
+            if not(os.path.exists(MODEL_FOLDER)):
+                os.mkdir(MODEL_FOLDER)
+
+            model_path = os.path.join(MODEL_FOLDER,self.model_name.rsplit("_epoch",1)[0])
+            if not(os.path.exists(model_path)):
+                os.mkdir(model_path)
+        
+            np.save(os.path.join(model_path,"validation_error.npy"), np.array([bin_centers,*qvals.values()]))
+            LOGGER.log("Validation errors saved in model folder.")
+
+        return bin_centers, qvals
+
+    
     def create_baseline(self,n:int=1000, force_compute:bool=False, log:bool=True)->Tuple[List[float],List[float]]:
         """
         Create a baseline using moving average method.
@@ -1158,7 +1196,9 @@ if __name__ == "__main__":
     ds = getDataset("batch_highres_2")
     ds1, ds2 = ds.split(0.8)
     trainer = load_trainer("UNet")
-    trainer.model.plot_features(ds2.get(3)[0], os.path.join(EXPORT_FOLDER,"model_features"))
+    trainer.validation_set = ds2
+    trainer.get_validation_error()
+    #trainer.model.plot_features(ds2.get(3)[0], os.path.join(EXPORT_FOLDER,"model_features"))
 
     #ds = ds.downsample(channel_names=["cospectra"], target_depths=[128], methods=["mean"])
     #ds2 = getDataset("batch_validation")

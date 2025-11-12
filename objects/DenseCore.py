@@ -46,10 +46,11 @@ class DenseCore():
         else:
             return np.nan
     
-    def compute_mass(self, method:Literal["gaussian","constant"]="gaussian"):
+    def compute_mass(self, method:Literal["gaussian","constant"]="gaussian", density_error:Union[np.ndarray, None]=None):
         """Compute mass of the core using predicted density.
         Args:
             method(str,default='constant'): Method used to compute the mass, if constant then this is just the volume*density, if gaussian: this is a 3D isotrope gaussian. 
+            density_error: (Only works for constant method) If an error is passed, then a mass is computed using a random sample from the gaussian distribution of density.
         """
 
         assert self.obs.prediction is not None, LOGGER.error(f"No predicted density on the observation: f{self.obs.name}")
@@ -100,7 +101,20 @@ class DenseCore():
         elif method == "constant":
             r_cm = self.data["radius_pc"] * pc_to_cm
             volume = (4/3) * np.pi * (r_cm**3)
-            n = CONVERT_massn_TO_n_coldens(float(self.get_center_density(column_density=True)),10,float(self.get_center_density()),float(self.data["radius_pc"]), is_density=False)
+            mw_density = float(self.get_center_density())
+            n = CONVERT_massn_TO_n_coldens(float(self.get_center_density(column_density=True)),10,mw_density,float(self.data["radius_pc"]), is_density=False)
+            
+            if density_error is not None:
+                try:
+                    bin_centers, q1, q2, means = density_error
+                except:
+                    LOGGER.error("Density error is not in the good format in DenseCore -> Can't sample a random mass given the error.")
+                    return (mu*m_H*n*volume)/Msun
+                q1_interp = np.interp(np.log10(mw_density), bin_centers, q1)
+                q2_interp = np.interp(np.log10(mw_density), bin_centers, q2)
+                gauss_sigma = (q2_interp-q1_interp)/(2*1.64485)
+                n = 10**np.random.normal(loc=np.log10(n),scale=gauss_sigma)
+            
             mass = mu * m_H *n* volume
 
         return mass/Msun

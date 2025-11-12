@@ -11,18 +11,15 @@ from POLARIScore.networks.architectures.nn_BaseModule import BaseModule
 from POLARIScore.networks.utils.nn_utils import init_network
 from torch.nn import init
 from typing import List, Literal, Tuple
-from kan import KAN
 from POLARIScore.networks.addons.FiLM import FiLMGenerator
 
 #tensors shape B,C,H,W ; no third axis
-class ContextAwareUNet(BaseModule):
+class SizeAwareUNet(BaseModule):
     """
-    Basic Attention U-Net with context given (in reality it can be any other 2D parameter instead of context)
+    Basic Attention U-Net and size aware (in reality it can be any other 1D parameter instead of physical size)
     """
-    #Local refers to wanted Region
-    #Global refers to Context
     def __init__(self,num_layers:int=4, base_filters:int=64, init_method=init.kaiming_uniform_):
-        super(ContextAwareUNet, self).__init__()
+        super(SizeAwareUNet, self).__init__()
 
         self.num_layers = num_layers
         self.in_channels = 1
@@ -32,33 +29,26 @@ class ContextAwareUNet(BaseModule):
         filter_sizes = [int(base_filters * 2**i) for i in range(num_layers+1)]
         self.pool = nn.MaxPool2d(2,2)
 
-        #Global & Local Encoders
-        self.g_encoders = nn.ModuleList()
-        self.l_encoders = nn.ModuleList()
+        #Encoder
+        self.encoders = nn.ModuleList()
         in_channels =  self.in_channels
         for i in range(num_layers):
             out_channels = filter_sizes[i]
-            self.l_encoders.append(DoubleConvBlock(in_channels, out_channels, init_method=self.init_method))
-            self.g_encoders.append(DoubleConvBlock(2 if i==0 else in_channels, out_channels, init_method=self.init_method))
+            self.encoders.append(DoubleConvBlock(in_channels, out_channels, init_method=self.init_method))
             in_channels = out_channels
         out_channels = filter_sizes[-1]
 
         # Bottleneck
-        self.g_bottleneck = DoubleConvBlock(in_channels, out_channels, init_method=self.init_method)
-        self.l_bottleneck = DoubleConvBlock(in_channels, out_channels, init_method=self.init_method)
+        self.bottleneck = DoubleConvBlock(in_channels, out_channels, init_method=self.init_method)
         in_channels = out_channels
 
-        #FiLM learned using Global latent space
-        self.film = FiLMGenerator(in_channels, filter_sizes[:-1])
         #FiLM learned using physical size
-        #self.film_physize = FiLMGenerator(1, filter_sizes[:-1])
+        self.film_physize = FiLMGenerator(1, filter_sizes[:-1])
 
-        #Local Decoder with FiLM learned using Global
         self.upconvs = nn.ModuleList()
         self.decoders = nn.ModuleList()
         self.attentions = nn.ModuleList()
         reversed_filters = filter_sizes[::-1]
-
         for j in range(self.out_channels):
             self.upconvs.append(nn.ModuleList())
             self.decoders.append(nn.ModuleList())
@@ -72,7 +62,6 @@ class ContextAwareUNet(BaseModule):
                 concat_ch = out_channels * 2
                 block = DoubleConvBlock(concat_ch, out_channels, init_method=self.init_method)
                 self.decoders[j].append(block)
-
                 in_channels = out_channels
 
         # Output layer
@@ -90,39 +79,34 @@ class ContextAwareUNet(BaseModule):
     def forward(self, *x:List[torch.tensor]):
         """
         Args
-            x: tensor shape [(B,1,H,W),(B,2,H,W),(B,1)] ; i.e [region, context, physical_size]
+            x: tensor shape [(B,1,H,W),(B,1)] ; i.e [region, physical_size]
         """
-        gl_x = x[1]
-        lo_x = x[0]
+        size_x = x[1]
+        x = x[0]
 
         # Encoders forward pass
-        l_enc_features = []
+        enc_features = []
         for i in range(self.num_layers):
-            gl_x = self.g_encoders[i](gl_x)
-            lo_x = self.l_encoders[i](lo_x)
-            l_enc_features.append(lo_x)
-            gl_x = self.pool(gl_x)
-            lo_x = self.pool(lo_x)
+            x = self.encoders[i](x)
+            enc_features.append(x)
+            x = self.pool(x)
         
         # Bottleneck
-        gl_x = self.g_bottleneck(gl_x)
-        lo_x = self.l_bottleneck(lo_x)
+        x = self.bottleneck(x)
 
-        film_params = self.film(gl_x.mean(dim=-1).mean(dim=-1))
-        #film_physize_params = self.film_physize(x[2])
+        film_physize_params = self.film_physize(size_x)
         
         # Decoder forward pass with film modulation
         decoded_x = []
         for j in range(self.out_channels):
-            xj = lo_x#.clone()
+            xj = x
             for i in range(self.num_layers):
                 xj = self.upconvs[j][i](xj)
-                enc_feat = l_enc_features[-(i+1)]
+                enc_feat = enc_features[-(i+1)]
                 enc_feat = self.attentions[j][i](xj, enc_feat)
                 skip_feats = [xj, enc_feat]
                 xj = torch.cat(skip_feats, dim=1)
-                gamma, beta = film_params[::-1][i]
-                #gamma_physize, beta_physize = film_physize_params[::-1][i]
+                gamma, beta = film_physize_params[::-1][i]
                 xj = gamma*self.decoders[j][i](xj)+beta
                 
             decoded_x.append(xj)
@@ -133,6 +117,6 @@ class ContextAwareUNet(BaseModule):
     
 if __name__ == "__main__":
     #Test shape
-    model = ContextAwareUNet(num_layers=2)
-    x = [torch.randn(2, 1, 32, 32), torch.randn(2, 2, 32, 32), torch.randn(2,1)]
+    model = SizeAwareUNet(num_layers=3)
+    x = [torch.randn(2, 1, 32, 32), torch.randn(2,1)]
     print(model(x).shape)

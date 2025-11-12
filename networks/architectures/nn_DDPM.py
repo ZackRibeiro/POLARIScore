@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 from POLARIScore.config import LOGGER
+from POLARIScore.networks.architectures.nn_BaseModule import BaseModule
 
 """
 Heavily inspired by 'https://apxml.com/courses/advanced-diffusion-architectures'
@@ -96,7 +97,25 @@ class MHSAttentionBlock(nn.Module):
 
         return out + residual
     
+class DDPMUnet(BaseModule):
+    """"""
+    def __init__(self, num_layers:int=4, base_filters:int=64, attention_layer:int=2,init_method=nn.init.kaiming_uniform_):
+        super(DDPMUnet, self).__init__()
 
+        self.num_layers = num_layers
+        self.in_channels = 1
+        self.out_channels = 1
+        self.init_method = init_method
+        self.attention_layer = attention_layer
 
+        filter_sizes = [int(base_filters * 2**i) for i in range(num_layers+1)]
+        self.pool = nn.AvgPool2d(2,2)
+
+        #Encoder
+        self.encoders = nn.ModuleList()
+        in_channels = self.in_channels
+        for i in range(num_layers):
+            out_channels = filter_sizes[i]
+            self.encoders.append(ResConvBlock())
     
 

@@ -7,12 +7,6 @@ from POLARIScore.networks.utils.nn_utils import init_network
 from typing import Union, Literal
 from POLARIScore.networks.architectures.nn_BaseModule import BaseModule
 
-"""
-Some saved models use the old version of early May 2025.
-Check https://github.com/EazyEnder/POLARIScore/blob/e247372b4617c842894e4d91e0b4e1ec54261505/networks/nn_UNet.py 
-If you want to load and use these models, just replace this file by the github one.
-"""
-
 class ConvBlock(nn.Module):
     def __init__(self, in_channels:int=1, out_channels:int=1, is3D:bool=False, init_method=init.kaiming_uniform_, dropout=0.01):
         super(ConvBlock, self).__init__()

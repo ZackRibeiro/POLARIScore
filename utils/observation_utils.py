@@ -82,9 +82,9 @@ def find_context(canvas:np.ndarray, region:Tuple[int,int,int,int], context_size:
 
     return context_x1, context_y1, context_x2, context_y2
 
-def get_clumps(array, threshold=85):
+def get_clumps(array, threshold=0.85):
     """Return regions/clumps perimeters and areas in an image. (Unit: px) """
-    threshold = np.nanpercentile(array, threshold)
+    threshold = np.nanpercentile(array, threshold*100) if threshold < 1 else threshold 
     mask = array > threshold
 
     labels = measure.label(mask, connectivity=2)

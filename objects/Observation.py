@@ -52,6 +52,7 @@ class Observation():
         """Path to the observation data"""
         self.data:np.ndarray = None
         self.prediction:np.ndarray = None
+        self.prediction_error:np.ndarray = None
         self.wcs: 'WCS' = None
         self.cores: List[Dict] = None
         """Cores [{...core1_properties}]"""
@@ -643,7 +644,7 @@ class Observation():
 
         return fig, ax
 
-    def plot_fractal_dim(self, ax=None, suffixes=None,distance=None):
+    def plot_fractal_dim(self, ax=None, suffixes=None,distance=None, thresholds=[0.85]):
         if ax is None:
             fig, ax = plt.subplots()
         else:
@@ -652,7 +653,7 @@ class Observation():
         if suffixes is not None:
             suffixes = suffixes if type(suffixes) is list else [suffixes]
         else:
-            suffixes = [""]
+            suffixes = ["!COLUMN_DENSITY"]
 
         try:
             pixscale_deg = np.abs(self.wcs.pixel_scale_matrix.diagonal()).mean()
@@ -672,32 +673,56 @@ class Observation():
         def _fit_function(x, a, b):
             return a*x+b
 
+        D = [[] for i in range(len(suffixes))]
+        T = [[] for i in range(len(suffixes))]
         for i,s in enumerate(suffixes):
             label = s.replace("_","")
-            self.load(suffix=s)
-            P,A = get_clumps(self.prediction)
-            P = P * pc_per_pix
-            A = A * pc_per_pix**2
+            data = self.data
+            if s != "!COLUMN_DENSITY":
+                self.load(suffix=s)
+                data = self.prediction
+            for j,t in enumerate(thresholds):
+                printProgressBar(i*len(thresholds)+j, len(thresholds)*len(suffixes), length=20, prefix='Finding clumps')
+                P,A = get_clumps(data, threshold=t)
+                P = P * pc_per_pix
+                A = A * pc_per_pix**2
 
-            x = np.log(A)
-            y = np.log(P)
-            popt, _ = curve_fit(_fit_function, x, y, p0=[1., 0.])
-            fit_a, fit_b = popt
-            func = lambda X: np.exp(_fit_function(np.log(X), fit_a, fit_b))
-            plot_function(func, ax=ax, scatter=False, logspace=True, lims= (np.min(A), np.max(A)), color=colors[i], linestyle="--")
-            label = label + f", D={(fit_a*2):.3}"
-            ax.scatter(A, P, marker="+", color=colors[i], label=label)
+                x = np.log(A)
+                y = np.log(P)
+                popt, pcov = curve_fit(_fit_function, x, y, p0=[1., 0.])
+                fit_a, fit_b = popt
+                if len(thresholds) < 2:
+                    func = lambda X: np.exp(_fit_function(np.log(X), fit_a, fit_b))
+                    plot_function(func, ax=ax, scatter=False, logspace=True, lims= (np.min(A), np.max(A)), color=colors[i], linestyle="--")
+                    label = label + f", D={(fit_a*2):.3}"
+                    ax.scatter(A, P, marker="+", color=colors[i], label=label)
+                else:
+                    if(len(x) > 20):
+                        D[i].append(fit_a*2)
+                        T[i].append(float(np.nanpercentile(data, t*100) if t < 1 else t))
+        print("")
+        if len(D) > 0:
+            for i in range(len(D)):
+                ax.scatter(T[i], D[i], marker="+", color=colors[i], label=suffixes[i].replace("_",""))
+                ax.plot(T[i], D[i], color=colors[i])
 
-        ax.set_xlabel(r"Area [$\text{pc}^2$]")
-        ax.set_ylabel("Perimeter [pc]")
-        ax.set_xscale("log")
-        ax.set_yscale("log")
+        if len(thresholds) < 2:
+            ax.set_xlabel(r"Area [$\text{pc}^2$]")
+            ax.set_ylabel("Perimeter [pc]")
+            ax.set_xscale("log")
+            ax.set_yscale("log")
+        else:
+            ax.set_xlabel(r"Threshold $<n>_H$ [$cm^{-3}$]" if suffixes[0] != "!COLUMN_DENSITY" else r"Threshold $N_H$ [$cm^{-2}$]")
+            ax.set_ylabel("D")
+            ax.set_xscale("log")
         ax.legend()
 
         return fig, ax
 
-    
-    def plot_dcmf(self, ax=None, bins:int=10, ext_lims:Tuple[Union[float,None],Union[float,None]]=[None,None], logM:bool=True, fit=True, method:Literal['constant','gaussian']="gaussian"):
+    def plot_dcmf(self, ax=None, bins:int=10, ext_lims:Tuple[Union[float,None],Union[float,None]]=[None,None],
+                   logM:bool=True, fit=True, method:Literal['constant','gaussian']="gaussian",
+                    monte_carlo:int=100   
+                ):
         """
         Plot the dense core mass function
         Args:
@@ -707,6 +732,7 @@ class Observation():
             logM: plot dN/dlogM or dN/dM.
             fit: try to fit the dcmf by a lognormal with power law.
             method: method used to compute the core mass.
+            monte_carlo: Compute a dcmf error by taking sample from error distribution of dense core mass. Integer controls how many samples are taken.
         """
 
         if ext_lims[0] is None:
@@ -734,8 +760,6 @@ class Observation():
             derived_radius.append(derived_cores[i]['radius_pc'])
         extinctions = np.array(extinctions)[mask]
         derived_radius = np.array(derived_radius, dtype=np.float64)[mask]
-        predicted_densities = predicted_densities[mask]
-        predicted_densities = CONVERT_massn_TO_n_coldens(column_densities,10,predicted_densities,derived_radius, is_density=False)
         derived_densities = derived_densities[mask]
 
         global_mask = (extinctions >= ext_lims[0]) & (extinctions <= ext_lims[1])
@@ -780,7 +804,7 @@ class Observation():
         ax.scatter(derived_bin_centers, derived_dcmf, color="blue")
         if fit:
             popt, _ = curve_fit(_dcmf_function, derived_bin_centers, derived_dcmf,
-                            p0=[np.max(derived_dcmf), 1.5, np.std(np.log(derived_masses)), 2.3, 1.6])
+                            p0=[np.max(derived_dcmf), 1.5, np.std(np.log(derived_masses)), 2.3, 2.0])
             amp_fit, mu_fit, sigma_fit, alpha_fit ,cutoff_fit = popt
             LOGGER.log(f"Best DCMF fit for estimated cores: amp={amp_fit:.2e}, mu={mu_fit:.3f}, sigma={sigma_fit:.3f}, alpha={alpha_fit}, cutoff={cutoff_fit}")
             func = lambda X: _dcmf_function(X, popt[0], popt[1], popt[2], popt[3], popt[4])
@@ -789,21 +813,33 @@ class Observation():
         LOGGER.log(f"DCMF with {len(derived_radius[global_mask])} cores.")
 
         if(self.prediction is not None):            
-            #predicted_masses = np.array(_compute_mass(derived_radius, predicted_densities))
+            
+
             predicted_dcmf, predicted_bin_centers = _get_dcmf(predicted_masses)
             predicted_bin_centers = 10**predicted_bin_centers
+            if monte_carlo > 0 and self.prediction_error is not None:
+                all_pred_dcmfs = []
+                for mc in range(monte_carlo):
+                    printProgressBar(mc, monte_carlo, prefix="MC-DCMF", length=20)
+                    random_predicted_masses = np.array([c.compute_mass(method=method, density_error=self.prediction_error) for c in cores])[mask]
+                    _dcmf, _ = _get_dcmf(random_predicted_masses)
+                    all_pred_dcmfs.append(_dcmf)
+                print("")
+                all_pred_dcmfs = np.array(all_pred_dcmfs)
+                dcmf_std = np.std(all_pred_dcmfs, axis=0)
+                ax.errorbar(predicted_bin_centers, predicted_dcmf, yerr=dcmf_std, fmt='none', color="black")
             ax.plot(predicted_bin_centers, predicted_dcmf, drawstyle="steps-mid", color="red", label=f"{self.name} (Neural Network)")
             ax.scatter(predicted_bin_centers, predicted_dcmf, color="red")
 
             if fit:
                 popt, _ = curve_fit(_dcmf_function, predicted_bin_centers[predicted_bin_centers>0.], predicted_dcmf[predicted_bin_centers>0.],
-                            p0=[np.max(predicted_dcmf), 0.22, np.std(np.log(predicted_masses)), 2.3, 100.6])
+                            p0=[np.max(predicted_dcmf), 0.22, np.std(np.log(predicted_masses)), 2.3, 1.6])
                 amp_fit, mu_fit, sigma_fit, alpha_fit ,cutoff_fit = popt
                 LOGGER.log(f"Best DCMF fit for predicted cores: amp={amp_fit:.2e}, mu={mu_fit:.3f}, sigma={sigma_fit:.3f}, alpha={alpha_fit}, cutoff={cutoff_fit}")
                 func = lambda X: _dcmf_function(X, popt[0], popt[1], popt[2], popt[3], popt[4])
                 plot_function(func, ax=ax, scatter=False, logspace=True, lims= (0.01, 100), color="red", linestyle="--")
 
-        plot_sim_dcmf(ax, factor=0.035, logM=logM)
+        #plot_sim_dcmf(ax, factor=0.035, logM=logM)
         plot_imf_chabrier(ax, logM=logM)
         ax.set_xscale("log")
         ax.set_yscale("log")
@@ -878,10 +914,20 @@ class Observation():
         if mov_average > 1:
             residuals, residuals_std = moving_average(residuals, n=mov_average, return_std=True) 
             column_densities = moving_average(column_densities, n=mov_average)
+
+        if self.prediction_error is not None:
+            bin_centers, q1, q2, means = self.prediction_error            
+            interp_mean = np.interp(predicted_densities, bin_centers, means)
+            interp_q1 = np.interp(predicted_densities, bin_centers, q1)
+            interp_q2 = np.interp(predicted_densities, bin_centers, q2)
+            yerr_lower = moving_average(interp_mean - interp_q1, n=mov_average)
+            yerr_upper = moving_average(interp_q2 - interp_mean, n=mov_average)
+            #ax.errorbar(column_densities,residuals,yerr=[yerr_lower, yerr_upper],fmt='none', color="black",alpha=0.8)
+            ax.fill_between(column_densities, residuals-yerr_lower, yerr_upper+residuals, color="black", alpha=0.2)
         line, = ax.plot(column_densities,residuals, marker="+", alpha=alpha, label=self.name)
         if mov_average > 1 and show_errors:
             ax.fill_between(column_densities,residuals-residuals_std,residuals+residuals_std, color=line.get_color(), alpha=0.2)
-        
+
         ax.set_xlabel(r"$\log_{10}(N_{col})$")
         ax.set_ylabel(r"$\log_{10}(n_{pred})-\log_{10}(n_{estimated})$")
 
@@ -941,6 +987,23 @@ class Observation():
         self.prediction = np.load(path) 
         return self.prediction
     
+    def load_error(self, model_name)->np.ndarray:
+        """
+        Load prediction error using the validation error computed when training the neural network.
+        Validation error is a list with 4 elements:
+            -bin_centers in log10 of predicted quantity
+            - 3 quantiles: first two for confidence (default: 90%) and the third for mean.
+            Note that the validation error is computed on the validation set without residuals fitting.
+        Args:
+            model_name(str): Model (folder) name.
+        """
+        path = os.path.join(MODEL_FOLDER, model_name, "validation_error.npy")
+        if not(os.path.exists(path)):
+            LOGGER.error(f"File: {path} doesn't exist -> Unable to load neural network errors.")
+            return
+        self.prediction_error = np.load(path)
+        return self.prediction_error
+
 def script_data_and_figures(name,crop=None,suffix=None,save_fig=False,plot_cores=True,normcol=[None,None],normvol=[None,None], show=True):
     obs = Observation(name, "column_density_map")
     name = name.replace("_","")
@@ -989,8 +1052,10 @@ if __name__ == "__main__":
     from POLARIScore.networks.INNTrainer import INNTrainer
     from POLARIScore.config import DATA_NORMALIZATION_CDENS, DATA_NORMALIZATION_VDENS
     obs = Observation("OrionB","column_density_map")
-    obs.plot_fractal_dim(suffixes=["_unet"])
-    
+    #obs.plot_fractal_dim(suffixes=["_unet","_cinn", "_generalunet"], thresholds=[l for l in np.logspace(np.log10(30), np.log10(1e5), 30)])
+
+
+
     #trainer = load_trainer("General_UNet")
     #trainer = load_trainer("cINN_3", trainer_class=INNTrainer)
     #trainer.norms = {
@@ -1003,13 +1068,14 @@ if __name__ == "__main__":
     #obs.plot_cores_error(mov_average=10)
     # obs.plot_dcmf(method="constant")
     # obs.load(suffix="_unet")
-    # obs.plot_dcmf(method="constant")
-    #obs.load(suffix="_generalunet")
+    obs.load(suffix="_unet")
+    obs.load_error(model_name="UNet")
     #obs.plot_cores_error(mov_average=10)
-    # obs.plot_dcmf(method="constant")
-    
+    obs.plot_dcmf(method="constant", monte_carlo=10)
+
+
     #print(obs.get_cores()[200].data["name"])
-    #obs.plot_cores_baseline(suffixes=["_cinn","_unet","_generalunet"], derived_cores=True, density_correction=True, invert_xy=True, x_coldens=True, mov_average=5, fit=True)
+    #obs.plot_cores_baseline(suffixes=["_unet"], derived_cores=True, density_correction=True, invert_xy=True, x_coldens=True, mov_average=5, fit=True)
 
     #obs.get_cores()[25].plot()
     #for i,c in enumerate(obs.get_cores()):
