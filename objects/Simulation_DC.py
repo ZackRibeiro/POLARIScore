@@ -14,7 +14,7 @@ from astropy import units as u
 import numpy as np
 from POLARIScore.objects.SpectrumMap import getSimulationSpectra
 from POLARIScore.objects.Dataset import Dataset
-from typing import Dict,List,Tuple,Callable,Union
+from typing import Dict,List,Tuple,Callable,Union, Literal
 from matplotlib.widgets import Slider
 from scipy.ndimage import zoom
 
@@ -587,6 +587,61 @@ class Simulation_DC():
         fig.tight_layout()
         return fig, ax
 
+    def plot_density_distributions(self, ax=None, bins:int=20, vdens_method=compute_mass_weighted_density, offset_method:Literal["mean","max"]="mean"):
+        
+        if ax is None:
+            fig, ax = plt.subplots()
+        else:
+            fig = ax.figure
+
+        cdens = np.array([self._compute_c_density(axis=0),self._compute_c_density(axis=1),self._compute_c_density(axis=2)]).flatten()
+        vdens = np.array([self._compute_v_density(method=vdens_method, axis=0, force=True),self._compute_v_density(method=vdens_method, axis=1, force=True),self._compute_v_density(method=vdens_method, axis=2, force=True)]).flatten()
+
+        mask = (~np.isnan(vdens)) & (vdens > 0) & (~np.isnan(cdens)) & (cdens > 0)
+
+        log10_coldens = np.log10(cdens[mask])
+        log10_voldens = np.log10(vdens[mask])
+
+        hist_cd, _ = np.histogram(log10_coldens, bins=bins+1, density=False)
+        hist_cd_stats_error = np.sqrt(hist_cd)/hist_cd
+        hist_cd, bin_edges_cd = np.histogram(log10_coldens, bins=bins+1, density=True)
+        bin_centers_cd = 0.5 * (bin_edges_cd[1:] + bin_edges_cd[:-1])
+
+        bin_edges_pr = np.linspace(np.min(log10_voldens), np.max(log10_voldens), bins + 1)
+        hist_pr, _ = np.histogram(log10_voldens, bins=bin_edges_pr, density=False)
+        hist_pred_stats_error = np.sqrt(hist_pr)/hist_pr
+        hist_pr, bin_edges_pr = np.histogram(log10_voldens, bins=bin_edges_pr, density=True)
+        bin_centers_pr = 0.5 * (bin_edges_pr[1:] + bin_edges_pr[:-1])
+
+        def _normalize_x(hist, bin_centers):
+            if offset_method == "mean":
+                return (bin_centers - bin_centers[np.argmin(np.abs(hist-np.mean(hist)))]) / (np.max(bin_centers) - np.min(bin_centers))
+            else:
+                return (bin_centers - bin_centers[np.argmax(hist)]) / (np.max(bin_centers) - np.min(bin_centers))
+        
+        bin_centers_cd = _normalize_x(hist_cd, bin_centers_cd)
+        bin_centers_pr = _normalize_x(hist_pr, bin_centers_pr)
+
+        ax.plot(10**bin_centers_cd, hist_cd, drawstyle="steps-mid", color="blue", label=r"$N_H$ [$cm^{-2}$]")
+        ax.scatter(10**bin_centers_cd, hist_cd, marker="o", color="blue")
+        ax.errorbar(10**bin_centers_cd, hist_cd, yerr=hist_cd_stats_error*hist_cd, fmt='none', color="black")
+        ax.plot(10**bin_centers_pr, hist_pr, drawstyle="steps-mid", color="red", label=r"$<n_H>_m$ [$cm^{-3}$]")
+        ax.scatter(10**bin_centers_pr, hist_pr, marker="o", color="red")
+        ax.errorbar(10**bin_centers_pr, hist_pr, yerr=hist_pred_stats_error*hist_pr, fmt='none', color="black")
+        
+        if offset_method == "mean":
+            ax.set_xlabel(r"($x-\mu) / (max(x)-min(x))$")
+        else:
+            ax.set_xlabel(r"($x-max(x)) / (max(x)-min(x))$")
+        ax.set_ylabel("density")
+
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+
+        ax.legend()
+        
+        return fig, ax
+
 def mergeSimu(sim_array:List[Simulation_DC])->Simulation_DC:
     """
     Merge simulations into one.
@@ -670,11 +725,12 @@ def openSimulation(name_root:str, global_size:float, use_cache:bool=True,cache_n
     return sim
 
 if __name__ == "__main__":
-    #sim = Simulation_DC(name="orionMHD_lowB_0.39_512", global_size=66.0948, init=True)
+    sim = Simulation_DC(name="orionMHD_lowB_0.39_512", global_size=66.0948, init=True)
+    sim.plot_density_distributions(offset_method="max")
     #sim.init(loadTemp=True, loadVel=True)
-    sim = openSimulation("orionMHDt2_lowB_multi", global_size=66.0948, cache_name="sim_memory_2")
+    #sim = openSimulation("orionMHDt2_lowB_multi", global_size=66.0948, cache_name="sim_memory_2")
     #sim.plotSlice(axis=2, enable_slider=True)
-    sim.generate_batch(name="highres_sim2_32px_val",number=10000, img_size=32,what_to_compute={"cospectra":False, "density":False,"context":None},axis=[2])
+    #sim.generate_batch(name="highres_sim2_32px_val",number=10000, img_size=32,what_to_compute={"cospectra":False, "density":False,"context":None},axis=[2])
     #sim.plot(derivate=2, axis=0)
     #plt.figure()
     #sim.plot_correlation(method=compute_mass_weighted_density, contour_levels=3)

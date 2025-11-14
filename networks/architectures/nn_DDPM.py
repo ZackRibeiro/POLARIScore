@@ -1,3 +1,4 @@
+from typing import Optional, List
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -97,25 +98,120 @@ class MHSAttentionBlock(nn.Module):
 
         return out + residual
     
+class SinusoidalTimeEmbedding(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.dim = dim
+
+    def forward(self, timesteps: torch.Tensor):
+        """
+        timesteps: tensor shape (B)
+        returns: (batch, dim)
+        """
+        assert timesteps.dim() == 1
+        half = self.dim // 2
+        freqs = torch.exp(
+            -math.log(10000) * torch.arange(0, half, dtype=torch.float32, device=timesteps.device) / float(half)
+        )  # (half,)
+        args = timesteps[:, None].float() * freqs[None, :]  # (B, half)
+        emb = torch.cat([torch.sin(args), torch.cos(args)], dim=-1)
+        if self.dim % 2 == 1:  # pad if odd
+            emb = F.pad(emb, (0, 1))
+        return emb
+
 class DDPMUnet(BaseModule):
     """"""
-    def __init__(self, num_layers:int=4, base_filters:int=64, attention_layer:int=2,init_method=nn.init.kaiming_uniform_):
+    def __init__(self, num_layers:int=4, base_filters:int=64, attention_layers:Optional[List[int]]=None,time_emb_dim: int=256, init_method=nn.init.kaiming_uniform_):
         super(DDPMUnet, self).__init__()
 
         self.num_layers = num_layers
-        self.in_channels = 1
+        self.in_channels = 2
         self.out_channels = 1
         self.init_method = init_method
-        self.attention_layer = attention_layer
+        self.attention_layers = attention_layers
+        self.time_emb_dim = time_emb_dim
 
-        filter_sizes = [int(base_filters * 2**i) for i in range(num_layers+1)]
-        self.pool = nn.AvgPool2d(2,2)
+        self.time_embed = nn.Sequential(
+            SinusoidalTimeEmbedding(time_emb_dim // 2),
+            nn.Linear(time_emb_dim // 2, time_emb_dim),
+            nn.SiLU(),
+            nn.Linear(time_emb_dim, time_emb_dim)
+        )
 
-        #Encoder
-        self.encoders = nn.ModuleList()
-        in_channels = self.in_channels
+        self.init_conv = nn.Conv2d(self.in_channels, base_filters, kernel_size=3, padding=1)
+        filters = [base_filters * (2 ** i) for i in range(num_layers + 1)]
+
+        self.enc_blocks = nn.ModuleList()
+        self.enc_attn = nn.ModuleList()
+
         for i in range(num_layers):
-            out_channels = filter_sizes[i]
-            self.encoders.append(ResConvBlock())
-    
+            in_ch = filters[i]
+            out_ch = filters[i]
+            block = nn.Sequential(
+                ResConvBlock(in_ch, out_ch, time_emb_dim=time_emb_dim),
+                ResConvBlock(out_ch, out_ch, time_emb_dim=time_emb_dim),
+            )
+            self.enc_blocks.append(block)
+            self.enc_attn.append(MHSAttentionBlock(out_ch) if (attention_layers and i in attention_layers) else nn.Identity())
+        
+        bottleneck_ch = filters[num_layers]
+        self.bottleneck = nn.Sequential(
+            ResConvBlock(filters[num_layers - 1], bottleneck_ch, time_emb_dim=time_emb_dim),
+            MHSAttentionBlock(bottleneck_ch),
+            ResConvBlock(bottleneck_ch, bottleneck_ch, time_emb_dim=time_emb_dim),
+        )
 
+        self.up_blocks = nn.ModuleList()
+        self.up_attn = nn.ModuleList()
+        for i in reversed(range(num_layers)):
+            in_ch = filters[i] + filters[i]
+            out_ch = filters[i]
+            block = nn.Sequential(
+                ResConvBlock(in_ch, out_ch, time_emb_dim=time_emb_dim),
+                ResConvBlock(out_ch, out_ch, time_emb_dim=time_emb_dim),
+            )
+            self.up_blocks.append(block)
+            self.up_attn.append(MHSAttentionBlock(out_ch) if (attention_layers and i in attention_layers) else nn.Identity())
+    
+        self.final_norm = nn.GroupNorm(8, filters[0]) if filters[0] % 8 == 0 else nn.GroupNorm(1, filters[0])
+        self.final_act = nn.SiLU()
+        self.final_conv = nn.Conv2d(filters[0], self.out_channels, kernel_size=3, padding=1)
+
+        self.pool = nn.AvgPool2d(2)
+        self.upsample = nn.Upsample(scale_factor=2, mode='nearest')
+
+    def forward(self, x, t):
+        t_emb = self.time_embed(t) #(B, time_emb_dim)
+        h = self.init_conv(x)
+        skips = []
+
+        for enc_block, attn in zip(self.enc_blocks, self.enc_attn):
+            h = enc_block[0](h, t_emb)
+            h = enc_block[1](h, t_emb)
+            h = attn(h)
+            skips.append(h)
+            h = self.pool(h)
+
+        h = self.bottleneck[0](h, t_emb)
+        h = self.bottleneck[1](h)
+        h = self.bottleneck[2](h, t_emb)
+
+        for up_block, attn in zip(self.up_blocks, self.up_attn):
+            h = self.upsample(h)
+            skip = skips.pop()
+            if skip.shape[-2:] != h.shape[-2:]:
+                sh, sw = skip.shape[-2:]
+                th, tw = h.shape[-2:]
+                dh = (sh - th) // 2
+                dw = (sw - tw) // 2
+                skip = skip[:, :, dh:dh + th, dw:dw + tw]
+            h = torch.cat([h, skip], dim=1)
+            h = up_block[0](h, t_emb)
+            h = up_block[1](h, t_emb)
+            h = attn(h)
+
+        h = self.final_norm(h)
+        h = self.final_act(h)
+        h = self.final_conv(h)
+
+        return h

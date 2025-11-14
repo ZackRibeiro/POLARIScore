@@ -108,16 +108,17 @@ def dcmf_func(M, amp, mu, sigma, alpha, cutoff, logM=True):
               return pdf_low*M if logM else pdf_low
 
 def plot_imf_chabrier(ax, color='black', x_min=1e-2, x_max=1e3, n_points=100,
-                      Mc=0.22, sigma_ln=1.31, alpha=2.3, amp=25.0, logM=True):
+                      Mc=0.22, sigma_ln=1.31, alpha=2.3, amp=25.0, logM=True, dcmf=1.):
 
     x = np.logspace(np.log10(x_min), np.log10(x_max), n_points)
+    x = x / dcmf
 
-    pdf_low = lognorm.pdf(x, s=sigma_ln, scale=Mc)
+    pdf_low = lognorm.pdf(x, s=sigma_ln, scale=Mc/dcmf)
     pdf_low = pdf_low * x * np.log(10)
 
     pdf_high = x**(1 - alpha) if logM else x**(-alpha)
 
-    join_mass = 1.0
+    join_mass = 1./dcmf
     scale_factor = (pdf_low[np.argmin(np.abs(x - join_mass))] /
                     pdf_high[np.argmin(np.abs(x - join_mass))])
     pdf_high *= scale_factor
@@ -127,8 +128,13 @@ def plot_imf_chabrier(ax, color='black', x_min=1e-2, x_max=1e3, n_points=100,
     pdf_low *= amp_scaled
     pdf_high *= amp_scaled
 
+    if dcmf != 1.:
+        label = f'DCMF (Chabrier, 2003; IMF with efficiency of {(dcmf*100.)}%)'
+    else:
+        label = 'IMF (Chabrier, 2003)'
+
     ax.plot(x[x <= join_mass], pdf_low[x <= join_mass],
-            ls='--', color=color, label='IMF (Chabrier, 2003)')
+            ls='--', color=color, label=label)
     ax.plot(x[x > join_mass], pdf_high[x > join_mass],
             ls='--', color=color)
 

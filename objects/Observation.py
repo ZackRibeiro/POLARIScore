@@ -18,7 +18,7 @@ import astropy.units as u
 import re
 from POLARIScore.networks.Trainer import Trainer
 from POLARIScore.objects.Dataset import getDataset
-from typing import Dict, List, Tuple, Union, Literal
+from typing import Dict, List, Optional, Tuple, Union, Literal
 from scipy.stats import lognorm
 from scipy.optimize import curve_fit
 from POLARIScore.scripts.plotORIONsimDCMF import plot_sim_dcmf
@@ -296,8 +296,11 @@ class Observation():
 
         return values
         
+    @DeprecationWarning
     def _get_cores_predicted_values(self, region:Union[Tuple[float,float,float,float],None]=None, return_ncol:bool=False, return_indexes:bool=False):
         """
+        Returns values in LOG10
+        Deprecated, use DenseCore object instead
         Args:
             region: [ra_max, ra_min, dec_min, dec_max]
             return_ncol: Return column density
@@ -340,6 +343,24 @@ class Observation():
         pixscale_rad = np.deg2rad(pixscale_deg)
         pc_per_pix = self.distance * pixscale_rad
         return pc / pc_per_pix
+
+    def rectify_error_baseline(self, revert:bool=False)->np.ndarray:
+        """
+        Equivalent to apply baseline of Trainer class. <br />
+        Allows to align the validation error means on 0. So it removes the error means on the predicted map. <br />
+        **Be careful** when you use it because maybe you already applied residuals fitting when applying the neural network on observation (if apply_baseline was True).
+        Args:
+            revert: If true go backward, i.e add the mean to the predicted map.
+        """
+        assert self.prediction is not None, LOGGER.error("Can't rectify baseline of prediction if there is no prediction loaded in the observation.")
+        assert self.prediction_error is not None, LOGGER.error("Can't rectify baseline of prediction if there is no baseline (error) loaded in the observation.")
+        
+        log10_pred = np.log10(self.prediction)
+
+        bin_centers, _, _, means = self.prediction_error            
+        interp_mean = np.interp(log10_pred, bin_centers, means)
+
+        return 10**(log10_pred+interp_mean) if revert else 10**(log10_pred-interp_mean)
 
     #-------PLOT-------
 
@@ -388,6 +409,97 @@ class Observation():
             ax.set_xlim((x_min, x_max))
             ax.set_ylim((y_min, y_max))
 
+        return fig, ax
+
+    def plot_density_distributions(self, ax=None, bins:int=20, monte_carlo:int=10, offset_method:Literal["mean","max","wout_ncol"]="mean", 
+                                   color:str="red", label:Optional[str]=None):
+        """
+        Plot PDF (histogram) of column density and predicted volume density.
+        Args:
+            ax: matplotlib axis
+            bins: number of bins in the PDFs
+            monte_carlo (int): if prediction error available, will compute histogram error by sampling N times from error assuming it's gaussian
+            offset_method (str): Method used to 'normalize' x, i.e to align column density and volume density. If offset_method='wout_ncol' then no normalization is made because column density will not be shown.
+            color (str): Color for the volume density PDF.
+            label (str): Label for the volume density PDF.
+        """
+        if ax is None:
+            fig, ax = plt.subplots()
+        else:
+            fig = ax.figure
+
+        mask = (~np.isnan(self.prediction)) & (self.prediction > 0) & (~np.isnan(self.data)) & (self.data > 0)
+
+        log10_coldens = np.log10(self.data[mask])
+        log10_pred = np.log10(self.prediction[mask]).flatten()
+
+        hist_cd, _ = np.histogram(log10_coldens, bins=bins+1, density=False)
+        hist_cd_stats_error = np.sqrt(hist_cd)/hist_cd
+        hist_cd, bin_edges_cd = np.histogram(log10_coldens, bins=bins+1, density=True)
+        bin_centers_cd = 0.5 * (bin_edges_cd[1:] + bin_edges_cd[:-1])
+
+        bin_edges_pr = np.linspace(np.min(log10_pred), np.max(log10_pred), bins + 1)
+        hist_pr, _ = np.histogram(log10_pred, bins=bin_edges_pr, density=False)
+        hist_pred_stats_error = np.sqrt(hist_pr)/hist_pr
+        hist_pr, bin_edges_pr = np.histogram(log10_pred, bins=bin_edges_pr, density=True)
+        bin_centers_pr = 0.5 * (bin_edges_pr[1:] + bin_edges_pr[:-1])
+
+        def _normalize_x(hist, bin_centers):
+            if offset_method == "mean":
+                return (bin_centers - bin_centers[np.argmin(np.abs(hist-np.mean(hist)))]) / (np.max(bin_centers) - np.min(bin_centers))
+            elif offset_method == "wout_ncol":
+                return bin_centers
+            else:
+                return (bin_centers - bin_centers[np.argmax(hist)]) / (np.max(bin_centers) - np.min(bin_centers))
+        
+        bin_centers_cd = _normalize_x(hist_cd, bin_centers_cd)
+        bin_centers_pr = _normalize_x(hist_pr, bin_centers_pr)
+
+        if offset_method != "wout_ncol":
+            ax.plot(10**bin_centers_cd, hist_cd, drawstyle="steps-mid", color="blue", label=r"$N_H$ [$cm^{-2}$]")
+            ax.scatter(10**bin_centers_cd, hist_cd, marker="o", color="blue")
+            ax.errorbar(10**bin_centers_cd, hist_cd, yerr=hist_cd_stats_error*hist_cd, fmt='none', color="black")
+        ax.plot(10**bin_centers_pr, hist_pr, drawstyle="steps-mid", color=color, label=r"$<n_H>_m$ [$cm^{-3}$]" if label is None else label)
+        ax.scatter(10**bin_centers_pr, hist_pr, marker="o", color=color)
+        ax.errorbar(10**bin_centers_pr, hist_pr, yerr=hist_pred_stats_error*hist_pr, fmt='none', color="black")
+
+        if self.prediction_error is not None and monte_carlo > 0:
+            try:
+                bin_centers, q1, q2, _ = self.prediction_error
+            except:
+                LOGGER.error("Density error is not in the good format in DenseCore -> Can't sample a random density given the error.")
+            q1_interp = np.interp(log10_pred, bin_centers, q1)
+            q2_interp = np.interp(log10_pred, bin_centers, q2)
+            gauss_sigma = (q2_interp-q1_interp)/(2*1.64485)
+
+            all_pred_hists = []
+            for mc in range(monte_carlo):
+                printProgressBar(mc, monte_carlo, prefix="MC-Dist", length=20)
+                random_predicted_densities = np.random.normal(loc=log10_pred, scale=gauss_sigma)
+                rd_hist, _ = np.histogram(random_predicted_densities, bins=bin_edges_pr, density=True)
+                all_pred_hists.append(rd_hist)
+            print("")
+            all_pred_hists = np.array(all_pred_hists)
+            hist_std = np.std(all_pred_hists, axis=0)
+            x_step, y_lower_step, y_upper_step = step_fill(10**bin_centers_pr, hist_pr - 2*hist_std,
+                hist_pr + 2*hist_std, log_bins=True, offset=1.0)
+            ax.fill_between(x_step, y_lower_step, y_upper_step, color=color, alpha=0.3)
+            
+        #plot_lines(10**bin_centers_pr,hist_pr,ax=ax, lines = [0,-.5, -1], logspace=True)
+
+        if offset_method == "mean":
+            ax.set_xlabel(r"($x-\mu) / (max(x)-min(x))$")
+        elif offset_method == "wout_ncol":
+            ax.set_xlabel(r"$<n>_m$ [$cm^{-3}$]")
+        else:
+            ax.set_xlabel(r"($x-max(x)) / (max(x)-min(x))$")
+        ax.set_ylabel("density")
+
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+
+        ax.legend()
+        
         return fig, ax
 
     def plot_cores(self,ax,cores:Union[List[Dict],None]=None,norm=None,vol_density:bool=False,show_text:bool=False, lims:Tuple[Union[None,float],Union[None,float]]=[None,None]):
@@ -547,7 +659,19 @@ class Observation():
 
         return fig, ax
 
-    def plot_cores_baseline(self, ax=None, suffixes=None, derived_cores=False, density_correction=True, x_coldens=False, invert_xy=False, mov_average:int=0, fit=False ):
+    def plot_cores_baseline(self, ax=None, suffixes:Optional[Union[List[str],str]]=None, derived_cores:bool=False, density_correction:bool=True,
+                             x_coldens:bool=False, invert_xy:bool=False, mov_average:int=0, fit:bool=False ):
+        """
+        Plot dense cores baseline with x axis depending on args. By default this plot the predicted mass-weighted average density of cores in function of their id.
+        Args:
+            suffixes: If load multiple predictions caches, e.g _cinn to load OrionB_cinn.npy as prediction if name of observation is OrionB.
+            derived_cores: If true, also add the derived catalog cores on the plot.
+            density_correction: Transform the mass-weighted average density to core volume average density using two mediums assumptions.
+            x_coldens: If true, use column density as x axis, so this will plot n(N).
+            invert_xy: If true, this will invert x and y axes. For example if x_coldens is True then it will plot N(n).
+            mov_average: Apply moving average on the points.
+            fit: Try to fit the function using a modified power law (used for N(n) and n(N)). If this is true, the points that will be shown on the plot are the log binned average points, same points used for the fit.
+        """
 
         if ax is None:
             fig, ax = plt.subplots()
@@ -644,7 +768,17 @@ class Observation():
 
         return fig, ax
 
-    def plot_fractal_dim(self, ax=None, suffixes=None,distance=None, thresholds=[0.85]):
+    def plot_fractal_dim(self, ax=None, suffixes:Optional[List[str]]=None, distance:Optional[float]=None, thresholds:List[float]=[0.85]):
+        """
+        Plot Perimeter vs Area of clumps identified in predicted volume density map(or in column density if suffixes='!COLUMN_DENSITY'). 
+        If thresholds contains more than one threshold, then this will plot Fractal Dimension vs thresholds. 
+        Clumps identified using skimage algorithm.
+        Args:
+            ax: matplotlib axis
+            suffixes: If load multiple predictions caches, e.g _cinn to load OrionB_cinn.npy as prediction if name of observation is OrionB.
+            distance: Physical distance between Earth and Cloud in parsec. (By default: 400pc or distance already given in a previous function call.)
+            thresholds: Can be lower of higher than 1.: if lower -> compute quantile on the density map, if higher -> use it as a density value. 
+        """
         if ax is None:
             fig, ax = plt.subplots()
         else:
@@ -720,7 +854,7 @@ class Observation():
         return fig, ax
 
     def plot_dcmf(self, ax=None, bins:int=10, ext_lims:Tuple[Union[float,None],Union[float,None]]=[None,None],
-                   logM:bool=True, fit=True, method:Literal['constant','gaussian']="gaussian",
+                   logM:bool=True, fit=True, method:Literal['constant','gaussian']="constant",
                     monte_carlo:int=100   
                 ):
         """
@@ -767,7 +901,9 @@ class Observation():
         def _get_dcmf(masses:np.ndarray):
             m = masses[global_mask]
             m = np.log10(m)
-            hist, bin_edges = np.histogram(m, bins=bins)
+            log_min, log_max = (-2, 2)
+            bin_edges = np.linspace(log_min, log_max, bins + 1)
+            hist, bin_edges = np.histogram(m, bins=bin_edges)
             bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
             dcmf = hist
             if logM:
@@ -801,10 +937,10 @@ class Observation():
         derived_bin_centers = 10**derived_bin_centers
 
         ax.plot(derived_bin_centers, derived_dcmf, drawstyle="steps-mid", color="blue", label=f"{self.name} (Könyves et al, 2020)")
-        ax.scatter(derived_bin_centers, derived_dcmf, color="blue")
+        ax.scatter(derived_bin_centers, derived_dcmf, marker="^", color="blue")
         if fit:
             popt, _ = curve_fit(_dcmf_function, derived_bin_centers, derived_dcmf,
-                            p0=[np.max(derived_dcmf), 1.5, np.std(np.log(derived_masses)), 2.3, 2.0])
+                            p0=[np.max(derived_dcmf), 1.5, np.std(np.log(derived_masses)), 2.3, 1.6])
             amp_fit, mu_fit, sigma_fit, alpha_fit ,cutoff_fit = popt
             LOGGER.log(f"Best DCMF fit for estimated cores: amp={amp_fit:.2e}, mu={mu_fit:.3f}, sigma={sigma_fit:.3f}, alpha={alpha_fit}, cutoff={cutoff_fit}")
             func = lambda X: _dcmf_function(X, popt[0], popt[1], popt[2], popt[3], popt[4])
@@ -822,25 +958,34 @@ class Observation():
                 for mc in range(monte_carlo):
                     printProgressBar(mc, monte_carlo, prefix="MC-DCMF", length=20)
                     random_predicted_masses = np.array([c.compute_mass(method=method, density_error=self.prediction_error) for c in cores])[mask]
-                    _dcmf, _ = _get_dcmf(random_predicted_masses)
+                    _dcmf, _bin_centers = _get_dcmf(random_predicted_masses)
                     all_pred_dcmfs.append(_dcmf)
                 print("")
                 all_pred_dcmfs = np.array(all_pred_dcmfs)
                 dcmf_std = np.std(all_pred_dcmfs, axis=0)
-                ax.errorbar(predicted_bin_centers, predicted_dcmf, yerr=dcmf_std, fmt='none', color="black")
+                x_step, y_lower_step, y_upper_step = step_fill(predicted_bin_centers,predicted_dcmf - 2*dcmf_std,
+                    predicted_dcmf + 2*dcmf_std, log_bins=True, offset=1.03)
+                #ax.errorbar(predicted_bin_centers, predicted_dcmf, yerr=dcmf_std, fmt='none', color="black")
+                ax.fill_between(x_step, y_lower_step, y_upper_step, color="red", alpha=0.2)
             ax.plot(predicted_bin_centers, predicted_dcmf, drawstyle="steps-mid", color="red", label=f"{self.name} (Neural Network)")
             ax.scatter(predicted_bin_centers, predicted_dcmf, color="red")
 
             if fit:
                 popt, _ = curve_fit(_dcmf_function, predicted_bin_centers[predicted_bin_centers>0.], predicted_dcmf[predicted_bin_centers>0.],
-                            p0=[np.max(predicted_dcmf), 0.22, np.std(np.log(predicted_masses)), 2.3, 1.6])
+                            p0=[np.max(predicted_dcmf), 0.22, np.std(np.log(predicted_masses)), 2.3, 2.0])
                 amp_fit, mu_fit, sigma_fit, alpha_fit ,cutoff_fit = popt
                 LOGGER.log(f"Best DCMF fit for predicted cores: amp={amp_fit:.2e}, mu={mu_fit:.3f}, sigma={sigma_fit:.3f}, alpha={alpha_fit}, cutoff={cutoff_fit}")
                 func = lambda X: _dcmf_function(X, popt[0], popt[1], popt[2], popt[3], popt[4])
                 plot_function(func, ax=ax, scatter=False, logspace=True, lims= (0.01, 100), color="red", linestyle="--")
 
         #plot_sim_dcmf(ax, factor=0.035, logM=logM)
-        plot_imf_chabrier(ax, logM=logM)
+        ax.axvline(0.4, 0., 1., color='black', ls='--')
+        ax.text(0.4 - 0.1,0.5,r'Completeness limit: $M=0.4M_\odot$',
+            rotation=90,va='center',ha='left',color='black',fontsize=11, transform=ax.get_xaxis_transform())
+
+
+        #plot_imf_chabrier(ax, logM=logM, dcmf=0.4, x_min=1e-3, amp = np.max(predicted_dcmf))
+        
         ax.set_xscale("log")
         ax.set_yscale("log")
         ax.set_xlabel(r"Mass [$M_\odot$]")
@@ -848,6 +993,101 @@ class Observation():
 
         ax.set_xlim([0.01, 100])
         ax.set_ylim([0.8,600])
+
+        plt.legend()
+
+        return fig, ax
+
+    def plot_cores_mass(self, ax=None, method:Literal['constant','gaussian']="constant", mov_average=0, bins_mean=0):
+        """
+        Plot the dense core mass function
+        Args:
+            ax: matplotlib axis
+            
+        """
+        cores = self.get_cores()
+
+        assert self.prediction is not None
+
+        predicted_masses = np.array([c.compute_mass(method=method) for c in cores])
+        predicted_densities = np.array(self.get_predicted_density_at_cores(), dtype=np.float64)
+        derived_densities =  np.array([c.data["average_n"] for c in cores], dtype=np.float64)
+        derived_masses = np.array([c.data["mass"] for c in cores], dtype=np.float64)
+        
+        mask = (~np.isnan(predicted_densities)) & (predicted_densities > 0) & (derived_densities > 0) & (~np.isnan(predicted_masses))
+        predicted_masses = predicted_masses[mask]
+        derived_masses = derived_masses[mask]
+        derived_radius = np.array([c.data['radius_pc'] for c in cores], dtype=np.float64)[mask]
+        derived_densities = derived_densities[mask]
+        predicted_densities = predicted_densities[mask]
+
+        def _compute_mass(radius,densities):
+            m_H = 1.67e-24  # g
+            mu = 1.4        # mean molecular weight for H (not H2)
+            pc_to_cm = PC_TO_CM
+            Msun = 1.989e33 # g
+            rslt_masses = []
+            for n, r_pc in zip(densities, radius):
+                r_cm = r_pc * pc_to_cm
+                volume = (4/3) * np.pi * (r_cm**3)
+                mass = mu * m_H *n* volume
+                mass_Msun = mass / Msun
+                rslt_masses.append(mass_Msun)
+            rslt_masses = np.array(rslt_masses, dtype=np.float64)
+            return rslt_masses
+        
+        if ax is None:
+            fig, ax = plt.subplots()
+        else:
+            fig = ax.figure()
+
+        derived_masses = _compute_mass(derived_radius,derived_densities)
+
+        sorted_indexes = np.argsort(derived_masses)
+        derived_masses = derived_masses[sorted_indexes]
+        predicted_masses = predicted_masses[sorted_indexes]
+        predicted_densities = predicted_densities[sorted_indexes]
+
+        has_errors = True if self.prediction_error is not None else False
+        if has_errors:
+            bin_centers, q1, q2, means = self.prediction_error            
+            log10_pd = np.log10(predicted_densities)
+            interp_mean = np.interp(log10_pd, bin_centers, means)
+            interp_q1 = np.interp(log10_pd, bin_centers, q1)
+            interp_q2 = np.interp(log10_pd, bin_centers, q2)
+            interp_masses = np.log10(predicted_masses)
+            interp_densities = np.log10(predicted_densities)
+            yerr_lower = interp_mean - interp_q1
+            yerr_upper = interp_q2 - interp_mean
+            yerr_lower = yerr_lower / interp_densities * interp_masses
+            yerr_upper = yerr_upper / interp_densities * interp_masses
+            yerr_lower = 10**yerr_lower
+            yerr_upper = 10**yerr_upper
+            if mov_average > 0:
+                yerr_lower = moving_average(yerr_lower, n=mov_average)
+                yerr_upper = moving_average(yerr_upper, n=mov_average)
+            elif bins_mean > 0:
+                _, yerr_lower = bin_mean(derived_masses, yerr_lower, nbins=bins_mean, logspace=True, min_per_bin=3)
+                _, yerr_upper = bin_mean(derived_masses, yerr_upper, nbins=bins_mean, logspace=True, min_per_bin=3)
+            #ax.fill_between(column_densities, residuals-yerr_lower, yerr_upper+residuals, color="black", alpha=0.2
+                            
+        if mov_average > 0:
+            derived_masses = moving_average(derived_masses, n=mov_average)
+            predicted_masses = moving_average(predicted_masses, n=mov_average)
+        elif bins_mean > 0:
+            derived_masses, predicted_masses = bin_mean(derived_masses, predicted_masses, nbins=bins_mean, logspace=True, min_per_bin=3)
+
+        if has_errors:
+            ax.errorbar(derived_masses, predicted_masses,yerr=[yerr_lower, yerr_upper],fmt='none', color="black",alpha=0.8)
+        ax.scatter(derived_masses, predicted_masses, marker="+", color="black", label="Cores")
+
+        plot_function(lambda x:x, ax=ax, lims=[ax.get_xlim()[0],ax.get_xlim()[1],ax.get_ylim()[0],ax.get_ylim()[1]], color="red", label="y=x")
+        
+            
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.set_xlabel(r"Derived Mass [$M_\odot$]")
+        ax.set_ylabel(r"Predicted Mass [$M_\odot$]")
 
         plt.legend()
 
@@ -1068,14 +1308,22 @@ if __name__ == "__main__":
     #obs.plot_cores_error(mov_average=10)
     # obs.plot_dcmf(method="constant")
     # obs.load(suffix="_unet")
+    obs.load(suffix="_cinn")
+    obs.load_error(model_name="cINN_3")
+    #obs.plot_cores_error(mov_average=10)
+    #obs.plot_cores_mass(bins_mean=20)
+    _, ax = obs.plot_density_distributions(offset_method="wout_ncol", monte_carlo=20, label="cINN")
+
     obs.load(suffix="_unet")
     obs.load_error(model_name="UNet")
-    #obs.plot_cores_error(mov_average=10)
-    obs.plot_dcmf(method="constant", monte_carlo=10)
+    obs.plot_density_distributions(ax=ax, color="green", offset_method="wout_ncol", monte_carlo=20, label="UNet")
+    #obs.prediction = obs.rectify_error_baseline(revert=True)
+    #obs.plot_dcmf(method="constant", monte_carlo=50, fit=False, bins=15)
+    #obs.plot_cores_baseline(suffixes=[""], derived_cores=True, density_correction=True, invert_xy=True, x_coldens=True, mov_average=5, fit=True)
+    #obs.plot_cores_mass(bins_mean=20)
 
 
     #print(obs.get_cores()[200].data["name"])
-    #obs.plot_cores_baseline(suffixes=["_unet"], derived_cores=True, density_correction=True, invert_xy=True, x_coldens=True, mov_average=5, fit=True)
 
     #obs.get_cores()[25].plot()
     #for i,c in enumerate(obs.get_cores()):

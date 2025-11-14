@@ -265,7 +265,7 @@ def plot_function(function:Callable, ax=None, res:int=100, lims:Tuple[float]=[0,
     return fig, ax
 
 
-def plot_lines(x:Union[np.ndarray,List,None],y:Union[np.ndarray,List,None], ax, lines:List[float]=[0,1,2], x_max:float=None, x_min:float=None, y_max:float=None, y_min:float=None):
+def plot_lines(x:Union[np.ndarray,List,None],y:Union[np.ndarray,List,None], ax, lines:List[float]=[0,1,2], x_max:float=None, x_min:float=None, y_max:float=None, y_min:float=None, logspace=False):
     """
     Plots lines on matplotlib plot. 
     """
@@ -281,10 +281,10 @@ def plot_lines(x:Union[np.ndarray,List,None],y:Union[np.ndarray,List,None], ax, 
         length = axisx_length*0.2  
         for l in lines:
             ax.plot([x_corner, x_corner + length],
-                    [y_corner, y_corner + length*l],
+                    [10**y_corner if logspace else y_corner, 10**(y_corner + length*l) if logspace else y_corner + length*l],
                     '--', lw=1, color="black")
             if l != 0:
-                ax.text(x_corner + length + length*0.1, y_corner + l*length, f'$x^{l}$', color='black')
+                ax.text(x_corner + length + length*0.1, 10**(y_corner + l*length) if logspace else y_corner + l*length, fr'$x^{l}$', color='black')
     return ax
 
 def get_system_info():
@@ -418,3 +418,28 @@ def split_dict(dic:Dict, cut_index:int)->Tuple[Dict,Dict]:
         if not(k in dic2):
             dic2[k] = v
     return (dic1, dic2)
+
+def step_fill(x, y_lower, y_upper, log_bins=False, offset=1):
+    x = np.asarray(x)
+    y_lower = np.asarray(y_lower)
+    y_upper = np.asarray(y_upper)
+    
+    if log_bins:
+        log_centers = np.log10(x*offset)
+        log_edges = np.zeros(len(x)+1)
+        log_edges[1:-1] = 0.5 * (log_centers[1:] + log_centers[:-1])
+        log_edges[0] = log_centers[0] - 0.5*(log_centers[1]-log_centers[0])
+        log_edges[-1] = log_centers[-1] + 0.5*(log_centers[-1]-log_centers[-2])
+        edges = 10**log_edges
+    else:
+        dx = np.diff(x)/2
+        edges = np.zeros(len(x)+1)
+        edges[1:-1] = x[:-1] + dx
+        edges[0] = x[0] - dx[0]
+        edges[-1] = x[-1] + dx[-1]
+    
+    x_step = np.repeat(edges, 2)[1:-1]
+    y_lower_step = np.repeat(y_lower, 2)
+    y_upper_step = np.repeat(y_upper, 2)
+    
+    return x_step, y_lower_step, y_upper_step

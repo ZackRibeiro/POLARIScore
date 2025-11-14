@@ -63,8 +63,8 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
     from POLARIScore.objects.Dataset import getDataset
     from POLARIScore.config import DATA_NORMALIZATION_CDENS, DATA_NORMALIZATION_VDENS, DATA_NORMALIZATION_CDENS_TORCH, DATA_NORMALIZATION_VDENS_TORCH
-    ds1 = getDataset("batch_training")
-    ds2 = getDataset("batch_validation")
+    #ds1 = getDataset("batch_training")
+    #ds2 = getDataset("batch_validation")
 
     def classic_log_mse(output, target):
         output_phys = DATA_NORMALIZATION_VDENS_TORCH[1](output)
@@ -76,11 +76,17 @@ if __name__ == "__main__":
 
 
     #trainer = INNTrainer(cINN, ds1, ds2, model_name="cINN_5")
-    trainer = load_trainer("cINN_5", trainer_class=INNTrainer)
+    trainer = load_trainer("cINN_3", trainer_class=INNTrainer)
     trainer.norms = {
         "cdens": DATA_NORMALIZATION_CDENS,
         "vdens": DATA_NORMALIZATION_VDENS,
     }
+    ds = getDataset("batch_highres_2")
+    ds1, ds2 = ds.split(0.8)
+    trainer.validation_set = ds2
+    trainer.get_validation_error()
+
+    """
     #trainer.ema = True
     trainer.validation_loss_method = classic_log_mse
     #trainer.ema_warmup = 200
@@ -109,3 +115,4 @@ if __name__ == "__main__":
     trainer.plot_validation(save=True, number=8, number_per_row=4)
 
     plt.show()
+    """
