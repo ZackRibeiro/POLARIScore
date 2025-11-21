@@ -33,7 +33,7 @@ CONVERT_EXTINCTION_TO_NH = lambda a: a*2*0.94e21
 
 CONVERT_massn_TO_n = lambda n_d,L_d,n,r_c: (n+np.sqrt(n**2-(2*L_d/r_c)*(n_d**2-n*n_d)))/2
 def CONVERT_massn_TO_n_coldens(N:Union[np.ndarray[float],float], L_d:Union[np.ndarray[float],float], n:Union[np.ndarray[float],float], r_c:Union[np.ndarray[float],float]
-                               , filter:Union[None,float]=22.2, is_density=False):
+                               , filter:Union[None,float]=23.2, is_density=False):
     """
     Args:
         N: column density (particles/cm^-2)
@@ -61,19 +61,20 @@ def CONVERT_massn_TO_n_coldens(N:Union[np.ndarray[float],float], L_d:Union[np.nd
     L_c = 2*r_c
     if is_density:
         n_d = L_d
-        n_c = n_d * ((1+np.sqrt(1-4*N/(L_c*n_d)*(1-n/n_d)))/2)
-    else:   
-        d = N**2+L_c**2-4*(L_c*L_d+L_c**2)*N*(N-n*L_d)
-        n_c = (N+np.sqrt(d))/(2*(L_c+L_d)*L_c)
+        n_c = n_d/2 * (1+np.sqrt(1-4*N/(L_c*n_d)*(1-n/n_d)))
+    else:
+        n_c = N/(L_c+L_d)*(1+np.sqrt(1-(L_d/L_c+1)*(1-(n*L_d)/(N))))
+
     mask = np.isnan(n_c)
     if type(n) is list or type(n) is np.ndarray:
         n_c[mask] = n[mask]
         if np.sum(mask) > 0:
-            LOGGER.warn(f"{np.sum(mask)}/{len(N)} cores densities are replaced with mass average density, bcs discriminant is < 0")
+            LOGGER.warn(f"{np.sum(mask)}/{len(n_c)} cores densities are replaced with mass average density, bcs discriminant is < 0")
     else:
         if mask.any():
             return n
 
+    n_c = np.maximum(n_c, n)
     n_c = n_c*factor+n*(1-factor)
     return n_c
 

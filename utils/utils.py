@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.ndimage import rotate
+from POLARIScore.config import LOGGER
 import matplotlib.pyplot as plt
 import platform
 from typing import List, Tuple, Callable, Union, Dict
@@ -12,6 +13,7 @@ try:
     import GPUtil
     gputil_available = True
 except ImportError:
+    LOGGER.warn("No GPU detected on the machine, can leads to very long waiting time when using neural networks.")
     gputil_available = False
 from POLARIScore.config import LOGGER
 import inspect
@@ -134,7 +136,7 @@ def moving_minimum(l, n=5, exclude_zeros=False):
 def bin_mean(x, y, dx=None, nbins=None, logspace=True, stat='mean', min_per_bin=1):
     x = np.asarray(x)
     y = np.asarray(y)
-    mask = (~np.isnan(x)) & (~np.isnan(y)) & (x > 0) & (y > 0)
+    mask = (~np.isnan(x)) & (~np.isnan(y)) & (x > 0) #& (y > 0)
     x = x[mask]
     y = y[mask]
 
@@ -168,7 +170,6 @@ def bin_mean(x, y, dx=None, nbins=None, logspace=True, stat='mean', min_per_bin=
             elif stat == 'median':
                 x_binned.append(np.median(x[in_bin]))
                 y_binned.append(np.median(y[in_bin]))
-
     return np.array(x_binned), np.array(y_binned)
 
 

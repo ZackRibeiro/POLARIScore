@@ -296,8 +296,7 @@ class Observation():
 
         return values
         
-    @DeprecationWarning
-    def _get_cores_predicted_values(self, region:Union[Tuple[float,float,float,float],None]=None, return_ncol:bool=False, return_indexes:bool=False):
+    def _get_cores_predicted_values(self, region:Union[Tuple[float,float,float,float],None]=None, return_ncol:bool=False, return_indexes:bool=False, correction:bool=True):
         """
         Returns values in LOG10
         Deprecated, use DenseCore object instead
@@ -305,6 +304,7 @@ class Observation():
             region: [ra_max, ra_min, dec_min, dec_max]
             return_ncol: Return column density
             return_indexes: Return indexes
+            correction: if True apply density correction
         """
         predicted_densities = np.array(self.get_predicted_density_at_cores())
         derived_densities =  np.array([c.data["average_n"] for c in self.get_cores()])
@@ -318,7 +318,8 @@ class Observation():
             mask = mask & region_mask
         predicted_densities = predicted_densities[mask]
         column_densities = np.array(self.get_predicted_density_at_cores(column_density=True))[mask]
-        predicted_densities = CONVERT_massn_TO_n_coldens(column_densities,10,predicted_densities,np.array([c.data["radius_pc"] for c in self.get_cores()])[mask],is_density=False)
+        if correction:
+            predicted_densities = CONVERT_massn_TO_n_coldens(column_densities,10,predicted_densities,np.array([c.data["radius_pc"] for c in self.get_cores()])[mask],is_density=False)
         derived_densities = derived_densities[mask]
         global_indexes = global_indexes[mask]
         predicted_densities = np.log10(predicted_densities)
@@ -1133,28 +1134,35 @@ class Observation():
 
         return fig, ax
     
-    def plot_cores_error(self, ax=None, region:Union[Tuple[float,float,float,float],None]=None, alpha:float=1., mov_average:int=5, show_errors:bool=True):
+    def plot_cores_error(self, ax=None, region:Union[Tuple[float,float,float,float],None]=None, alpha:float=1., mov_average:int=5, log_average:int=0 ,show_errors:bool=True, correction:bool=True, color=None, linestyle=None, label=None):
         """
         Args:
             ax: matplotlib axis
             region: [ra_max, ra_min, dec_min, dec_max]
             alpha (float): opacity
-            mov_average (bool): data is downsampled/smoothed using moving average method.
+            mov_average (int): data is downsampled/smoothed using moving average method.
+            log_average (int): data is smoothed using average of log bins, this controls the number of bins.
             show_errors (bool): show std deviation induced by the moving average.
+            correction(bool): If True, apply density correction (mass-weighted average to core)
         """
         if ax is None:
             fig, ax = plt.subplots()
         else:
             fig = ax.figure
 
-        predicted_densities, derived_densities, column_densities = self._get_cores_predicted_values(region=region, return_ncol=True)
-        ax.grid()
+        predicted_densities, derived_densities, column_densities = self._get_cores_predicted_values(region=region, return_ncol=True, correction=correction)
 
         residuals = predicted_densities-derived_densities
         if mov_average > 1:
             residuals, residuals_std = moving_average(residuals, n=mov_average, return_std=True) 
             column_densities = moving_average(column_densities, n=mov_average)
+        if log_average > 1:
+            column_densities, residuals = bin_mean(10**column_densities, residuals, dx=None,min_per_bin=2, nbins=log_average)
+            column_densities = np.log10(column_densities)
 
+        ax.axhline(0., color="red")
+
+        column_densities = 10**column_densities
         if self.prediction_error is not None:
             bin_centers, q1, q2, means = self.prediction_error            
             interp_mean = np.interp(predicted_densities, bin_centers, means)
@@ -1164,12 +1172,14 @@ class Observation():
             yerr_upper = moving_average(interp_q2 - interp_mean, n=mov_average)
             #ax.errorbar(column_densities,residuals,yerr=[yerr_lower, yerr_upper],fmt='none', color="black",alpha=0.8)
             ax.fill_between(column_densities, residuals-yerr_lower, yerr_upper+residuals, color="black", alpha=0.2)
-        line, = ax.plot(column_densities,residuals, marker="+", alpha=alpha, label=self.name)
+        line, = ax.plot(column_densities,residuals, marker="+", alpha=alpha, label=self.name if label is None else label, color=color, linestyle=linestyle if linestyle is not None else "-")
         if mov_average > 1 and show_errors:
             ax.fill_between(column_densities,residuals-residuals_std,residuals+residuals_std, color=line.get_color(), alpha=0.2)
 
-        ax.set_xlabel(r"$\log_{10}(N_{col})$")
-        ax.set_ylabel(r"$\log_{10}(n_{pred})-\log_{10}(n_{estimated})$")
+        ax.set_xlabel(r"$N_{H}(\mathrm{cm}^{-2})$")
+        ax.set_ylabel(r"$\log_{10}(n_{\mathrm{neural network}})-\log_{10}(n_{\mathrm{catalog}})$")
+        ax.set_xscale("log")
+        ax.grid(True, which='both', axis='x')
 
         ax.legend()
 
@@ -1292,7 +1302,7 @@ if __name__ == "__main__":
     from POLARIScore.networks.INNTrainer import INNTrainer
     from POLARIScore.config import DATA_NORMALIZATION_CDENS, DATA_NORMALIZATION_VDENS
     obs = Observation("OrionB","column_density_map")
-    #obs.plot_fractal_dim(suffixes=["_unet","_cinn", "_generalunet"], thresholds=[l for l in np.logspace(np.log10(30), np.log10(1e5), 30)])
+    #obs.plot_fractal_dim(suffixes=["_unet","_cinn"], thresholds=[l for l in np.logspace(np.log10(30), np.log10(1e5), 30)])
 
 
 
@@ -1304,24 +1314,25 @@ if __name__ == "__main__":
     #}
     #obs.predict(trainer,patch_size=(128,128), overlap=0., downsample_factor=obs.find_scale(3.30474,128,400), nan_value=-1., apply_baseline=False)
     #obs.save()
-    #obs.load(suffix="_cinn")
-    #obs.plot_cores_error(mov_average=10)
-    # obs.plot_dcmf(method="constant")
-    # obs.load(suffix="_unet")
-    obs.load(suffix="_cinn")
-    obs.load_error(model_name="cINN_3")
+
+    #obs.load(suffix="_unet")
+    #obs.load_error(model_name="UNet")
     #obs.plot_cores_error(mov_average=10)
     #obs.plot_cores_mass(bins_mean=20)
-    _, ax = obs.plot_density_distributions(offset_method="wout_ncol", monte_carlo=20, label="cINN")
+    #obs.plot_density_distributions(offset_method="max", monte_carlo=0, label="cINN")
 
     obs.load(suffix="_unet")
-    obs.load_error(model_name="UNet")
-    obs.plot_density_distributions(ax=ax, color="green", offset_method="wout_ncol", monte_carlo=20, label="UNet")
-    #obs.prediction = obs.rectify_error_baseline(revert=True)
-    #obs.plot_dcmf(method="constant", monte_carlo=50, fit=False, bins=15)
+    #obs.load_error(model_name="cINN_3")
+    obs.prediction_error = None
+    fig, ax = obs.plot_cores_error(mov_average=0, log_average=50, show_errors=False, correction=True, color="black", linestyle="-", label="with correction")
+    obs.plot_cores_error(ax=ax, mov_average=0, log_average=50, show_errors=False, correction=False, color="black", linestyle="--", label="no correction")
+    fig.set_size_inches(10, 5)
+
+    #obs.plot_density_distributions(offset_method="max", monte_carlo=0, label="UNet")
+    #obs.prediction = obs.rectify_error_baseline()
+    #obs.plot_dcmf(method="constant", monte_carlo=0, fit=True, bins=15)
     #obs.plot_cores_baseline(suffixes=[""], derived_cores=True, density_correction=True, invert_xy=True, x_coldens=True, mov_average=5, fit=True)
     #obs.plot_cores_mass(bins_mean=20)
-
 
     #print(obs.get_cores()[200].data["name"])
 

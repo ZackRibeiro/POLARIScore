@@ -490,7 +490,7 @@ class Simulation_DC():
 
                 slider.on_changed(update_slice)
 
-    def plot(self,method:Callable=compute_column_density,axis:Union[List[int],int]=[0],plot_pdf:bool=False,color_bar:bool=True,derivate:int=0)->Tuple:
+    def plot(self,method:Callable=compute_column_density,axis:Union[List[int],int]=[0],plot_pdf:bool=False,color_bar:bool=True,derivate:int=0):
         """
         Plot simulations faces with probabiliy density function
 
@@ -522,6 +522,7 @@ class Simulation_DC():
             axes = [axes]
 
         def _plot(column, data):
+            print(np.mean(data))
             cd = axes[0][column].imshow(data, extent=[self.axis[0][0], self.axis[0][1], self.axis[1][0],self.axis[1][1]], cmap="jet", norm=LogNorm())
             if plot_pdf:
                 pdf = compute_pdf(data)
@@ -532,15 +533,24 @@ class Simulation_DC():
                 axes[1][column].set_title("PDF")
             return cd
 
-        for i,_ in enumerate(axis):
-            cd = _plot(0,densities[i])
-            axes[0][i].set_title("Top-Down View (XY Projection)")
-            axes[0][i].set_xlabel("X [pc]")
-            axes[0][i].set_ylabel("Y [pc]")
+        for i, ai in enumerate(axis):
+            cd = _plot(i,densities[i])
+            if ai == 0:
+                axes[0][i].set_title("Top-Down View (XY Projection)")
+                axes[0][i].set_xlabel("X (pc)")
+                axes[0][i].set_ylabel("Y (pc)")
+            elif ai == 1:
+                axes[0][i].set_title("Side View (XZ Projection)")
+                axes[0][i].set_xlabel("X (pc)")
+                axes[0][i].set_ylabel("Z (pc)")
+            elif ai == 2:
+                axes[0][i].set_title("Front View (YZ Projection)")
+                axes[0][i].set_xlabel("Y (pc)")
+                axes[0][i].set_ylabel("Z (pc)")
 
         if color_bar:
             cbar = plt.colorbar(cd, ax=axes[0], orientation="vertical", fraction=0.02, pad=0.02)
-            cbar.set_label("Column density ($cm^{-2}$)")
+            cbar.set_label(r"$N_H$ ($cm^{-2}$)")
 
         return fig, axes
 
@@ -726,7 +736,8 @@ def openSimulation(name_root:str, global_size:float, use_cache:bool=True,cache_n
 
 if __name__ == "__main__":
     sim = Simulation_DC(name="orionMHD_lowB_0.39_512", global_size=66.0948, init=True)
-    sim.plot_density_distributions(offset_method="max")
+    sim.plot(plot_pdf=False, axis=[0,1,2], color_bar=True)
+    #sim.plot(method=compute_mass_weighted_density, axis=[0,1,2], plot_pdf=False)
     #sim.init(loadTemp=True, loadVel=True)
     #sim = openSimulation("orionMHDt2_lowB_multi", global_size=66.0948, cache_name="sim_memory_2")
     #sim.plotSlice(axis=2, enable_slider=True)

@@ -1,0 +1,28 @@
+\begin{thebibliography}{8}
+\expandafter\ifx\csname natexlab\endcsname\relax\def\natexlab#1{#1}\fi
+
+\bibitem[{Gaches \& Grudić(2024)}]{gaches_probabilistic_2024}
+Gaches, B. A.~L. \& Grudić, M.~Y. 2024, A {Probabilistic} {Model} to {Estimate} {Number} {Densities} from {Column} {Densities} in {Molecular} {Clouds}, version Number: 1
+
+\bibitem[{Kingma \& Ba(2017)}]{kingma_adam_2017}
+Kingma, D.~P. \& Ba, J. 2017, Adam: {A} {Method} for {Stochastic} {Optimization}, arXiv:1412.6980 [cs]
+
+\bibitem[{Könyves {et~al.}(2020)Könyves, André, Arzoumanian, Schneider, Men’shchikov, Bontemps, Ladjelate, Didelon, Pezzuto, Benedettini, Bracco, Di~Francesco, Goodwin, Rygl, Shimajiri, Spinoglio, Ward-Thompson, \& White}]{konyves_properties_2020}
+Könyves, V., André, P., Arzoumanian, D., {et~al.} 2020, Astronomy \& Astrophysics, 635, A34
+
+\bibitem[{Ntormousi \& Hennebelle(2019)}]{ntormousi_core_2019}
+Ntormousi, E. \& Hennebelle, P. 2019, Astronomy \& Astrophysics, 625, A82
+
+\bibitem[{Orkisz \& Kainulainen(2024)}]{orkisz_volume_2024}
+Orkisz, J.~H. \& Kainulainen, J. 2024, On volume density and star formation in nearby molecular clouds, version Number: 1
+
+\bibitem[{Paszke {et~al.}(2019)Paszke, Gross, Massa, Lerer, Bradbury, Chanan, Killeen, Lin, Gimelshein, Antiga, Desmaison, Köpf, Yang, DeVito, Raison, Tejani, Chilamkurthy, Steiner, Fang, Bai, \& Chintala}]{paszke_pytorch_2019}
+Paszke, A., Gross, S., Massa, F., {et~al.} 2019, {PyTorch}: {An} {Imperative} {Style}, {High}-{Performance} {Deep} {Learning} {Library}, arXiv:1912.01703 [cs]
+
+\bibitem[{Teyssier(2002)}]{teyssier_cosmological_2002}
+Teyssier, R. 2002, Astronomy \& Astrophysics, 385, 337
+
+\bibitem[{Yang {et~al.}(2023)Yang, Xiao, Zhang, Guo, Zhao, \& Shen}]{yang_image_2023}
+Yang, S., Xiao, W., Zhang, M., {et~al.} 2023, Image {Data} {Augmentation} for {Deep} {Learning}: {A} {Survey}, arXiv:2204.08610 [cs]
+
+\end{thebibliography}
