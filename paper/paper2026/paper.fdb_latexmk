@@ -1,15 +1,15 @@
 # Fdb version 4
-["bibtex paper"] 1763734242.20321 "paper.aux" "paper.bbl" "paper" 1763734359.10874 0
+["bibtex paper"] 1764253810.97709 "paper.aux" "paper.bbl" "paper" 1764253812.83746 0
   "./aa.bst" 1760088440 32103 296074362bd3e822c5209e1570c1d28f ""
-  "./biblio.bib" 1763731618.68495 200209 ca8841cd6cee12f853af65d5309285af ""
-  "paper.aux" 1763734358.91646 10320 d0180ea622c9938e7e54682c829bd61f "pdflatex"
+  "./biblio.bib" 1764247142.45938 202608 0ff2d09e0b7f621a53788f2f93c60122 ""
+  "paper.aux" 1764253812.54599 16985 62106847161c3a8e506c824e08793383 "pdflatex"
   (generated)
   "paper.bbl"
   "paper.blg"
   (rewritten before read)
-["pdflatex"] 1763734358.04589 "/home/zack/Documents/POLARIScore/paper/paper2026/paper.tex" "paper.pdf" "paper" 1763734359.10905 0
+["pdflatex"] 1764253811.05341 "/home/zack/Documents/POLARIScore/paper/paper2026/paper.tex" "paper.pdf" "paper" 1764253812.83797 0
   "/etc/texmf/web2c/texmf.cnf" 1742201012.88803 475 c0e671620eb5563b2130f56340a5fde8 ""
-  "/home/zack/Documents/POLARIScore/paper/paper2026/paper.tex" 1763734357.65146 15342 77658d7069d67dc2dd7939470534029d ""
+  "/home/zack/Documents/POLARIScore/paper/paper2026/paper.tex" 1764253808.56499 26819 4ef792bb278fb2632e0cae9f88302817 ""
   "/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc" 1165713224 4850 80dc9bab7f31fb78a000ccfed0e27cab ""
   "/usr/share/texlive/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/jknappen/ec/ecrm1000.tfm" 1136768653 3584 adb004a0c8e7c46ee66cad73671f37b4 ""
@@ -170,14 +170,17 @@
   "figures/fig_mw_correction_diffkonyves.eps" 1763650465.15032 27119 a8efacf9b5321ded5c7ff479eae0c289 ""
   "figures/fig_mw_correction_ld.eps" 1763633555.17232 29494 28e8fe07a86fa77659444990b04f6435 ""
   "figures/fig_mw_correction_nd.eps" 1763633542.76146 33192 d2cd79e9fb7a0effdff93ae5b8dc04b3 ""
+  "figures/fig_score_accuracy.eps" 1764000357.46416 22063 13f862c0489520f328baacbafa7c1821 ""
+  "figures/fig_score_residuals.eps" 1764000340.60934 28712 adb262fb9047b576c95c3746990a8881 ""
+  "figures/fig_score_unet_diffkonyves.eps" 1763986894.76858 29556 df21fc6ba8c9947dc803ba2222b3aa00 ""
   "figures/fig_sim_coldens.eps" 1763733114.76141 1243209 3d5b7a2ad068366d5cf3be8f46588f2b ""
   "figures/fig_sim_voldens.eps" 1763733263.34541 1322293 05842d172316cd6289093fb28edf3e9a ""
   "lineno.sty" 1760088440 151723 f406be88dbdad6c97fb774bd975d0393 ""
   "linenoaa.sty" 1760088440 4221 64fc978f7ff26cff65f5a8f1adc2a33b ""
-  "paper.aux" 1763734358.91646 10320 d0180ea622c9938e7e54682c829bd61f "pdflatex"
-  "paper.bbl" 1763734242.24246 1898 bf6b57c94d70f4a49b1482da9cda6089 "bibtex paper"
-  "paper.out" 1763734358.92746 3365 87a173993ae43895a06a05df53675bb4 "pdflatex"
-  "paper.tex" 1763734357.65146 15342 77658d7069d67dc2dd7939470534029d ""
+  "paper.aux" 1764253812.54599 16985 62106847161c3a8e506c824e08793383 "pdflatex"
+  "paper.bbl" 1764253811.04299 3177 e9464ba3e5c223e1ae94f7f4595262d6 "bibtex paper"
+  "paper.out" 1764253812.55899 4474 bd299112bf4267beda6c4519b6306492 "pdflatex"
+  "paper.tex" 1764253808.56499 26819 4ef792bb278fb2632e0cae9f88302817 ""
   (generated)
   "paper.aux"
   "paper.log"

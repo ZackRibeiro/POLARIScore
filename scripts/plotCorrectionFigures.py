@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 if __name__ == "__main__":
 
-    col_dens = 1e21
+    col_dens = 1e22
     core_radius = 0.05
 
     fig, ax = plt.subplots(figsize=(5,5))
@@ -25,11 +25,13 @@ if __name__ == "__main__":
     for i,n in enumerate(np.linspace(1e3,2.e3,3)):
         
         ld_min, ld_max = 0.01, 3
-        function_ld = lambda X: n/CONVERT_massn_TO_n_coldens(col_dens, X, n*np.ones((100)), core_radius, filter=None)
+        function_ld = lambda X: CONVERT_massn_TO_n_coldens(col_dens, X, n*np.ones((100)), core_radius, filter=None)/n
         nd_min, nd_max = 30, 1e3
-        function_nd = lambda X: n/CONVERT_massn_TO_n_coldens(col_dens, X, n*np.ones((100)), core_radius, filter=None, is_density=True)
+        function_nd = lambda X: CONVERT_massn_TO_n_coldens(col_dens, X, n*np.ones((100)), core_radius, filter=None, is_density=True)/n
 
-        print(n,n/np.sqrt((n*col_dens)/(core_radius*2*PC_TO_CM)))
+        #print(n,n/np.sqrt((n*col_dens)/(core_radius*2*PC_TO_CM)))
+
+        #print nd
                 
         plot_function(function_ld, ax=ax, lims=[ld_min,ld_max,None,None], logspace=False, label=rf"$<n_H>_m=${n:.2e}", ls=lss[i], color="black")
         plot_function(function_nd, ax=ax2, lims=[nd_min,nd_max,None,None], logspace=False, label=rf"$<n_H>_m=${n:.2e}", ls=lss[i], color="black")

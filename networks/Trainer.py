@@ -1196,7 +1196,8 @@ if __name__ == "__main__":
     #trainer.model.plot_features(ds2.get(3)[0], os.path.join(EXPORT_FOLDER,"model_features"))
 
     #ds = ds.downsample(channel_names=["cospectra"], target_depths=[128], methods=["mean"])
-    #ds2 = getDataset("batch_validation")
+    ds = getDataset("batch_highres_2")
+    ds1, ds2 = ds.split(0.7)
 
     """
     #trainer = Trainer(UNet, ds1, ds2, model_name="General_UNet_6")
@@ -1221,7 +1222,17 @@ if __name__ == "__main__":
     trainer.plot_validation(save=True)
     #plot_models_accuracy([load_trainer("UneK"),load_trainer("UNet")], sigmas=(0,1,20), bins=[0,2,4,8], use_linestyles=True) 
     """
-    
+
+    trainer_gen = load_trainer("General_UNet")
+    trainer_gen.validation_set = ds2
+    trainer = load_trainer("UNet")
+    trainer.validation_set = ds2
+    fig, _ = plot_models_accuracy([trainer, trainer_gen], use_linestyles=True)
+    fig.set_size_inches(5, 5)
+    fig, _, _ = plot_models_residuals([trainer, trainer_gen])
+    fig.set_size_inches(5,5) 
+
+
     """
     #How to create and use baseline on a model
     #trainer.plot()

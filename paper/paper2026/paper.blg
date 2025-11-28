@@ -4,44 +4,56 @@ The top-level auxiliary file: paper.aux
 The style file: aa.bst
 Database file #1: biblio.bib
 Reallocated wiz_functions (elt_size=4) to 6000 items from 3000.
-You've used 8 entries,
+Warning--empty journal in ardizzoneConditionalInvertibleNeural2021
+Warning--empty journal in gachesProbabilisticModelEstimate2024
+Warning--empty journal in goodfellowGenerativeAdversarialNetworks2014
+Warning--empty journal in hoDenoisingDiffusionProbabilistic2020
+Warning--empty journal in kingmaAdamMethodStochastic2017
+Warning--empty journal in lipmanFlowMatchingGenerative2023
+Warning--empty journal in oktayAttentionUNetLearning2018
+Warning--empty journal in orkiszVolumeDensityStar2024
+Warning--empty journal in paszkePyTorchImperativeStyle2019
+Warning--empty journal in ronnebergerUNetConvolutionalNetworks2015
+Warning--empty journal in yangImageDataAugmentation2023
+You've used 16 entries,
             3039 wiz_defined-function locations,
-            705 strings with 6603 characters,
-and the built_in function-call counts, 4762 in all, are:
-= -- 390
-> -- 510
-< -- 5
-+ -- 172
-- -- 162
-* -- 415
-:= -- 904
-add.period$ -- 8
-call.type$ -- 8
-change.case$ -- 91
-chr.to.int$ -- 8
-cite$ -- 8
-duplicate$ -- 142
-empty$ -- 179
-format.name$ -- 189
-if$ -- 913
+            760 strings with 9120 characters,
+and the built_in function-call counts, 9177 in all, are:
+= -- 730
+> -- 937
+< -- 6
++ -- 315
+- -- 297
+* -- 814
+:= -- 1724
+add.period$ -- 16
+call.type$ -- 16
+change.case$ -- 174
+chr.to.int$ -- 16
+cite$ -- 27
+duplicate$ -- 315
+empty$ -- 384
+format.name$ -- 342
+if$ -- 1748
 int.to.chr$ -- 1
 int.to.str$ -- 1
-missing$ -- 3
-newline$ -- 28
-num.names$ -- 32
-pop$ -- 82
+missing$ -- 16
+newline$ -- 52
+num.names$ -- 64
+pop$ -- 188
 preamble$ -- 1
-purify$ -- 86
+purify$ -- 163
 quote$ -- 0
-skip$ -- 112
+skip$ -- 220
 stack$ -- 0
-substring$ -- 130
+substring$ -- 250
 swap$ -- 0
 text.length$ -- 0
 text.prefix$ -- 0
 top$ -- 0
-type$ -- 72
-warning$ -- 0
-while$ -- 27
+type$ -- 144
+warning$ -- 11
+while$ -- 53
 width$ -- 0
-write$ -- 83
+write$ -- 152
+(There were 11 warnings)

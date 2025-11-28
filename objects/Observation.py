@@ -2,6 +2,7 @@ import os
 import sys
 from astropy.io import fits
 from astropy.wcs import WCS
+from matplotlib import axes
 
 from POLARIScore.utils.physics_utils import PC_TO_CM, plot_lognorm, plot_imf_chabrier, dcmf_func, CONVERT_NH_TO_EXTINCTION
 from POLARIScore.config import *
@@ -20,6 +21,7 @@ from POLARIScore.networks.Trainer import Trainer
 from POLARIScore.objects.Dataset import getDataset
 from typing import Dict, List, Optional, Tuple, Union, Literal
 from scipy.stats import lognorm
+from scipy.ndimage import gaussian_filter
 from scipy.optimize import curve_fit
 from POLARIScore.scripts.plotORIONsimDCMF import plot_sim_dcmf
 from POLARIScore.utils.batch_utils import compute_smoothness
@@ -66,9 +68,34 @@ class Observation():
         self.wcs = WCS(f.header)
         file.close()
 
+    def predict_using_function(self,function: Callable,nan_value=1e19,chunk_size=10000):
+        data = self.data
+        n = data.shape[0]
+
+        prediction = np.empty_like(data, dtype=float)
+        #self.data = np.memmap("file.npy", dtype="float64", mode="r")
+        if nan_value < 0:
+            nan_value = float(np.nanmin(data[data > 0]))
+
+        for start in range(0, n, chunk_size):
+            end = min(start + chunk_size, n)
+
+            chunk = data[start:end].copy()
+            nan_mask = np.isnan(chunk) | (chunk <= 0)
+            chunk[nan_mask] = nan_value
+
+            chunk = 10 ** (function(np.log10(chunk)))
+            prediction[start:end] = chunk
+
+        self.prediction = prediction
+        return prediction
+
+
+        
+
     def predict(self, model_trainer:'Trainer', patch_size:Tuple[int,int]=(128, 128), nan_value:float=-1.0, overlap:float=0.5, downsample_factor:float=1., apply_baseline:bool=False)->np.ndarray:
         """
-        Predict a quantity by applying a model to an observation.
+        Predict a quantity by applying a neural network to an observation.
         Args:
             model_trainer (Trainer): Model wrapped in a Trainer object.
             patch_size (tuple[int, int]): Shape of the 2D patches on which the model will be applied. The observation will be divided into patches of this shape.
@@ -135,6 +162,28 @@ class Observation():
 
         return output_matrix
     
+    def apply_filter(self, method:Literal["gaussian"]="gaussian", factor=1., original_beam=18.2, replace=True):
+        """
+        Apply filter, e.g convolve by a gaussian beam with a width of original_beam*factor.
+        """
+
+        try:
+            pixscale_deg = np.abs(self.wcs.pixel_scale_matrix.diagonal()).mean()
+        except AttributeError:
+            cdelt = self.wcs.wcs.cdelt
+            pixscale_deg = np.mean(np.abs(cdelt))
+
+        sigma_pixels = (original_beam*factor / (2*np.sqrt(2*np.log(2)))) / (pixscale_deg*3600)
+        
+        if method == "gaussian":
+            smoothed = gaussian_filter(self.datadata, sigma=sigma_pixels)
+            if replace:
+                self.data = smoothed
+            return smoothed
+        else:
+            raise NotImplementedError()
+
+
     def find_scale(self, pc: float, px_size: int, distance_pc: float) -> float:
         """
         Compute the downsampling scale factor so that a region of `px_size` pixels 
@@ -1210,17 +1259,18 @@ class Observation():
         LOGGER.log(f"Cores serialized for obs {self.name}, see the cores.txt file.")
         return string
 
-    def save(self,replace:bool=True):
+    def save(self,replace:bool=True,suffix=""):
         """
         Args:
-            replace (bool): if set to False, if there is an existing file then this function does nothing. 
+            replace (bool): if set to False, if there is an existing file then this function does nothing.
+            suffix (str): add suffix in file name.
         """
         if self.prediction is None:
             LOGGER.error(f"Can't save cache for prediction on {self.name} because there has no prediction on this observation, use .predict(model)")
             return
         if not(os.path.exists(CACHES_FOLDER)):
             os.mkdir(CACHES_FOLDER)
-        path = os.path.join(CACHES_FOLDER,self.name+".npy")
+        path = os.path.join(CACHES_FOLDER,self.name+suffix+".npy")
         if os.path.exists(path):
             if not(replace):
                 LOGGER.error(f"Can't save cache for prediction on {self.name} because there is already a cache and replace is set to False")
@@ -1321,17 +1371,23 @@ if __name__ == "__main__":
     #obs.plot_cores_mass(bins_mean=20)
     #obs.plot_density_distributions(offset_method="max", monte_carlo=0, label="cINN")
 
-    obs.load(suffix="_unet")
+    #obs.plot_fractal_dim(suffixes=["_fit"])
     #obs.load_error(model_name="cINN_3")
-    obs.prediction_error = None
-    fig, ax = obs.plot_cores_error(mov_average=0, log_average=50, show_errors=False, correction=True, color="black", linestyle="-", label="with correction")
-    obs.plot_cores_error(ax=ax, mov_average=0, log_average=50, show_errors=False, correction=False, color="black", linestyle="--", label="no correction")
-    fig.set_size_inches(10, 5)
+    #obs.prediction_error = None
+    #fig, ax = obs.plot_cores_error(mov_average=0, log_average=50, show_errors=False, correction=True, color="black", linestyle="-", label="few WNM")
+    #obs.load(suffix="_generalunet")
+    #obs.plot_cores_error(ax=ax, mov_average=0, log_average=50, show_errors=False, correction=True, color="black", linestyle="--", label="all WNM")
+    #fig.set_size_inches(10, 5)
+
+    obs.load(suffix="_fit")
+    fig, ax = obs.plot_cores_error(mov_average=0, log_average=30, color="black", linestyle="-", label="Fit")
+    obs.load(suffix="_unet")
+    obs.plot_cores_error(ax=ax, mov_average=0, log_average=30, color="black", linestyle="--", label="UNet")
 
     #obs.plot_density_distributions(offset_method="max", monte_carlo=0, label="UNet")
     #obs.prediction = obs.rectify_error_baseline()
     #obs.plot_dcmf(method="constant", monte_carlo=0, fit=True, bins=15)
-    #obs.plot_cores_baseline(suffixes=[""], derived_cores=True, density_correction=True, invert_xy=True, x_coldens=True, mov_average=5, fit=True)
+    #obs.plot_cores_baseline(derived_cores=True, density_correction=True, invert_xy=True, x_coldens=True, mov_average=5, fit=True)
     #obs.plot_cores_mass(bins_mean=20)
 
     #print(obs.get_cores()[200].data["name"])

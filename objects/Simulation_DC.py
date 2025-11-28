@@ -17,6 +17,9 @@ from POLARIScore.objects.Dataset import Dataset
 from typing import Dict,List,Tuple,Callable,Union, Literal
 from matplotlib.widgets import Slider
 from scipy.ndimage import zoom
+from scipy.optimize import curve_fit
+import matplotlib.cm as cm
+
 
 class Simulation_DC():
     """
@@ -554,7 +557,7 @@ class Simulation_DC():
 
         return fig, axes
 
-    def plot_correlation(self,method:Callable=compute_mass_weighted_density, axis:int=-1, contour_levels:int=0, force_compute:bool=False, lines:List[int]=[0,1,2])->Tuple:
+    def plot_correlation(self,ax=None, method:Callable=compute_mass_weighted_density, axis:int=-1, force_compute:bool=False, lines:List[int]=[0,1,2], colorbar=True)->Tuple:
 
         """
         Plot correlation between the column density and the volumic density
@@ -567,90 +570,226 @@ class Simulation_DC():
         Returns:
             Tuple(fig, ax)
         """
-        fig, ax = plt.subplots(1,1)
-        if axis >= 0:
-            column_density = np.log(self._compute_c_density(axis=axis,force=force_compute).flatten())/np.log(10)
-            volume_density = np.log(self._compute_v_density(method=method, axis=axis,force=force_compute).flatten())/np.log(10)
-        else:
-            column_density = np.log(np.array([self._compute_c_density(axis=0,force=force_compute),self._compute_c_density(axis=1,force=force_compute),self._compute_c_density(axis=2,force=force_compute)]).flatten())/np.log(10)
-            volume_density = np.log(np.array([self._compute_v_density(method=method, axis=0,force=force_compute),self._compute_v_density(method=method, axis=1,force=force_compute),self._compute_v_density(method=method, axis=2,force=force_compute)]).flatten())/np.log(10)
-
-        if contour_levels > 1:
-            hist, xedges, yedges = np.histogram2d(column_density, volume_density, bins=(256, 256))
-            xcenters = 0.5 * (xedges[:-1] + xedges[1:])
-            ycenters = 0.5 * (yedges[:-1] + yedges[1:])
-            X, Y = np.meshgrid(xcenters, ycenters)
-            contour = ax.contour(X, Y, hist.T, levels=int(contour_levels), norm=LogNorm(), colors="black")
-            ax.clabel(contour, fmt=lambda x: r"$10^{{{:.0f}}}$".format(np.log10(x)), inline=True, fontsize=8)
-        else:
-            _, _,_,hist = ax.hist2d(column_density, volume_density, bins=(256,256), norm=LogNorm())
-            plt.colorbar(hist, ax=ax, label="counts")
-        ax.set_xlabel(r"Column density ($log_{10}(cm^{-2})$)")
-        ax.set_ylabel(r"Mass-weighted density ($log_{10}(cm^{-3})$)")
-
-        ax = plt.gca()
-
-        plot_lines(column_density, volume_density, ax, lines=lines)
-
-        ax.grid(True)
-        ax.set_axisbelow(True)
-        fig.tight_layout()
-        return fig, ax
-
-    def plot_density_distributions(self, ax=None, bins:int=20, vdens_method=compute_mass_weighted_density, offset_method:Literal["mean","max"]="mean"):
         
         if ax is None:
             fig, ax = plt.subplots()
         else:
             fig = ax.figure
 
-        cdens = np.array([self._compute_c_density(axis=0),self._compute_c_density(axis=1),self._compute_c_density(axis=2)]).flatten()
-        vdens = np.array([self._compute_v_density(method=vdens_method, axis=0, force=True),self._compute_v_density(method=vdens_method, axis=1, force=True),self._compute_v_density(method=vdens_method, axis=2, force=True)]).flatten()
-
-        mask = (~np.isnan(vdens)) & (vdens > 0) & (~np.isnan(cdens)) & (cdens > 0)
-
-        log10_coldens = np.log10(cdens[mask])
-        log10_voldens = np.log10(vdens[mask])
-
-        hist_cd, _ = np.histogram(log10_coldens, bins=bins+1, density=False)
-        hist_cd_stats_error = np.sqrt(hist_cd)/hist_cd
-        hist_cd, bin_edges_cd = np.histogram(log10_coldens, bins=bins+1, density=True)
-        bin_centers_cd = 0.5 * (bin_edges_cd[1:] + bin_edges_cd[:-1])
-
-        bin_edges_pr = np.linspace(np.min(log10_voldens), np.max(log10_voldens), bins + 1)
-        hist_pr, _ = np.histogram(log10_voldens, bins=bin_edges_pr, density=False)
-        hist_pred_stats_error = np.sqrt(hist_pr)/hist_pr
-        hist_pr, bin_edges_pr = np.histogram(log10_voldens, bins=bin_edges_pr, density=True)
-        bin_centers_pr = 0.5 * (bin_edges_pr[1:] + bin_edges_pr[:-1])
-
-        def _normalize_x(hist, bin_centers):
-            if offset_method == "mean":
-                return (bin_centers - bin_centers[np.argmin(np.abs(hist-np.mean(hist)))]) / (np.max(bin_centers) - np.min(bin_centers))
-            else:
-                return (bin_centers - bin_centers[np.argmax(hist)]) / (np.max(bin_centers) - np.min(bin_centers))
-        
-        bin_centers_cd = _normalize_x(hist_cd, bin_centers_cd)
-        bin_centers_pr = _normalize_x(hist_pr, bin_centers_pr)
-
-        ax.plot(10**bin_centers_cd, hist_cd, drawstyle="steps-mid", color="blue", label=r"$N_H$ [$cm^{-2}$]")
-        ax.scatter(10**bin_centers_cd, hist_cd, marker="o", color="blue")
-        ax.errorbar(10**bin_centers_cd, hist_cd, yerr=hist_cd_stats_error*hist_cd, fmt='none', color="black")
-        ax.plot(10**bin_centers_pr, hist_pr, drawstyle="steps-mid", color="red", label=r"$<n_H>_m$ [$cm^{-3}$]")
-        ax.scatter(10**bin_centers_pr, hist_pr, marker="o", color="red")
-        ax.errorbar(10**bin_centers_pr, hist_pr, yerr=hist_pred_stats_error*hist_pr, fmt='none', color="black")
-        
-        if offset_method == "mean":
-            ax.set_xlabel(r"($x-\mu) / (max(x)-min(x))$")
+        if axis >= 0:
+            column_density = self._compute_c_density(axis=axis,force=force_compute).flatten()
+            volume_density = self._compute_v_density(method=method, axis=axis,force=force_compute).flatten()
         else:
-            ax.set_xlabel(r"($x-max(x)) / (max(x)-min(x))$")
-        ax.set_ylabel("density")
+            column_density = np.array([self._compute_c_density(axis=0,force=force_compute),self._compute_c_density(axis=1,force=force_compute),self._compute_c_density(axis=2,force=force_compute)]).flatten()
+            volume_density = np.array([self._compute_v_density(method=method, axis=0,force=force_compute),self._compute_v_density(method=method, axis=1,force=force_compute),self._compute_v_density(method=method, axis=2,force=force_compute)]).flatten()
+
+        logx = np.log10(column_density)
+        logy = np.log10(volume_density)
+
+        xbins = np.logspace(logx.min(), logx.max(), 256)
+        ybins = np.logspace(logy.min(), logy.max(), 256)
+
+
+        _, _,_,hist = ax.hist2d(column_density, volume_density, bins=(xbins,ybins), norm=LogNorm(), cmap=cm.viridis)
+
+
+        if colorbar:
+            plt.colorbar(hist, ax=ax, label="counts")
+        ax.set_xlabel(r"$N_H$ $(\text{cm}^{-2})$")
+        ax.set_ylabel(r"$<n_H>_m$ $(c\text{m}^{-3})$")
 
         ax.set_xscale("log")
         ax.set_yscale("log")
 
-        ax.legend()
-        
+        ax = plt.gca()
+
+        plot_lines(column_density, volume_density, ax, lines=lines, logspace=True)
+
+        ax.grid(True)
+        ax.set_axisbelow(True)
+        fig.tight_layout()
         return fig, ax
+    
+    def plot_pdf_2D(self):
+        fig, axes = plt.subplot_mosaic(
+        [
+            ["A", "A", "O"],
+            ["B", "B", "C"],
+            ["B", "B", "C"]
+        ],
+        figsize=(7, 7)
+        )
+
+        #axes["O"].remove()
+
+        self.plot_pdf(ax=axes["A"], what="cdens", color="black", legend=False, offset_method='none', scatter=False, bins=40)
+        self.plot_pdf(ax=axes["C"], what="vdens", color="black", legend=False, offset_method='none', scatter=False, swap_axis=True, bins=40)
+        axes["A"].set_ylabel(r"$P_{N_H}$")
+        axes["C"].set_xlabel(r"$P_{<n_H>_m}$")
+        self.plot_correlation(ax=axes["B"], colorbar=False)
+        self.fit_correlation(ax=axes["B"], show_gaussians=False, legend=False)
+        self.fit_correlation(ax=axes["O"], legend=False, labels=False, show_data=False)
+
+        return fig, axes
+
+    def fit_correlation(self, ax=None, number=4, method=compute_mass_weighted_density, show_gaussians=True, 
+                        legend=True, show_data=True, labels=True,
+                        )->Callable[[Union[np.ndarray, float]], Union[np.ndarray, float]]:
+        
+        if ax is None:
+            fig, ax = plt.subplots()
+        else:
+            fig = ax.figure
+  
+        column_density = np.array([self._compute_c_density(axis=i,force=True) for i in range(3)]).flatten()
+        volume_density = np.array([self._compute_v_density(method=method, axis=i,force=True) for i in range(3)]).flatten()
+
+        sorted_indexes = np.argsort(column_density)
+        column_density = column_density[sorted_indexes]
+        volume_density = volume_density[sorted_indexes]
+        binned_x, binned_y = bin_mean(column_density, volume_density, dx=0.1,min_per_bin=3)
+        binned_x = np.log10(binned_x)
+        binned_y = np.log10(binned_y)
+
+        def _gaussian(x, sigma, mean, amplitude):
+            return amplitude * np.exp(-(x - mean)**2 / (2 * sigma**2))
+
+        def fit_function(x, *params):
+            sigmas = params[0:number]
+            means  = params[number:2*number]
+            amps   = params[2*number:3*number]
+
+            y = np.zeros_like(x)
+            for i in range(number):
+                y += _gaussian(x, sigmas[i], means[i], amps[i])
+            return y
+
+        sigma_guess = [0.5] * number
+        mean_guess  = np.linspace(binned_x.min(), binned_x.max(), number)
+        amp_guess   = [binned_y.max()/number] * number
+        p0 = np.concatenate([sigma_guess, mean_guess, amp_guess])
+
+        X = np.linspace(np.min(binned_x), np.max(binned_x), 100)
+
+        popt, pcov = curve_fit(fit_function, binned_x, binned_y, p0=p0, maxfev=20000)
+
+        if show_gaussians:
+            for i in range(number):
+                ax.plot(10**X, 10**_gaussian(X, popt[i], popt[number+i], popt[2*number+i]),color="green", label=rf"$G_{i}$: $\sigma$={popt[i]:.2f} $\mu$={popt[number+i]:.2f} Amp={popt[2*number+i]:.2f}")
+                LOGGER.log(f"Gaussian {i}: std={popt[i]:.2e} mean={popt[number+i]:.2e} amp={popt[2*number+i]:.2e}")
+
+        ax.plot(10**X, 10**fit_function(X, *popt), color="red", linestyle="--", label=r"Fit: $\sum^4_i \mathrm{G_i}$")
+        if show_data:
+            ax.plot(10**binned_x, 10**binned_y, marker="+", color="black", label="Data")
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.grid(visible=True)
+
+        if labels:
+            ax.set_xlabel(r"$N_H$ ($\mathrm{cm}^{-2}$)")
+            ax.set_ylabel(r"$<n_H>_m$ ($\mathrm{cm}^{-3}$)")
+
+        if legend:
+            ax.legend()
+
+        return lambda X: fit_function(X, *popt)
+
+    def plot_pdf(self,ax=None,bins: int = 20,vdens_method=compute_mass_weighted_density,offset_method: Literal["mean", "max", "none"] = "mean",what: Literal["both", "cdens", "vdens"] = "both",
+                 color=None, legend=True, scatter=True, swap_axis=False):
+        if ax is None:
+            fig, ax = plt.subplots()
+        else:
+            fig = ax.figure
+
+        if what in ("both", "cdens"):
+            cdens = np.array([
+                self._compute_c_density(axis=0),
+                self._compute_c_density(axis=1),
+                self._compute_c_density(axis=2)
+            ]).flatten()
+        else:
+            cdens = None
+
+        if what in ("both", "vdens"):
+            vdens = np.array([
+                self._compute_v_density(method=vdens_method, axis=0, force=True),
+                self._compute_v_density(method=vdens_method, axis=1, force=True),
+                self._compute_v_density(method=vdens_method, axis=2, force=True)
+            ]).flatten()
+        else:
+            vdens = None
+
+        if what == "both":
+            mask = (~np.isnan(vdens)) & (vdens > 0) & (~np.isnan(cdens)) & (cdens > 0)
+        elif what == "cdens":
+            mask = (~np.isnan(cdens)) & (cdens > 0)
+        else:
+            mask = (~np.isnan(vdens)) & (vdens > 0)
+
+        def _normalize_x(hist, bin_centers):
+            if offset_method == "mean":
+                return (bin_centers - bin_centers[np.argmin(np.abs(hist - np.mean(hist)))]) / \
+                    (np.max(bin_centers) - np.min(bin_centers))
+            elif offset_method == "max":
+                return (bin_centers - bin_centers[np.argmax(hist)]) / \
+                    (np.max(bin_centers) - np.min(bin_centers))
+            else:
+                return bin_centers
+
+        if what in ("both", "cdens"):
+            log10_coldens = np.log10(cdens[mask])
+            hist_cd_raw, _ = np.histogram(log10_coldens, bins=bins+1, density=False)
+            hist_cd_stats_error = np.sqrt(hist_cd_raw) / hist_cd_raw
+            hist_cd, bin_edges_cd = np.histogram(log10_coldens, bins=bins+1, density=True)
+            bin_centers_cd = 0.5 * (bin_edges_cd[1:] + bin_edges_cd[:-1])
+            bin_centers_cd = _normalize_x(hist_cd, bin_centers_cd)
+            ax.plot(hist_cd if swap_axis else 10**bin_centers_cd, 10**bin_centers_cd if swap_axis else hist_cd, drawstyle="steps-mid", marker="o" if scatter else None, color="blue" if color is None else color, label=r"$N_H$ [$cm^{-2}$]")
+            if not(swap_axis):
+                ax.errorbar(10**bin_centers_cd, hist_cd, yerr=hist_cd_stats_error * hist_cd, fmt='none', color="black")
+
+        if what in ("both", "vdens"):
+            log10_voldens = np.log10(vdens[mask])
+            bin_edges_pr = np.linspace(np.min(log10_voldens), np.max(log10_voldens), bins + 1)
+            hist_pr_raw, _ = np.histogram(log10_voldens, bins=bin_edges_pr, density=False)
+            hist_pred_stats_error = np.sqrt(hist_pr_raw) / hist_pr_raw
+            hist_pr, bin_edges_pr = np.histogram(log10_voldens, bins=bin_edges_pr, density=True)
+            bin_centers_pr = 0.5 * (bin_edges_pr[1:] + bin_edges_pr[:-1])
+            bin_centers_pr = _normalize_x(hist_pr, bin_centers_pr)
+            ax.plot(hist_pr if swap_axis else 10**bin_centers_pr, 10**bin_centers_pr if swap_axis else hist_pr, drawstyle="steps-mid", marker="o" if scatter else None, color="red" if color is None else color, label=r"$<n_H>_m$ [$cm^{-3}$]")
+            if not(swap_axis):
+                ax.errorbar(10**bin_centers_pr, hist_pr, yerr=hist_pred_stats_error * hist_pr, fmt='none', color="black")
+
+        if offset_method == "mean":
+            ax.set_xlabel(r"($x-\mu) / (max(x)-min(x))$")
+        elif offset_method == "max":
+            ax.set_xlabel(r"($x-max(x)) / (max(x)-min(x))$")
+        
+        if swap_axis:
+            ax.set_xlabel("density")
+            if what == "cdens":
+                ax.set_ylim(np.min(cdens), np.max(cdens))
+                ax.set_xlim(np.min(hist_cd), np.max(hist_cd))
+            elif what == "vdens":
+                ax.set_ylim(np.min(vdens), np.max(vdens))
+                ax.set_xlim(np.min(hist_pr), np.max(hist_pr))
+        else:
+            ax.set_ylabel("density")
+            if what == "cdens":
+                ax.set_xlim(np.min(cdens), np.max(cdens))
+                ax.set_ylim(np.min(hist_cd), np.max(hist_cd))
+            elif what == "vdens":
+                ax.set_xlim(np.min(vdens), np.max(vdens))
+                ax.set_ylim(np.min(hist_pr), np.max(hist_pr))
+
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.grid(visible=True)
+
+        if legend:
+            ax.legend()
+
+        return fig, ax
+
 
 def mergeSimu(sim_array:List[Simulation_DC])->Simulation_DC:
     """
@@ -736,7 +875,9 @@ def openSimulation(name_root:str, global_size:float, use_cache:bool=True,cache_n
 
 if __name__ == "__main__":
     sim = Simulation_DC(name="orionMHD_lowB_0.39_512", global_size=66.0948, init=True)
-    sim.plot(plot_pdf=False, axis=[0,1,2], color_bar=True)
+    #fct = sim.fit_correlation()
+    sim.plot_pdf_2D()
+    #sim.plot(plot_pdf=False, axis=[0,1,2], color_bar=True)
     #sim.plot(method=compute_mass_weighted_density, axis=[0,1,2], plot_pdf=False)
     #sim.init(loadTemp=True, loadVel=True)
     #sim = openSimulation("orionMHDt2_lowB_multi", global_size=66.0948, cache_name="sim_memory_2")
