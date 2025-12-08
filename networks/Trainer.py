@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from POLARIScore.networks.architectures.nn_BaseModule import BaseModule
 from POLARIScore.networks.architectures.nn_SAUNet import SizeAwareUNet
 from POLARIScore.networks.architectures.nn_cINN import cINN
+from POLARIScore.networks.architectures.nn_DDPM import DDPMUnet
 from POLARIScore.utils.batch_utils import *
 from POLARIScore.config import *
 import uuid
@@ -37,6 +38,7 @@ NETWORK_OPTIONS = {
     "CAUNet": ContextAwareUNet,
     "JustKAN": JustKAN,
     "cINN": cINN,
+    "DDPMUnet": DDPMUnet,
     "None": None
 }
 
@@ -248,15 +250,19 @@ class Trainer():
                 if self.training_random_transform:
                     t_input, t_target = _random_transform(t_input, t_target)
                 output = self._train_model(self.model,t_input,t_target)
+                target = t_target
+                #In some cases the train function can also returns the target (like in DDPMs where it returs the noise added).
+                if type(output) is tuple:
+                    output, target = output
                 loss = 0
                 try:
-                    loss = self.loss_method(output, t_target)
+                    loss = self.loss_method(output, target)
                 except:
-                    for tt in range(len(t_target)):
+                    for tt in range(len(target)):
                         if type(output) is list:
-                            loss += self.loss_method(output[tt], t_target[tt])
+                            loss += self.loss_method(output[tt], target[tt])
                         else:
-                            loss += self.loss_method(output, t_target[tt])
+                            loss += self.loss_method(output, target[tt])
                 loss.backward()
                 epoch_loss += loss.item()
             self.optimizer.step()

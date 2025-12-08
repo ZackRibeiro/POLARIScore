@@ -49,10 +49,12 @@ class INNTrainer(Trainer):
             input = input[0]
         B,_,_,_ = input.shape
         C, H, W = model.z_shape
-        z = torch.randn((B, C, H, W), device=input.device)
-        output = model.inverse(z, input)
+        
+        with torch.no_grad(): 
+            z = torch.randn((B, C, H, W), device=input.device)
+            output = model.inverse(z, input)
 
-        return output
+            return output
     
     
     @staticmethod

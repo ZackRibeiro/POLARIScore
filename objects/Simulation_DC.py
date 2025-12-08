@@ -607,7 +607,7 @@ class Simulation_DC():
 
         ax.grid(True)
         ax.set_axisbelow(True)
-        fig.tight_layout()
+        #fig.tight_layout()
         return fig, ax
     
     def plot_pdf_2D(self):

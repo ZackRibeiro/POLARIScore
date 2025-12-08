@@ -17,7 +17,7 @@ class ResConvBlock(nn.Module):
     """Residuals convolution block with time embedding"""
     def __init__(self, in_channels, out_channels, group_over=32, activation_function=nn.SiLU, time_emb_dim=None):
         super().__init__()
-        self.norm1 = nn.GroupNorm(group_over, in_channels)
+        self.norm1 = nn.GroupNorm(min(group_over, in_channels), in_channels)
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
 
         self.time_mlp = None
@@ -27,7 +27,7 @@ class ResConvBlock(nn.Module):
                 nn.Linear(time_emb_dim, out_channels * 2)
             )
 
-        self.norm2 = nn.GroupNorm(group_over, out_channels)
+        self.norm2 = nn.GroupNorm(min(group_over, out_channels), out_channels)
         self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1)
         self.activation = activation_function()
 
@@ -146,7 +146,7 @@ class DDPMUnet(BaseModule):
 
         for i in range(num_layers):
             in_ch = filters[i]
-            out_ch = filters[i]
+            out_ch = filters[i+1]
             block = nn.Sequential(
                 ResConvBlock(in_ch, out_ch, time_emb_dim=time_emb_dim),
                 ResConvBlock(out_ch, out_ch, time_emb_dim=time_emb_dim),
@@ -154,9 +154,9 @@ class DDPMUnet(BaseModule):
             self.enc_blocks.append(block)
             self.enc_attn.append(MHSAttentionBlock(out_ch) if (attention_layers and i in attention_layers) else nn.Identity())
         
-        bottleneck_ch = filters[num_layers]
+        bottleneck_ch = filters[-1]
         self.bottleneck = nn.Sequential(
-            ResConvBlock(filters[num_layers - 1], bottleneck_ch, time_emb_dim=time_emb_dim),
+            ResConvBlock(bottleneck_ch, bottleneck_ch, time_emb_dim=time_emb_dim),
             MHSAttentionBlock(bottleneck_ch),
             ResConvBlock(bottleneck_ch, bottleneck_ch, time_emb_dim=time_emb_dim),
         )
@@ -164,7 +164,7 @@ class DDPMUnet(BaseModule):
         self.up_blocks = nn.ModuleList()
         self.up_attn = nn.ModuleList()
         for i in reversed(range(num_layers)):
-            in_ch = filters[i] + filters[i]
+            in_ch = filters[i+1]*2
             out_ch = filters[i]
             block = nn.Sequential(
                 ResConvBlock(in_ch, out_ch, time_emb_dim=time_emb_dim),
@@ -181,12 +181,14 @@ class DDPMUnet(BaseModule):
         self.upsample = nn.Upsample(scale_factor=2, mode='nearest')
 
     def forward(self, x, t):
+
         t_emb = self.time_embed(t) #(B, time_emb_dim)
         h = self.init_conv(x)
         skips = []
 
         for enc_block, attn in zip(self.enc_blocks, self.enc_attn):
             h = enc_block[0](h, t_emb)
+
             h = enc_block[1](h, t_emb)
             h = attn(h)
             skips.append(h)
