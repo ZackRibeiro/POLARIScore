@@ -666,11 +666,14 @@ class Observation():
 
         return fig, ax
 
-    def plot_cores_hist(self, ax=None, region:Union[Tuple[float,float,float,float],None]=None):
+    def plot_cores_hist(self, ax=None, region:Union[Tuple[float,float,float,float],None]=None, linestyle:bool=False, drawstyle:Optional[str]="steps-mid", bins:int=15, plot_catalog:bool=True, label:Optional[str]=None):
         """
         Args:
             ax: matplotlib axis
             region: [ra_max, ra_min, dec_min, dec_max]
+            linestyle (bool): If True use linestyles instead of colors
+            drawstyle: Drawstyle argument of plt.plot function
+            bins (int): number of bins 
         """
         if ax is None:
             fig, ax = plt.subplots()
@@ -679,10 +682,24 @@ class Observation():
 
         predicted_densities, derived_densities = self._get_cores_predicted_values(region=region)
 
-        ax.hist(predicted_densities, bins=10, alpha=0.5, label="Predicted Densities")
-        ax.hist(derived_densities, bins=10, alpha=0.5, label="Derived Densities")
+        def _get_hist(densities:np.ndarray):
+            log_min, log_max = (3, 6.5)
+            bin_edges = np.linspace(log_min, log_max,  bins)
+            hist, bin_edges = np.histogram(densities, bins=bin_edges)
+            bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
+            return hist, 10**bin_centers
         
-        ax.set_xlabel(r"$\log_{10}(n_H) [cm^{-3}]$")
+        hist_pr, bins_pr = _get_hist(predicted_densities)
+        hist_dr, bins_dr = _get_hist(derived_densities)
+
+        ax.plot(bins_pr, hist_pr, drawstyle=drawstyle, marker="+", linestyle="--" if linestyle else "-", color="black" if linestyle else None, label=f"{self.name} (Neural network)" if label is None else label)
+        if plot_catalog:
+            ax.plot(bins_dr, hist_dr, drawstyle=drawstyle, marker="+", linestyle="-" if linestyle else "-", color="black" if linestyle else None, label=f"{self.name} (Könyves et al, 2020)")
+        
+        ax.set_xlabel(r"$n_H (cm^{-3})$")
+        ax.set_ylabel("Number of cores per log bin")
+        ax.set_xscale("log")
+        ax.set_yscale("log")
 
         ax.legend()
 
@@ -1380,13 +1397,17 @@ if __name__ == "__main__":
     #fig.set_size_inches(10, 5)
 
     obs.load(suffix="_fit")
-    fig, ax = obs.plot_cores_error(mov_average=0, log_average=30, color="black", linestyle="-", label="Fit")
-    obs.load(suffix="_unet")
-    obs.plot_cores_error(ax=ax, mov_average=0, log_average=30, color="black", linestyle="--", label="UNet")
+    
+    #fig, ax = obs.plot_cores_error(mov_average=0, log_average=30, color="black", linestyle="-", label="Fit")
+    #obs.load(suffix="_unet")
+    #obs.plot_cores_error(ax=ax, mov_average=0, log_average=30, color="black", linestyle="--", label="UNet")
+    #fig, ax = obs.plot_cores_hist(bins=15, label="UNet")
+    #obs.load(suffix="_cinn")
+    #obs.plot_cores_hist(ax=ax, bins=15, plot_catalog=False, label="cINN")
 
     #obs.plot_density_distributions(offset_method="max", monte_carlo=0, label="UNet")
     #obs.prediction = obs.rectify_error_baseline()
-    #obs.plot_dcmf(method="constant", monte_carlo=0, fit=True, bins=15)
+    obs.plot_dcmf(method="constant", monte_carlo=0, fit=False, bins=15)
     #obs.plot_cores_baseline(derived_cores=True, density_correction=True, invert_xy=True, x_coldens=True, mov_average=5, fit=True)
     #obs.plot_cores_mass(bins_mean=20)
 

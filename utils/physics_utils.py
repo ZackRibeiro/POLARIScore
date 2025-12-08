@@ -33,11 +33,11 @@ CONVERT_EXTINCTION_TO_NH = lambda a: a*2*0.94e21
 
 CONVERT_massn_TO_n = lambda n_d,L_d,n,r_c: (n+np.sqrt(n**2-(2*L_d/r_c)*(n_d**2-n*n_d)))/2
 def CONVERT_massn_TO_n_coldens(N:Union[np.ndarray[float],float], L_d:Union[np.ndarray[float],float], n:Union[np.ndarray[float],float], r_c:Union[np.ndarray[float],float]
-                               , filter:Union[None,float]=23.2, is_density=False):
+                               , filter:Union[None,float]=23.2, is_density=False, is_column_density=False):
     """
     Args:
         N: column density (particles/cm^-2)
-        L_d: size of the diffuse medium along l.o.s (pc) if 'is_density' is False else is the diffuse density (particles/cm^-3)
+        L_d: size of the diffuse medium along l.o.s (pc) if 'is_density' is False else is the diffuse density (particles/cm^-3). If 'is_column_density' is set to True, this is indeed the column density of background medium.
         n: mass weighted density along l.o.s (particles/cm^-3)
         r_c: radius of the dense core (pc)
         filter: if not None, set the threshold of log10 column density where the conversion will be made.
@@ -57,11 +57,18 @@ def CONVERT_massn_TO_n_coldens(N:Union[np.ndarray[float],float], L_d:Union[np.nd
         factor = np.ones_like(N)
 
     r_c = PC_TO_CM*r_c
-    L_d = L_d if is_density else PC_TO_CM*L_d 
+    if is_column_density:
+        N_d = L_d
+    else:
+        L_d = L_d if is_density else PC_TO_CM*L_d 
+    
     L_c = 2*r_c
     if is_density:
         n_d = L_d
         n_c = n_d/2 * (1+np.sqrt(1-4*N/(L_c*n_d)*(1-n/n_d)))
+    elif is_column_density:
+        alpha = N/N_d
+        n_c=n*(alpha)/(alpha-1)
     else:
         n_c = N/(L_c+L_d)*(1+np.sqrt(1-(L_d/L_c+1)*(1-(n*L_d)/(N))))
 

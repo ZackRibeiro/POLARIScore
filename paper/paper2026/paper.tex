@@ -37,6 +37,7 @@
 
 \begin{document}
 
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % if you use custom commands in your title,
 % ensure to check your title when submitting!
@@ -202,13 +203,157 @@
    \subsubsection{Convolutional Neural Network}
       Convolutional Neural Networks (CNNs) were introduced (\cite{fukushimaNeocognitronSelforganizingNeural1980}, \cite{lecunBackpropagationAppliedHandwritten1989})
       as a specialized architecture for grid-like data such as images or maps.
-      Instead of connectiong every input to every neuron (as in MultiLayer Perceptrons), CNNs restrict connections to local receptive fields.
+      Instead of connectiong every input to every neuron (as in multi-layer perceptrons), CNNs restrict connections to local receptive fields.
       Each neuron in a convolutional layer is connected only to a small region of the input, and the same set of learnable weights (a filter or kernel) is shared across different spatial locations.
-      This enables CNNs to learn spatially invariant features such 
+      This enables CNNs to learn spatially invariant features such  as edges, textures and structure morphologies.
+      
+      Mathematically, for a 2D input $X$ (e.g a column density region), the convolution operation with a filter $W$ is given by:
+      \begin{equation}
+         \label{eq_convolution}
+         Y_{i,j}=f(\sum_{m=1}^{M}\sum_{n=1}^{N}W_{m,n}\cdot X_{i+m,j+n}+b),
+      \end{equation} 
+      where $W$ is the learnable convolutional kernel, $X$ is the input feature map, $Y$ is the output feature map, $f$ is a nonlinear activation function such as $\text{ReLU}$, $b$ is the learnable bias term.
+      
+      In this work, we are using an Attention-U-Net (\cite{ronnebergerUNetConvolutionalNetworks2015},\cite{oktayAttentionUNetLearning2018}) architecture, shown in Figure~\ref{fig_unet}.
+      It features a symmetric encoder-decoder structure where the encoder captures high-level features of the column density map through convolution (Eq~\ref{eq_convolution}) and max pooling operations, while the decoder gradually reconstructs the mass-weighted density map using upsampling layers.
+      \\A key feature of U-Net is its \textit{skip connections}, which allow direct information flow between corresponding encoder and decoder layers, preserving spatial details lost during downsampling.
+      \textbf{small sentence on Attention blocks ?}
+      \begin{figure}[!ht]
+         \centering
+         \includegraphics[width=\linewidth]{figures/unet_architecture.jpg}
+         \caption{U-Net architecture \citep{ronnebergerUNetConvolutionalNetworks2015}. Each bluebox corresponds to a convolutionnal block.
+         The number of channels is denoted on top of the box. The x-y-size is provided at the right or left edge of the box.}
+         \label{fig_unet}
+      \end{figure}
 
    \subsubsection{Conditional Invertible Neural Network}
+
+      However, state-of-art networks used today are not deterministic architectures such as UNet, but stochastic models that sample from probability distributions.
+      
+      The goal of these networks is to sample from the conditional data distribution $p_\mathrm{data}(X|c)$ where $X$ is the target random variable (here $\nmh$) and $c$ the conditioning information (from observable, here $\Nh$).
+      In our case, if the inverse problem is ill-posed, i.e if one cannot uniquely infer the mass-weighted average volume density map $\nmh(x,y)$ from the 2D column-density map $\Nh(x,y)$, the generative network instead learns to sample physically plausible solutions drawn from the full posterior distribution 
+      \begin{equation}
+         p(\nmh(x,y)|\Nh(x,y)).
+      \end{equation}
+
+      To make sampling tractable, we map the unknown complex distribution to a simple latent one, typically a standard multivariate Gaussian: 
+      \begin{equation}
+         p_z(Z)=N(0,I),
+      \end{equation}
+      where $Z$ represents the latent variables.
+
+      The network then learns a bijective transformation $f$ between $X$ and $Z$, conditioned on $c$:
+      \begin{equation}
+         Z=f(X,c),~X=f^{-1}(Z,c)
+      \end{equation}
+      The approach used in conditional invertible neural networks (cINN,~\cite{ardizzoneConditionalInvertibleNeural2021}) is to train \textit{the forward direction} 
+      \begin{equation}
+         f: X \rightarrow Z
+      \end{equation}
+      such that the pushforward of the data distribution becomes Gaussian:
+      \begin{equation}
+         f_*(p_\text{data}(X|c))=p_z(Z).
+      \end{equation}
+
+      This is achieved through normalizing flows \citep{rezendeVariationalInferenceNormalizing2016}, which transform a complex distribution into a simple one via a sequence of invertible transformations: $f_1,...,f_K$:
+      \begin{equation}
+         Z=f_K\cdot f_{K-1}\cdot...\cdot f_1(X,c).
+      \end{equation}
+      For each invertible transformation $f_k$, the change-of-variable formula gives the exact likelihood:
+      \begin{equation}
+         p_\text{data}(X|c)=p_z(f(X|c))|\det\frac{\partial f(X,c)}{\partial X}|.
+      \end{equation}
+
+      During training, the cINN maximizes the log-likelihood of the data under this model.
+      At inference time, we draw $Z\sim N(0,I)$ and obtain samples of the physical solution via the inverse mapping: $X=f^{-1}(Z|c)$.
+      
+      To ensure reasonable computation time, each transformation $f_k$ in the flow must be easily invertible, and its Jacobian determinant must be efficient to compute.
+      cINNs achieve this by using conditional coupling blocks (CCBs).
+      Let the input of a coupling block be split (in features channels) as $u\rightleftarrows (u_1,u_2)$, and the output be $v\rightleftarrows (v_1,v_2)$.
+      A typical forward transformation of a CCB is:
+      \begin{equation}
+         \label{eq_cinn_ccbs_forward}
+         \left\{
+         \begin{aligned}
+            v_1 &= u_1\odot\exp (s_1(u_2,c))+t_1(u_2,c), \\
+            v_2 &= u_2\odot\exp (s_2(v_1,c))+t_2(v_1,c),
+         \end{aligned}
+         \right.
+      \end{equation}
+      where $s_i$, $t_i$ are scale and translation functions implemented by sub-networks (e.g MLPs). 
+      These sub-networks do not need to be invertible because they are only evaluated in the forward pass; the coupling block itself remains analytically invertible.
+      The inverse transformation is obtained by algebraic rearrangement of Equation~\ref{eq_cinn_ccbs_forward}:
+      \begin{equation}
+         \label{eq_cinn_ccbs_reverse}
+         \left\{
+         \begin{aligned}
+            u_2 &= (v_2-t_2(v_1))\odot\exp (-s_2(v_1)) \\
+            u_1 &= (v_1-t_1(u_2))\odot\exp (-s_1(u_2))
+         \end{aligned}
+         \right.
+      \end{equation}
+
+      Because each coupling block is triangular in structure, its Jacobian is also triangular.
+      Thus the log-determinant of the Jacobian is simply the sum of the scaling terms:
+      \begin{equation}
+         \log |\det J|=\sum s_1(u_2,c)+\sum s_2(v_1,c),
+      \end{equation}
+      where the sums run over features and spatial dimensions.
+      This makes CCBs computationally efficient while retaining exact invertibility and tractable likelihood.
+      
+      \textbf{Some words on architecture with figure (Encoder, Haar wavelet downsampling)}
       
    \subsubsection{Denoising Diffusion Probabilistic Model}
+      Denoising Diffusion Probabilistic Models (DDPMs, \cite{hoDenoisingDiffusionProbabilistic2020}) generate samples by gradually transforming white noise, i.e a sample from the latent Gaussian prior $p_z=N(0,I)$, into a data sample $x_0\sim p_\text{data}$.
+      This is achieved through a sequence of learned denoising steps parameterized by a neural network, typically a UNet.
+
+      The forward diffusion process progressively destroys structure by adding Gaussian noise with a predefined variance schedule $\beta_t$. In the continous-time limit, this process is described by the stochastic differential equation (Itô SDE):
+      \begin{equation}
+         \label{eq_ddpm_sde}
+         dx=f(x,t)dt+g(t)dW_t=-\frac{1}{2}\beta(t) x_t dt+\sqrt{\beta(t)} dW_t,      
+      \end{equation} 
+      where $W_t$ is a Wiener process. 
+      Here:
+      \begin{itemize}
+         \item $g(t)=\sqrt{\beta(t)}$ is the diffusion strength,
+         \item $f(x,t)=-\frac{1}{2}\beta(t)x$ is the drift term,
+         \item $t\in[0,T]$ parametrized the diffusion trajectory. 
+      \end{itemize}
+      This SDE is a variant of the Ornstein-Uhlenbeck process, whose solutions converge to a Gaussian distribution \citep{uhlenbeckTheoryBrownianMotion1930}.
+      The process is variance-preserving, sice as $t\rightarrow\infty$, $x_t\sim N(0,I)$.
+
+      To generate data, DDPMs simulate the reverse-time SDE:
+      \begin{equation}
+         \label{eq_ddpm_sde_reverse}
+         dx= [f(x,t)-g(t)^2\nabla_{x_t}\log p_t(x_t)]dt+g(t)d\overline{W_t},
+      \end{equation}
+      where $\overline{W_t}$ is a Wiener process running backward in time.
+      The quantity
+      \begin{equation}
+         \nabla_{x_t}\log p_t(x_t)
+      \end{equation}
+      is the score function, i.e the gradient of the log-density of the noisy data at time $t$.
+      Because the exact score is intractable, the network learns an approximation $s_\theta(x_t,t)\approx\nabla_{x_t}\log p_t(x_t)$.
+
+      In DDPM parameterization, the neural network instead predicts the noise
+      \begin{equation}
+         s_\theta(x_t,t)\approx\frac{\epsilon_\theta(x_t,t)}{\sigma_t},
+      \end{equation}
+      where $\sigma_t=\sqrt{1-\overline{\alpha_t}}$ is the standard deviation of the forward noising kernel.
+      
+      The forward noising process has the closed-form solution:
+      \begin{equation}
+         x_t = \sqrt{\bar{\alpha}_t}, x_0 + \sqrt{1 - \bar{\alpha}_t}, \epsilon,
+         \qquad \epsilon \sim \mathcal{N}(0,I),
+      \end{equation}
+      where $\overline{\alpha_t}=\prod_{i=1}^{t}(1-\beta_i)$ encodes the cumulative noise schedule.
+
+      Thus, training a DDPM consists of learning to predict the injected noise $\epsilon$, which in turn provides the score needed to solve the reverse SDE and sample realistic data from pure Gaussian noise.
+      
+      In the conditional setting, the observable $\Nh$ is incorporated by concatenating it with the noisy sample $x_t$ at the input of the UNet, ensuring that each denoising step is conditioned on the available physical information.
+
+      \textbf{Some words on architecture with figure (Encoder, Noise scheduling)}
+
    \subsubsection{Flow matching}
 
 \subsection{Application}
@@ -226,9 +371,17 @@
    \item \textbf{Required training-set size:} For example, UNet reaches good performance with relatively few regions, whereas cINNs typically require larger datasets.
    \item \textbf{Training stability:} For instance, UNet can be trained reliably under a wide range of settings, while cINNs require more careful choices of training parameters for stable optimization.
    \end{itemize}
-\subsection{Test on Orion B}
-   Structures metrics: Density PDFs, Fractal dimension, Typical size of structures (?), ...;
-   Dense cores metrics: Direct comparaison to konyves, Direct view of cores, $N_H(n_H)$, DCMF 
+\subsection{Tests on Orion B}
+   \begin{itemize}
+   \item \textbf{Density PDFs:} Comparison of the probability distribution functions of the predicted densities (but how ?).
+   \item \textbf{Fractal dimension:} Using the relation $P = A^{D/2}$, where $P$ is the perimeter and $A$ the area, we test whether the structures follow a power-law scaling, implying a constant fractal dimension $D$ across spatial scales.
+   \item \textbf{Typical size of structures (?):} Evaluate characteristic spatial scales (e.g., whether filament widths cluster around $\sim 0.1$ pc).
+   \item \textbf{Comparison with the core catalog of Könyves et al.:} Differences between predicted core densities and catalogued values.
+   \item \textbf{Core morphology:} Visual inspection to determine whether predicted cores are embedded within density clumps or appear isolated (hierarchical picture).
+   \item \textbf{Robustness to resolution changes: } Evaluate how the predictions vary when the observational resolution is modified, using both the validation set and real observations.
+   \item \textbf{$\Nh(\nh)$ relation (dense cores only):} Fit the predicted column-volume density of dense cores relation to infer plausible temperatures or sound speeds.
+   \item \textbf{Dense Core Mass Function (DCMF):} Agreement with Könyves et al. regarding peak position, width, low-mass cutoff, and high-mass power-law slope.
+   \end{itemize}
 \subsection{Summary}
    Table: Models vs Metrics 
 \section{Discussions}
@@ -316,8 +469,8 @@
     \end{subfigure}
     
     \caption{Correction $\nmh\rightarrow n_c$ for different $\nmh$;
-    the vertical axis shows the ratio $\nmh/n_c$.
-    The used parameters are $r_c = 0.05\,\mathrm{pc}$ and $\Nh = 10^{21}\,\mathrm{cm}^{-2}$.
+    the vertical axis shows the ratio $n_c/\nmh$.
+    The used parameters are $r_c = 0.05\,\mathrm{pc}$ and $\Nh = 10^{22}\,\mathrm{cm}^{-2}$.
     }
     \label{fig_mw_correction}
    \end{figure}

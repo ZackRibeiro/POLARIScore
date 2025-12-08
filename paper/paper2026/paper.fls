@@ -409,6 +409,11 @@ INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxptmb.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxb.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/vf/public/txfonts/t1xi.vf
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxi.tfm
+INPUT ./figures/unet_architecture.jpg
+INPUT ./figures/unet_architecture.jpg
+INPUT ./figures/unet_architecture.jpg
+INPUT ./figures/unet_architecture.jpg
+INPUT ./figures/unet_architecture.jpg
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/t1xsl.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/vf/public/txfonts/t1xsl.vf
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxptmro.tfm
@@ -416,9 +421,17 @@ INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxsl.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/vf/public/txfonts/t1xss.vf
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxphvr.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxss.tfm
+INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/t1xb.tfm
+INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/t1xb.tfm
 INPUT ./paper.bbl
 INPUT ./paper.bbl
 INPUT paper.bbl
+INPUT /usr/share/texlive/texmf-dist/fonts/vf/public/txfonts/txmi.vf
+INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxmi.tfm
+INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxptmri.tfm
+INPUT /usr/share/texlive/texmf-dist/fonts/vf/public/txfonts/t1xb.vf
+INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxptmb.tfm
+INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxb.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/vf/public/txfonts/t1xr.vf
 INPUT ./figures/fig_mw_correction_ld.eps
 INPUT ./figures/fig_mw_correction_ld.eps
@@ -453,9 +466,6 @@ INPUT ./figures/fig_mw_correction_diffkonyves.eps
 INPUT ./figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf
 INPUT ./figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf
 INPUT ./figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf
-INPUT /usr/share/texlive/texmf-dist/fonts/vf/public/txfonts/txmi.vf
-INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxmi.tfm
-INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxptmri.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/vf/public/txfonts/t1xr.vf
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxptmr.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxr.tfm
@@ -505,6 +515,7 @@ INPUT /usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/rtxr.pfb
 INPUT /usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/t1xtt.pfb
 INPUT /usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/txex.pfb
 INPUT /usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/txsy.pfb
+INPUT /usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/txsya.pfb
 INPUT /usr/share/texlive/texmf-dist/fonts/type1/urw/helvetic/uhvb8a.pfb
 INPUT /usr/share/texlive/texmf-dist/fonts/type1/urw/helvetic/uhvr8a.pfb
 INPUT /usr/share/texlive/texmf-dist/fonts/type1/urw/helvetic/uhvr8a.pfb
