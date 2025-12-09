@@ -122,7 +122,7 @@
 \subsection{MHD Simulations and Datasets}
 
    Neural networks need to be trained on synthetic data, where they can learn the relevant correlations and underlying physics.
-   For segmentation tasks, such training data can consist of human-generated labels on observations (see, for example, filament-identification studies(\textbf{CITE})).
+   For segmentation tasks, such training data can consist of human-generated or algorithm-generated labels on observations (see, for example, filament-identification studies \citep{alinaMaLeFiSentaMachineLearning2022}).
    \\ However, in our task of estimating a physical quantity in molecular clouds, we do not have access to true observational values. This is where simulations become essential, since they provide full access to all required physical quantities.
    
    The properties of the simulations used to train the neural network are therefore extremely important and directly influence the network's performance.
@@ -199,7 +199,7 @@
    Diffusion Models \citep{hoDenoisingDiffusionProbabilistic2020},
    and latest Flow-Matching models \citep{lipmanFlowMatchingGenerative2023}.
    
-   We do not include Generative Adversarial Networks (GANs) \citep{goodfellowGenerativeAdversarialNetworks2014} in this work mainly because they are known to suffer from mode collapse (\textbf{CITE}).   
+   We do not include Generative Adversarial Networks (GANs) \citep{goodfellowGenerativeAdversarialNetworks2014} in this work mainly because they are known to suffer from mode collapse \citep{kossaleModeCollapseGenerative2022}.   
    \subsubsection{Convolutional Neural Network}
       Convolutional Neural Networks (CNNs) were introduced (\cite{fukushimaNeocognitronSelforganizingNeural1980}, \cite{lecunBackpropagationAppliedHandwritten1989})
       as a specialized architecture for grid-like data such as images or maps.

@@ -82,43 +82,46 @@ class DDPTrainer(Trainer):
         return model(torch.cat([xt, input], dim=1), t), noise
 
     def _infer_model(self, model, input):
-        if(type(input) is list):
+        # input: (B, C, H, W)
+        if isinstance(input, list):
             input = input[0]
-        
+
         B, C, H, W = input.shape
-        with torch.no_grad(): 
-            x_t = torch.randn((B,C,H,W), device=self.device)
+        device = self.device
 
-            for time_step in reversed(range(self.timesteps)):
-                t = torch.full((B,), time_step, device=self.device, dtype=torch.long)
+        x_t = torch.randn((B, C, H, W), device=device)
 
-                output_model = model(torch.cat([x_t, input], dim=1), t)
-                
-                pred_epsilon = output_model
-                sqrt_ac = self.sqrt_alphas_cumprod.to(self.device)[t].view(-1, 1, 1, 1)
-                sqrt_omac = self.sqrt_one_minus_alphas_cumprod.to(self.device)[t].view(-1, 1, 1, 1)
-                pred_x0 = (x_t - sqrt_omac * pred_epsilon) / (sqrt_ac + 1e-8)
+        for time_step in reversed(range(self.timesteps)):
+            t = torch.full((B,), time_step, device=device, dtype=torch.long)
 
-                if time_step == 0:
-                        x_t = pred_x0
-                else:
-                    beta_t = self.betas.to(self.device)[t].view(-1, 1, 1, 1)
-                    alpha_t = self.alphas.to(self.device)[t].view(-1, 1, 1, 1)
-                    alpha_cumprod_t = self.alphas_cumprod.to(self.device)[t].view(-1, 1, 1, 1)
-                    alpha_cumprod_prev_t = self.alphas_cumprod_prev.to(self.device)[t].view(-1, 1, 1, 1)
-                    posterior_variance_t = self.posterior_variance.to(self.device)[t].view(-1, 1, 1, 1)
+            eps_pred = model(torch.cat([x_t, input], dim=1), t)
 
-                    # formula for posterior mean mu_t = (sqrt(alpha_cumprod_prev) * beta_t / (1-alpha_cumprod)) * x0
-                    #                        + (sqrt(alpha_t) * (1 - alpha_cumprod_prev) / (1-alpha_cumprod)) * x_t
-                    # but simpler and numerically stable version from DDPM code:
-                    coef1 = (beta_t * torch.sqrt(alpha_cumprod_prev_t)) / (1.0 - alpha_cumprod_t)
-                    coef2 = (torch.sqrt(alpha_t) * (1.0 - alpha_cumprod_prev_t)) / (1.0 - alpha_cumprod_t)
-                    posterior_mean = coef1 * pred_x0 + coef2 * x_t
+            sqrt_ac = self.sqrt_alphas_cumprod[t].view(B, 1, 1, 1)
+            sqrt_omac = self.sqrt_one_minus_alphas_cumprod[t].view(B, 1, 1, 1)
+            x0_pred = (x_t - sqrt_omac * eps_pred) / (sqrt_ac + 1e-8)
 
-                    noise = torch.randn_like(x_t)
-                    x_t = posterior_mean# + torch.sqrt(posterior_variance_t.clamp(min=1e-20)) * noise
+            x0_pred = x0_pred.clamp(-1.0, 1.0)
 
-            return x_t.clamp(-1.0, 1.0)
+            if time_step == 0:
+                x_t = x0_pred
+                break
+
+            beta_t      = self.betas[t].view(B, 1, 1, 1)
+            alpha_t     = self.alphas[t].view(B, 1, 1, 1)
+            alpha_bar_t = self.alphas_cumprod[t].view(B, 1, 1, 1)
+            alpha_bar_prev = self.alphas_cumprod_prev[t].view(B, 1, 1, 1)
+            posterior_var = self.posterior_variance[t].view(B, 1, 1, 1)
+
+            coef1 = (beta_t * torch.sqrt(alpha_bar_prev)) / (1.0 - alpha_bar_t)
+            coef2 = (torch.sqrt(alpha_t) * (1.0 - alpha_bar_prev)) / (1.0 - alpha_bar_t)
+            posterior_mean = coef1 * x0_pred + coef2 * x_t
+
+            noise = torch.randn_like(x_t)
+            x_t = posterior_mean + torch.sqrt(posterior_var.clamp(min=1e-20)) * noise
+
+            x_t = x_t.clamp(-1.5, 1.5)
+
+        return x_t.clamp(-1.0, 1.0)
     
     @staticmethod
     def load(model_name, load_model=True):

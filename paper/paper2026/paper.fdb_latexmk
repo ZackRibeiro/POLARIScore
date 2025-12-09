@@ -1,15 +1,15 @@
 # Fdb version 4
-["bibtex paper"] 1765190021.51485 "paper.aux" "paper.bbl" "paper" 1765198426.06736 0
+["bibtex paper"] 1765282637.59429 "paper.aux" "paper.bbl" "paper" 1765282639.70512 0
   "./aa.bst" 1760088440 32103 296074362bd3e822c5209e1570c1d28f ""
-  "./biblio.bib" 1765184402.32072 205164 73efdab9e486b27ec4a5192d0cff2486 ""
-  "paper.aux" 1765198425.71318 20420 2d60cc39f3fe4dc9523310807630ec0f "pdflatex"
+  "./biblio.bib" 1765282616.0751 208036 4029b901bd845ffe47aef4b364766221 ""
+  "paper.aux" 1765282639.3761 20786 ea89cd4e63c28ab90ab2beafd6118506 "pdflatex"
   (generated)
   "paper.bbl"
   "paper.blg"
   (rewritten before read)
-["pdflatex"] 1765198423.78351 "/home/zack/Documents/POLARIScore/paper/paper2026/paper.tex" "paper.pdf" "paper" 1765198426.06782 0
+["pdflatex"] 1765282637.66978 "/home/zack/Documents/POLARIScore/paper/paper2026/paper.tex" "paper.pdf" "paper" 1765282639.7057 0
   "/etc/texmf/web2c/texmf.cnf" 1742201012.88803 475 c0e671620eb5563b2130f56340a5fde8 ""
-  "/home/zack/Documents/POLARIScore/paper/paper2026/paper.tex" 1765198422.98617 37217 54c0c90862cd284112ac2991fd3134ea ""
+  "/home/zack/Documents/POLARIScore/paper/paper2026/paper.tex" 1765282632.6511 37295 371a33d35cdf869dc4b713e8bbfdf051 ""
   "/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc" 1165713224 4850 80dc9bab7f31fb78a000ccfed0e27cab ""
   "/usr/share/texlive/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/jknappen/ec/ecrm1000.tfm" 1136768653 3584 adb004a0c8e7c46ee66cad73671f37b4 ""
@@ -179,10 +179,10 @@
   "figures/unet_architecture.jpg" 1764861184.84931 247154 d0e632fc890598a7cb4b1f068631efec ""
   "lineno.sty" 1760088440 151723 f406be88dbdad6c97fb774bd975d0393 ""
   "linenoaa.sty" 1760088440 4221 64fc978f7ff26cff65f5a8f1adc2a33b ""
-  "paper.aux" 1765198425.71318 20420 2d60cc39f3fe4dc9523310807630ec0f "pdflatex"
-  "paper.bbl" 1765190021.54509 3462 afa7e4882f7c5d0e3f2d900e479fff25 "bibtex paper"
-  "paper.out" 1765198425.72918 4479 9bee94f2687c202c20e68bd8186eb0ee "pdflatex"
-  "paper.tex" 1765198422.98617 37217 54c0c90862cd284112ac2991fd3134ea ""
+  "paper.aux" 1765282639.3761 20786 ea89cd4e63c28ab90ab2beafd6118506 "pdflatex"
+  "paper.bbl" 1765282637.6481 3932 59c1364d824f897dc1942691c600bb4a "bibtex paper"
+  "paper.out" 1765282639.3891 4479 9bee94f2687c202c20e68bd8186eb0ee "pdflatex"
+  "paper.tex" 1765282632.6511 37295 371a33d35cdf869dc4b713e8bbfdf051 ""
   (generated)
   "paper.aux"
   "paper.log"

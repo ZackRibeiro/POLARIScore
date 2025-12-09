@@ -1,5 +1,8 @@
-\begin{thebibliography}{18}
+\begin{thebibliography}{20}
 \expandafter\ifx\csname natexlab\endcsname\relax\def\natexlab#1{#1}\fi
+
+\bibitem[{Alina {et~al.}(2022)Alina, Shomanov, \& Baimukhametova}]{alinaMaLeFiSentaMachineLearning2022}
+Alina, D., Shomanov, A., \& Baimukhametova, S. 2022, IEEE Access, 10, 74472, arXiv:2205.00683 [astro-ph]
 
 \bibitem[{Ardizzone {et~al.}(2021)Ardizzone, Kruse, Lüth, Bracher, Rother, \& Köthe}]{ardizzoneConditionalInvertibleNeural2021}
 Ardizzone, L., Kruse, J., Lüth, C., {et~al.} 2021, arXiv:2105.02104 [cs]
@@ -18,6 +21,9 @@ Ho, J., Jain, A., \& Abbeel, P. 2020, version Number: 2
 
 \bibitem[{Kingma \& Ba(2017)}]{kingmaAdamMethodStochastic2017}
 Kingma, D.~P. \& Ba, J. 2017, arXiv:1412.6980 [cs]
+
+\bibitem[{Kossale {et~al.}(2022)Kossale, Airaj, \& Darouichi}]{kossaleModeCollapseGenerative2022}
+Kossale, Y., Airaj, M., \& Darouichi, A. 2022, in 2022 8th {International} {Conference} on {Optimization} and {Applications} ({ICOA}) (Genoa, Italy: IEEE), 1--6
 
 \bibitem[{Könyves {et~al.}(2020)Könyves, André, Arzoumanian, Schneider, Men’shchikov, Bontemps, Ladjelate, Didelon, Pezzuto, Benedettini, Bracco, Di~Francesco, Goodwin, Rygl, Shimajiri, Spinoglio, Ward-Thompson, \& White}]{konyvesPropertiesDenseCore2020}
 Könyves, V., André, P., Arzoumanian, D., {et~al.} 2020, Astronomy \& Astrophysics, 635, A34
