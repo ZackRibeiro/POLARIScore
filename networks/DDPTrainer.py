@@ -14,7 +14,7 @@ class DDPTrainer(Trainer):
     Extension of Trainer class to train Denoising Diffusion Probabilistic Models.
     """
     def __init__(self, *args,
-                 timesteps:int=500, beta_schedule:Literal["linear","cosine","quadratic"]="linear", beta_start:float=1e-4, beta_end:float=0.02,
+                 timesteps:int=1000, beta_schedule:Literal["linear","cosine","quadratic"]="linear", pred_type:Literal["epsilon","v","x0"]="v", beta_start:float=1e-4, beta_end:float=0.02,
                   **kwargs):
         """
         To know args and variables, please refers to '~.Trainer.__init__'
@@ -22,6 +22,7 @@ class DDPTrainer(Trainer):
         super(DDPTrainer, self).__init__(*args, **kwargs)
 
         self.timesteps = timesteps
+        self.pred_type = pred_type
 
         if beta_schedule == "linear":
             betas = linear_beta_schedule(timesteps, beta_start=beta_start, beta_end=beta_end)
@@ -79,48 +80,79 @@ class DDPTrainer(Trainer):
         noise = torch.randn_like(x0)
         xt = self.q_sample(x0, t, noise=noise)
 
+        if(self.pred_type == "epsilon"):
+            return model(torch.cat([xt, input], dim=1), t), noise
+        elif(self.pred_type == "v"):
+            sqrt_alpha_bar = self.sqrt_alphas_cumprod.to(self.device)[t].view(B, 1, 1, 1)
+            sqrt_one_minus_alpha_bar = self.sqrt_one_minus_alphas_cumprod.to(self.device)[t].view(B, 1, 1, 1)
+
+            v_target = sqrt_alpha_bar * noise - sqrt_one_minus_alpha_bar * x0
+            v_pred = model(torch.cat([xt, input], dim=1), t)
+
+            return v_pred, v_target
+        elif(self.pred_type == "x0"):
+            return model(torch.cat([xt, input], dim=1), t), x0
+
         return model(torch.cat([xt, input], dim=1), t), noise
 
     def _infer_model(self, model, input):
         # input: (B, C, H, W)
         if isinstance(input, list):
             input = input[0]
-
+                
         B, C, H, W = input.shape
-        device = self.device
+        eta = 0.
+        seq = range(0, self.timesteps, 10)
 
-        with torch.no_grad(): 
-            x_t = torch.randn((B, C, H, W), device=device)
+        if seq is None:
+            seq = list(range(self.timesteps))
 
-            for time_step in reversed(range(self.timesteps)):
-                t = torch.full((B,), time_step, device=device, dtype=torch.long)
+        seq_next = [-1] + list(seq[:-1])
 
-                eps_pred = model(torch.cat([x_t, input], dim=1), t)
+        with torch.no_grad():
+            x_t = torch.randn((B, C, H, W), device=self.device)
 
-                sqrt_ac = self.sqrt_alphas_cumprod[t].view(B, 1, 1, 1)
-                sqrt_omac = self.sqrt_one_minus_alphas_cumprod[t].view(B, 1, 1, 1)
-                x0_pred = (x_t - sqrt_omac * eps_pred) / (sqrt_ac + 1e-8)
+            for i, j in zip(reversed(seq), reversed(seq_next)):
+                t = torch.full((B,), i, device=self.device, dtype=torch.long)
+                next_t = torch.full((B,), j, device=self.device, dtype=torch.long)
 
-                x0_pred = x0_pred.clamp(-1.0, 1.0)
+                at = self.alphas_cumprod[t].view(B, 1, 1, 1)
 
-                if time_step == 0:
-                    x_t = x0_pred
+                if j == -1:
+                    at_next = torch.ones_like(at)
+                else:
+                    at_next = self.alphas_cumprod[next_t].view(B, 1, 1, 1)
+
+                sqrt_at = torch.sqrt(at)
+                sqrt_one_minus_at = torch.sqrt(1.0 - at)
+
+                model_in = torch.cat([x_t, input], dim=1)
+
+                if self.pred_type == "epsilon":
+                    eps = model(model_in, t)
+                    x0 = (x_t - sqrt_one_minus_at * eps) / (sqrt_at + 1e-8)
+
+                elif self.pred_type == "v":
+                    v = model(model_in, t)
+                    x0 = sqrt_at * x_t - sqrt_one_minus_at * v
+                    eps = (x_t - sqrt_at * x0) / (sqrt_one_minus_at + 1e-8)
+
+                elif self.pred_type == "x0":
+                    x0 = model(model_in, t)
+                    eps = (x_t - sqrt_at * x0) / (sqrt_one_minus_at + 1e-8)
+
+                x0 = x0.clamp(-1.5, 1.5)
+
+                if j == -1:
+                    x_t = x0
                     break
 
-                beta_t      = self.betas[t].view(B, 1, 1, 1)
-                alpha_t     = self.alphas[t].view(B, 1, 1, 1)
-                alpha_bar_t = self.alphas_cumprod[t].view(B, 1, 1, 1)
-                alpha_bar_prev = self.alphas_cumprod_prev[t].view(B, 1, 1, 1)
-                posterior_var = self.posterior_variance[t].view(B, 1, 1, 1)
-
-                coef1 = (beta_t * torch.sqrt(alpha_bar_prev)) / (1.0 - alpha_bar_t)
-                coef2 = (torch.sqrt(alpha_t) * (1.0 - alpha_bar_prev)) / (1.0 - alpha_bar_t)
-                posterior_mean = coef1 * x0_pred + coef2 * x_t
+                c1 = (eta* torch.sqrt((1 - at / at_next)* (1 - at_next)/ (1 - at)))
+                c2 = torch.sqrt((1 - at_next) - c1 ** 2)
 
                 noise = torch.randn_like(x_t)
-                x_t = posterior_mean + torch.sqrt(posterior_var.clamp(min=1e-20)) * noise
 
-                x_t = x_t.clamp(-1.0, 1.0)
+                x_t = (torch.sqrt(at_next) * x0 + c1 * noise + c2 * eps)
 
             return x_t.clamp(-1.0, 1.0)
     
@@ -132,11 +164,11 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
     from POLARIScore.objects.Dataset import getDataset
     from POLARIScore.config import DATA_NORMALIZATION_CDENS, DATA_NORMALIZATION_VDENS, DATA_NORMALIZATION_CDENS_TORCH, DATA_NORMALIZATION_VDENS_TORCH
-    #ds1 = getDataset("batch_training")
-    #ds2 = getDataset("batch_validation")
+    ds1 = getDataset("batch_training")
+    ds2 = getDataset("batch_validation")
 
-    ds = getDataset("batch_highres_2")
-    ds1, ds2 = ds.split(0.8)
+    #ds = getDataset("batch_highres_2")
+    ds2, _ = ds2.split(0.5)
 
     def classic_log_mse(output, target):
         output_phys = DATA_NORMALIZATION_VDENS_TORCH[1](output)
@@ -147,8 +179,9 @@ if __name__ == "__main__":
         return mse
 
 
-    trainer = DDPTrainer(DDPMUnet, ds1, ds2, model_name="DDPM", timesteps=500, beta_schedule='linear')
-    #trainer = load_trainer("DDPM", trainer_class=DDPTrainer)
+    #trainer = DDPTrainer(DDPMUnet, ds1, ds2, model_name="LightDDPM", timesteps=1000, beta_schedule='linear')
+    trainer = load_trainer("DDPM", trainer_class=DDPTrainer)
+    #trainer.pred_type = "epsilon"
     trainer.norms = {
         "cdens": DATA_NORMALIZATION_CDENS,
         "vdens": DATA_NORMALIZATION_VDENS,
@@ -158,21 +191,21 @@ if __name__ == "__main__":
 
     trainer.ema = True
     trainer.validation_loss_method = classic_log_mse
-    trainer.ema_warmup = 500
-    trainer.learning_rate = 1e-3
+    trainer.ema_warmup = 300
+    trainer.learning_rate = 0.00002
     trainer.training_set = ds1
     trainer.validation_set = ds2
-    trainer.network_settings["base_filters"] = 32
-    trainer.network_settings["num_layers"] = 4
+    #trainer.network_settings["base_filters"] = 64
+    #trainer.network_settings["num_layers"] = 4
     trainer.training_random_transform = True
     trainer.optimizer_name = "Adam"
     trainer.target_names = ["vdens"]
     trainer.input_names = ["cdens"]
-    trainer.auto_save = 250
+    trainer.auto_save = 200
     trainer.scheduler = ReduceLROnPlateau(trainer.optimizer, 'min', patience=10, factor=0.1, threshold=0.0001)
-    trainer.init()
-    trainer.train(1000,batch_number=8,compute_validation=250,early_stopping=False)
-    trainer.save()
+    #trainer.init()
+    #trainer.train(600,batch_number=8,compute_validation=200,early_stopping=False)
+    #trainer.save()
 
     trainer.plot(save=True)
     trainer.plot_validation(save=True, number=8, number_per_row=4)

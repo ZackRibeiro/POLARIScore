@@ -11,6 +11,8 @@ from POLARIScore.utils.utils import plot_function
 from POLARIScore.config import LOGGER
 from copy import deepcopy
 from typing import Literal, Dict, Tuple, List, Union
+from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
+import matplotlib.font_manager as fm
 
 class DenseCore():
     def __init__(self, obs, data:Dict):
@@ -311,6 +313,24 @@ class DenseCore():
             near_coords = all_coords[near_mask]
             near_x, near_y = skycoord_to_pixel(near_coords, self.wcs)
             ax_reg.scatter(near_x - x_min, near_y - y_min,marker='^', facecolor='white', edgecolor='black', s=25, zorder=10, label="Nearby cores")
+
+        scale_bar_px = self.obs.pc_to_pixels(env_size/5)
+
+        fontprops = fm.FontProperties(size=9)
+
+        scalebar = AnchoredSizeBar(
+            ax_reg.transData,
+            scale_bar_px,
+            f"{env_size/5:.1f} pc",
+            loc="lower right",
+            pad=0.4,
+            color="black",
+            frameon=True,
+            size_vertical=.0,
+            fontproperties=fontprops,
+        )
+
+        ax_reg.add_artist(scalebar)
 
         ax_reg.legend(loc="best")
         ax_cut_v.legend(loc="best")

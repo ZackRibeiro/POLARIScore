@@ -27,6 +27,8 @@ from POLARIScore.scripts.plotORIONsimDCMF import plot_sim_dcmf
 from POLARIScore.utils.batch_utils import compute_smoothness
 from POLARIScore.utils.physics_utils import CONVERT_massn_TO_n_coldens
 from POLARIScore.objects.DenseCore import DenseCore
+from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
+import matplotlib.font_manager as fm
 
 def _crop(wcs, lims):
     ra_min, ra_max, dec_min, dec_max = lims
@@ -458,6 +460,23 @@ class Observation():
             x_min, x_max, y_min, y_max = _crop(self.wcs, crop)
             ax.set_xlim((x_min, x_max))
             ax.set_ylim((y_min, y_max))
+
+        scale_bar_px = self.pc_to_pixels(5.)
+        fontprops = fm.FontProperties(size=9)
+
+        scalebar = AnchoredSizeBar(
+            ax.transData,
+            scale_bar_px,
+            f"{5.:.0f} pc",
+            loc="lower right",
+            pad=0.4,
+            color="black",
+            frameon=True,
+            size_vertical=.0,
+            fontproperties=fontprops,
+        )
+
+        ax.add_artist(scalebar)
 
         return fig, ax
 
@@ -1396,18 +1415,22 @@ if __name__ == "__main__":
     #obs.plot_cores_error(ax=ax, mov_average=0, log_average=50, show_errors=False, correction=True, color="black", linestyle="--", label="all WNM")
     #fig.set_size_inches(10, 5)
 
-    obs.load(suffix="_fit")
+    #obs.load(suffix="_fit")
     
     #fig, ax = obs.plot_cores_error(mov_average=0, log_average=30, color="black", linestyle="-", label="Fit")
     #obs.load(suffix="_unet")
     #obs.plot_cores_error(ax=ax, mov_average=0, log_average=30, color="black", linestyle="--", label="UNet")
     #fig, ax = obs.plot_cores_hist(bins=15, label="UNet")
-    #obs.load(suffix="_cinn")
+    obs.load(suffix="_cinn")
+    obs.load_error(model_name="cINN_3")
+    obs.prediction = obs.rectify_error_baseline()
+    obs.serialize_cores()
+    obs.plot(norm=LogNorm(vmin=1e21, vmax=None))
+    obs.plot(data=obs.prediction, norm=LogNorm(vmin=10, vmax=5e5))
     #obs.plot_cores_hist(ax=ax, bins=15, plot_catalog=False, label="cINN")
 
     #obs.plot_density_distributions(offset_method="max", monte_carlo=0, label="UNet")
-    #obs.prediction = obs.rectify_error_baseline()
-    obs.plot_dcmf(method="constant", monte_carlo=0, fit=False, bins=15)
+    #obs.plot_dcmf(method="constant", monte_carlo=0, fit=False, bins=15)
     #obs.plot_cores_baseline(derived_cores=True, density_correction=True, invert_xy=True, x_coldens=True, mov_average=5, fit=True)
     #obs.plot_cores_mass(bins_mean=20)
 

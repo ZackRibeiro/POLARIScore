@@ -20,6 +20,8 @@ class ResConvBlock(nn.Module):
         self.norm1 = nn.GroupNorm(min(group_over, in_channels), in_channels)
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
 
+        self.dropout = nn.Dropout2d(p=0.01)
+
         self.time_mlp = None
         if time_emb_dim is not None:
             self.time_mlp = nn.Sequential(
@@ -54,6 +56,8 @@ class ResConvBlock(nn.Module):
         h = self.activation(h)
         h = self.conv2(h)
 
+        h = self.dropout(h)
+
         return h + self.match_dim(residual)
     
 class MHSAttentionBlock(nn.Module):
@@ -67,7 +71,7 @@ class MHSAttentionBlock(nn.Module):
         self.head_dim = channels // num_heads
         self.scale = 1 / math.sqrt(self.head_dim)
 
-        self.norm = nn.GroupNorm(32, channels)
+        self.norm = nn.GroupNorm(min(32,channels), channels)
         self.to_qkv = nn.Conv2d(channels, channels * 3, kernel_size=1)
         self.to_out = nn.Conv2d(channels, channels, kernel_size=1)
 
@@ -121,7 +125,7 @@ class SinusoidalTimeEmbedding(nn.Module):
 
 class DDPMUnet(BaseModule):
     """"""
-    def __init__(self, num_layers:int=4, base_filters:int=64, attention_layers:Optional[List[int]]=None,time_emb_dim: int=256, init_method=nn.init.kaiming_uniform_):
+    def __init__(self, num_layers:int=4, base_filters:int=64, attention_layers:Optional[List[int]]=[2,3],time_emb_dim: int=256, init_method=nn.init.kaiming_uniform_):
         super(DDPMUnet, self).__init__()
 
         self.num_layers = num_layers
@@ -177,7 +181,7 @@ class DDPMUnet(BaseModule):
         self.final_act = nn.SiLU()
         self.final_conv = nn.Conv2d(filters[0], self.out_channels, kernel_size=3, padding=1)
 
-        self.pool = nn.AvgPool2d(2)
+        self.pool = nn.MaxPool2d(2)
         self.upsample = nn.Upsample(scale_factor=2, mode='nearest')
 
     def forward(self, x, t):
