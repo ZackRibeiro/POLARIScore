@@ -76,7 +76,12 @@ class DDPTrainer(Trainer):
         x0 = target.to(self.device)
         B = x0.shape[0]
 
-        t = torch.randint(0, self.timesteps, (B,), device=self.device).long()
+        half = (B + 1) // 2
+        t_half = torch.randint(0, self.timesteps, (half,), device=self.device)
+        t = torch.cat([t_half, self.timesteps - t_half - 1],dim=0)[:B]
+        perm = torch.randperm(B, device=self.device)
+        t = t[perm]
+
         noise = torch.randn_like(x0)
         xt = self.q_sample(x0, t, noise=noise)
 
@@ -101,8 +106,8 @@ class DDPTrainer(Trainer):
             input = input[0]
                 
         B, C, H, W = input.shape
-        eta = 0.
-        seq = range(0, self.timesteps, 10)
+        eta = 1.
+        seq = range(0, self.timesteps, 1)
 
         if seq is None:
             seq = list(range(self.timesteps))
@@ -130,18 +135,18 @@ class DDPTrainer(Trainer):
 
                 if self.pred_type == "epsilon":
                     eps = model(model_in, t)
-                    x0 = (x_t - sqrt_one_minus_at * eps) / (sqrt_at + 1e-8)
+                    x0 = (x_t - sqrt_one_minus_at * eps) / (sqrt_at + 1e-5)
 
                 elif self.pred_type == "v":
                     v = model(model_in, t)
                     x0 = sqrt_at * x_t - sqrt_one_minus_at * v
-                    eps = (x_t - sqrt_at * x0) / (sqrt_one_minus_at + 1e-8)
+                    eps = (x_t - sqrt_at * x0) / (sqrt_one_minus_at + 1e-5)
 
                 elif self.pred_type == "x0":
                     x0 = model(model_in, t)
-                    eps = (x_t - sqrt_at * x0) / (sqrt_one_minus_at + 1e-8)
+                    eps = (x_t - sqrt_at * x0) / (sqrt_one_minus_at + 1e-5)
 
-                x0 = x0.clamp(-1.5, 1.5)
+                #x0 = x0.clamp(-1.5, 1.5)
 
                 if j == -1:
                     x_t = x0
@@ -168,7 +173,7 @@ if __name__ == "__main__":
     ds2 = getDataset("batch_validation")
 
     #ds = getDataset("batch_highres_2")
-    ds2, _ = ds2.split(0.5)
+    #ds2, _ = ds2.split(0.5)
 
     def classic_log_mse(output, target):
         output_phys = DATA_NORMALIZATION_VDENS_TORCH[1](output)
@@ -179,10 +184,10 @@ if __name__ == "__main__":
         return mse
 
 
-    #trainer = DDPTrainer(DDPMUnet, ds1, ds2, model_name="LightDDPM", timesteps=1000, beta_schedule='linear')
-    trainer = load_trainer("DDPM", trainer_class=DDPTrainer)
+    #trainer = DDPTrainer(DDPMUnet, ds1, ds2, model_name="DDPM_LinearFilter", timesteps=1000, beta_schedule='linear')
+    trainer = load_trainer("DDPM_LinearFilter", trainer_class=DDPTrainer)
     #trainer.pred_type = "epsilon"
-    trainer.norms = {
+    trainer.norms = { 
         "cdens": DATA_NORMALIZATION_CDENS,
         "vdens": DATA_NORMALIZATION_VDENS,
     }
@@ -192,11 +197,12 @@ if __name__ == "__main__":
     trainer.ema = True
     trainer.validation_loss_method = classic_log_mse
     trainer.ema_warmup = 300
-    trainer.learning_rate = 0.00002
+    trainer.learning_rate = 0.0001
     trainer.training_set = ds1
     trainer.validation_set = ds2
-    #trainer.network_settings["base_filters"] = 64
-    #trainer.network_settings["num_layers"] = 4
+    trainer.network_settings["base_filters"] = 64
+    trainer.network_settings["num_layers"] = 4
+    trainer.network_settings["filter_function"] = "linear"
     trainer.training_random_transform = True
     trainer.optimizer_name = "Adam"
     trainer.target_names = ["vdens"]
@@ -204,7 +210,7 @@ if __name__ == "__main__":
     trainer.auto_save = 200
     trainer.scheduler = ReduceLROnPlateau(trainer.optimizer, 'min', patience=10, factor=0.1, threshold=0.0001)
     #trainer.init()
-    #trainer.train(600,batch_number=8,compute_validation=200,early_stopping=False)
+    #trainer.train(100,batch_number=16,compute_validation=100,early_stopping=False)
     #trainer.save()
 
     trainer.plot(save=True)

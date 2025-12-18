@@ -125,7 +125,7 @@ class SinusoidalTimeEmbedding(nn.Module):
 
 class DDPMUnet(BaseModule):
     """"""
-    def __init__(self, num_layers:int=4, base_filters:int=64, attention_layers:Optional[List[int]]=[2,3],time_emb_dim: int=256, init_method=nn.init.kaiming_uniform_):
+    def __init__(self, num_layers:int=4, base_filters:int=64, attention_layers:Optional[List[int]]=[3,4],time_emb_dim: int=256, filter_function="constant", init_method=nn.init.kaiming_uniform_):
         super(DDPMUnet, self).__init__()
 
         self.num_layers = num_layers
@@ -134,6 +134,7 @@ class DDPMUnet(BaseModule):
         self.init_method = init_method
         self.attention_layers = attention_layers
         self.time_emb_dim = time_emb_dim
+        self.filter_function = filter_function
 
         self.time_embed = nn.Sequential(
             SinusoidalTimeEmbedding(time_emb_dim // 2),
@@ -143,7 +144,12 @@ class DDPMUnet(BaseModule):
         )
 
         self.init_conv = nn.Conv2d(self.in_channels, base_filters, kernel_size=3, padding=1)
-        filters = [base_filters * (2 ** i) for i in range(num_layers + 1)]
+        if filter_function == "constant":
+            filters = [base_filters * (2 ** i) for i in range(num_layers + 1)]
+        elif filter_function == "linear":
+            filters = [base_filters * (i+1) for i in range(num_layers + 1)]
+        else:
+            raise ValueError()
 
         self.enc_blocks = nn.ModuleList()
         self.enc_attn = nn.ModuleList()
