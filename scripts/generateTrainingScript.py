@@ -143,4 +143,4 @@ script = script.replace("{{TRAINER_CLASS}}", block_trainer)
 output_path = os.path.join(args.output,"training_script.py")
 Path(output_path).write_text(script)
 
-LOGGER.log(f"Success: Training script was generated at {os.path.join(args.output,"training_script.py")}")
+LOGGER.log(f"Success: Training script was generated at {os.path.join(args.output,'training_script.py')}")

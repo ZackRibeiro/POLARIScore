@@ -1239,9 +1239,11 @@ class Observation():
 
         residuals = predicted_densities-derived_densities
         if mov_average > 1:
-            residuals, residuals_std = moving_average(residuals, n=mov_average, return_std=True) 
+            residuals, residuals_std = moving_average(residuals, n=mov_average, return_std=True)
+            predicted_densities = moving_average(predicted_densities, n=mov_average) 
             column_densities = moving_average(column_densities, n=mov_average)
         if log_average > 1:
+            _, predicted_densities = bin_mean(10**column_densities, predicted_densities, dx=None,min_per_bin=2, nbins=log_average)
             column_densities, residuals = bin_mean(10**column_densities, residuals, dx=None,min_per_bin=2, nbins=log_average)
             column_densities = np.log10(column_densities)
 
@@ -1253,8 +1255,9 @@ class Observation():
             interp_mean = np.interp(predicted_densities, bin_centers, means)
             interp_q1 = np.interp(predicted_densities, bin_centers, q1)
             interp_q2 = np.interp(predicted_densities, bin_centers, q2)
-            yerr_lower = moving_average(interp_mean - interp_q1, n=mov_average)
-            yerr_upper = moving_average(interp_q2 - interp_mean, n=mov_average)
+            yerr_lower = interp_mean - interp_q1
+            yerr_upper = interp_q2 - interp_mean
+
             #ax.errorbar(column_densities,residuals,yerr=[yerr_lower, yerr_upper],fmt='none', color="black",alpha=0.8)
             ax.fill_between(column_densities, residuals-yerr_lower, yerr_upper+residuals, color="black", alpha=0.2)
         line, = ax.plot(column_densities,residuals, marker="+", alpha=alpha, label=self.name if label is None else label, color=color, linestyle=linestyle if linestyle is not None else "-")
@@ -1386,14 +1389,14 @@ if __name__ == "__main__":
 
     from POLARIScore.networks.Trainer import load_trainer, plot_models_accuracy
     from POLARIScore.networks.INNTrainer import INNTrainer
+    from POLARIScore.networks.DDPTrainer import DDPTrainer
     from POLARIScore.config import DATA_NORMALIZATION_CDENS, DATA_NORMALIZATION_VDENS
     obs = Observation("OrionB","column_density_map")
     #obs.plot_fractal_dim(suffixes=["_unet","_cinn"], thresholds=[l for l in np.logspace(np.log10(30), np.log10(1e5), 30)])
 
 
 
-    #trainer = load_trainer("General_UNet")
-    #trainer = load_trainer("cINN_3", trainer_class=INNTrainer)
+    #trainer = load_trainer("BigDDPM", trainer_class=DDPTrainer)
     #trainer.norms = {
     #    "cdens": DATA_NORMALIZATION_CDENS,
     #    "vdens": DATA_NORMALIZATION_VDENS,
@@ -1421,14 +1424,28 @@ if __name__ == "__main__":
     #obs.load(suffix="_unet")
     #obs.plot_cores_error(ax=ax, mov_average=0, log_average=30, color="black", linestyle="--", label="UNet")
     #fig, ax = obs.plot_cores_hist(bins=15, label="UNet")
-    obs.load(suffix="_cinn")
-    obs.load_error(model_name="cINN_3")
+    
+    obs.load(suffix="_ddpm")
+    obs.load_error(model_name="BigDDPM")
     obs.prediction = obs.rectify_error_baseline()
-    obs.serialize_cores()
-    obs.plot(norm=LogNorm(vmin=1e21, vmax=None))
-    obs.plot(data=obs.prediction, norm=LogNorm(vmin=10, vmax=5e5))
-    #obs.plot_cores_hist(ax=ax, bins=15, plot_catalog=False, label="cINN")
+    obs.plot(data=obs.prediction, norm=LogNorm(vmin=1e2, vmax=5e5))
+    #obs.plot_cores_error(ax=ax, mov_average=0, log_average=50, show_errors=False, correction=True, color="black", linestyle="--", label="DDPM")
+    
+    #obs.load(suffix="_cinn")
+    #obs.load_error(model_name="cINN_3")
+    #obs.prediction = obs.rectify_error_baseline()
+    #obs.plot_cores_error(ax=ax, mov_average=0, log_average=50, show_errors=False, correction=True, color="black", linestyle="--", label="cINN")
+    #obs.load(suffix="_unet")
+    #obs.prediction = obs.rectify_error_baseline()
+    #obs.plot_cores_error(ax=ax, mov_average=0, log_average=50, show_errors=False, correction=True, color="black", linestyle="-.", label="UNet")
 
+    #obs.plot_dcmf(method="constant", monte_carlo=50, fit=False, bins=15)
+    #obs.serialize_cores()
+    #obs.plot(norm=LogNorm(vmin=1e21, vmax=None))
+    #obs.plot(data=obs.prediction, norm=LogNorm(vmin=10, vmax=5e5))
+    #obs.plot_cores_baseline(derived_cores=True, density_correction=True, invert_xy=True, x_coldens=True, mov_average=5, fit=True)
+
+    #obs.plot_cores_hist(ax=ax, bins=15, plot_catalog=False, label="cINN")
     #obs.plot_density_distributions(offset_method="max", monte_carlo=0, label="UNet")
     #obs.plot_dcmf(method="constant", monte_carlo=0, fit=False, bins=15)
     #obs.plot_cores_baseline(derived_cores=True, density_correction=True, invert_xy=True, x_coldens=True, mov_average=5, fit=True)

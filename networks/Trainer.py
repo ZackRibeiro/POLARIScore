@@ -289,6 +289,8 @@ class Trainer():
                         self.ema_handler.update(self.model)
             if self.scheduler is not None:
                 self.scheduler.step(epoch_loss)
+            if training_mode == "normal":
+                epoch_loss /= min(minbatch_nbr,1)
             self.training_losses.append((total_epoch, epoch_loss))
             val_total_loss = None
             if compute_validation>0 and total_epoch % compute_validation == 0:
