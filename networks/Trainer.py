@@ -3,7 +3,6 @@ import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.optim.lr_scheduler import ReduceLROnPlateau
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -128,7 +127,7 @@ class Trainer():
                 self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
             elif self.optimizer_name in (str(type(torch.optim.SGD)),"SGD"):
                 self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate, momentum=0.5)
-            self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', patience=50, factor=0.75, threshold=0.005)
+            self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, 'min', patience=50, factor=0.75, threshold=0.005)
 
         self.loss_method = nn.MSELoss() if not(self.segmentation) else nn.CrossEntropyLoss()
         self.validation_loss_method:Union[Callable, None] = None
@@ -160,7 +159,7 @@ class Trainer():
         elif self.optimizer_name in (str(type(torch.optim.SGD)),"SGD") or "SGD" in self.optimizer_name:
             self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate, momentum=0.5)
         if self.scheduler is not None:
-            self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', patience=50, factor=0.75, threshold=0.005)
+            self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, 'min', patience=50, factor=0.75, threshold=0.005)
         if self.validation_loss_method is None:
             self.validation_loss_method = self.loss_method
         return True
@@ -182,7 +181,7 @@ class Trainer():
             eval_model = self.model
         return eval_model
 
-    def train(self, epoch_number:int=50, batch_number:int=32, compute_validation:int=10, cache:bool=True, early_stopping:bool=True):
+    def train(self, epoch_number:int=100, batch_number:int=32, compute_validation:int=10, cache:bool=True, early_stopping:bool=True, training_mode:Literal["accumulation","normal"]="normal"):
         """
         Train the model (check trainer variables for settings)
 
@@ -192,6 +191,7 @@ class Trainer():
             compute_validation(int, default:10): compute validation losses each x epochs.
             cache(bool, default:True): If the validation loss is less than a previous epoch, the model will be saved in a cache.
             early_stopping(bool, default:True): Stop the training when the model isn't better in a timeframe. You can change the settings of early stopping (e.g patience and delta) by define a new ES: self.early_stopping = EarlyStopping(your_settings).
+            training_mode(str, default:"normal"): If is 'accumulation': gradients are sum over mini batches, if 'normal': optimizer is applied in each mini batch.
         """
         LOGGER.log(f"Training started with {str(epoch_number)} epochs on network {self.network_type} with mini-batch of size {batch_number}, model has {sum(p.numel() for p in self.model.parameters())} parameters.")
    
@@ -233,12 +233,15 @@ class Trainer():
         for epoch in range(epoch_number):
             total_epoch += 1
             epoch_loss = 0
-            shuffled_indices = torch.randperm(batch_size)  
-            self.optimizer.zero_grad()
+            shuffled_indices = torch.randperm(batch_size)
+            if training_mode == "accumulation":
+                self.optimizer.zero_grad()
             minbatch_nbr = int(np.floor(batch_size/batch_number))
             epoch_time = time.process_time()
             for b in range(minbatch_nbr if minbatch_nbr > 1 else 1):
                 printProgressBar(b, minbatch_nbr, length=10, prefix=f"{b}/{minbatch_nbr}")
+                if training_mode == "normal":
+                    self.optimizer.zero_grad()
                 used_batch = self.training_set.get(indexes=shuffled_indices[b*batch_number:(b+1)*batch_number if minbatch_nbr > 1 else -1])
                 if batch_number == 1:
                     used_batch = [used_batch]
@@ -263,17 +266,29 @@ class Trainer():
                             loss += self.loss_method(output[tt], target[tt])
                         else:
                             loss += self.loss_method(output, target[tt])
+                if training_mode == "accumulation":
+                    loss = loss / min(minbatch_nbr, 1)
                 loss.backward()
+                if training_mode == "normal":
+                    self.optimizer.step()
+                    if self.ema:
+                        if total_epoch > self.ema_warmup:
+                            if(self.ema_handler is None):
+                                self.ema_handler = ExponentialMovingAverage()
+                                self.ema_handler.register_model(self.model)
+                            self.ema_handler.update(self.model)
+            
                 epoch_loss += loss.item()
-            self.optimizer.step()
-            if self.ema:
-                if total_epoch > self.ema_warmup:
-                    if(self.ema_handler is None):
-                        self.ema_handler = ExponentialMovingAverage()
-                        self.ema_handler.register_model(self.model)
-                    self.ema_handler.update(self.model)
-            epoch_loss /= minbatch_nbr if minbatch_nbr != 0 else 1 
-            self.scheduler.step(epoch_loss)
+            if training_mode == "accumulation":
+                self.optimizer.step()
+                if self.ema:
+                    if total_epoch > self.ema_warmup:
+                        if(self.ema_handler is None):
+                            self.ema_handler = ExponentialMovingAverage()
+                            self.ema_handler.register_model(self.model)
+                        self.ema_handler.update(self.model)
+            if self.scheduler is not None:
+                self.scheduler.step(epoch_loss)
             self.training_losses.append((total_epoch, epoch_loss))
             val_total_loss = None
             if compute_validation>0 and total_epoch % compute_validation == 0:
@@ -324,7 +339,7 @@ class Trainer():
             LOGGER.print(f'Epoch {total_epoch}/{l_ep + epoch_number} | Elapsed: {_format_time(actual_time-start_time)} | Time Left: {_format_time(time_left)} | Training Loss: {epoch_loss}, Validation loss: {val_total_loss if val_total_loss else "Not computed"}', type="training", level=1, color="34m")
             
         self.last_epoch = total_epoch
-        self.learning_rate = self.scheduler.get_last_lr()[0]
+        self.learning_rate = self.scheduler.get_last_lr()[0] if self.scheduler is not None else self.learning_rate
 
     def get_validation_error(self, n:int=100, conf_lvl=0.9, save=True):
         LOGGER.log("Computing validation errors.")
@@ -720,6 +735,14 @@ class Trainer():
         fig_path = os.path.join(model_path,fig_name+'.jpg')
         fig.savefig(fig_path)
 
+    def _modify_saved_settings(self, settings):
+        """Override this method if you want to add new settings to be saved, don't forget to also override _modify_loaded_settings"""
+        return settings
+    
+    def _modify_loaded_settings(self, settings):
+        """Override this method if you want to add new settings to be auto loaded, don't forget to also override _modify_saved_settings"""
+        return
+
     def save(self, model_name=None, is_cache=False):
         """
         Save model and model settings in a new folder
@@ -794,6 +817,8 @@ class Trainer():
             "validation_losses": self.validation_losses,
         }
 
+        settings = self._modify_saved_settings(settings)
+
         with open(os.path.join(model_path,'settings.json'), 'w') as file:
             json.dump(settings, file, indent=4)
 
@@ -830,8 +855,13 @@ def load_trainer(model_name, load_model=True, trainer_class=Trainer):
         except Exception as e:
             LOGGER.warn(f"Couldn't load validation set: {e}")
 
-    network_options = NETWORK_OPTIONS
-    network_convblock_options = CONVBLOCK_OPTIONS
+    #TODO, REmove network options and convblock options by an auto handler
+    try:
+        network_options = NETWORK_OPTIONS
+        network_convblock_options = CONVBLOCK_OPTIONS
+    except:
+        network_options = {}
+        network_convblock_options = {}
     network_settings = settings["network_settings"] if "network_settings" in settings else {}
     if "convBlock" in network_settings:
         network_settings["convBlock"] = network_convblock_options[network_settings["convBlock"]]
@@ -846,6 +876,8 @@ def load_trainer(model_name, load_model=True, trainer_class=Trainer):
     trainer.input_names = settings["input_names"] if "input_names" in settings else ["cdens"]
     trainer.target_names = settings["target_names"] if "target_names" in settings else (settings["target_name"] if "target_name" in settings else "vdens")
     trainer.optimizer_name = settings["optimizer"]
+
+    trainer._modify_loaded_settings(settings)
 
     ema_state_path = os.path.join(model_path, f"{folder_model_name}_ema.pth")
     if os.path.exists(ema_state_path):
@@ -1064,95 +1096,6 @@ def heatmap(root_name, validation_batch, X, Y, ax=None):
     ax.set_ylabel("Layers")
 
     return fig, ax
-
-import glob
-import re
-def plot_modelset(root_name, validation_batch=None, prefix="t", ax=None):
-
-    if ax is None:
-        fig, ax = plt.subplots()
-    else:
-        fig = ax.figure
-
-    models_paths = glob.glob(os.path.join(MODEL_FOLDER,root_name)+f"_{prefix}*")
-    X = []
-    names = []
-    for p in models_paths:
-        p = p.split('/')[-1]
-        match = re.search(r"_t(\d+)", p)
-        if match:
-            X.append(int(match.group(1)))
-            names.append(p)
-        else:
-            LOGGER.warn(f"Can't read property in model name: {p}.")
-            continue
-
-    indexes = np.argsort(X)
-    X = np.array(X)[indexes]
-    names = np.array(names)[indexes]
-
-    Y = []
-    for n in names:
-        trainer = load_trainer(n)
-        if trainer is None:
-            continue
-        if not(validation_batch is None):
-            trainer.validation_set = validation_batch
-        acc, std = compute_batch_accuracy(trainer.get_prediction_batch(),sigma=0.3)
-        Y.append(acc)
-        del trainer
-    
-    ax.plot(X, Y)
-    ax.scatter(X, Y)
-    ax.grid(True)
-    ax.set_xlabel("Size of the training set")
-    ax.set_ylabel(r"Accuracy for $\sigma=0.3$")
-    fig.tight_layout()
-
-    return fig, ax
-
-def generate_model_map(root_name, train_batch, validation_batch, network=UNet, layers=[2,3,4,5], base_filters=[8,16,32,48,64,80]):
-
-    for i,l in enumerate(layers):
-        for j,bf in enumerate(base_filters):
-            model_path = os.path.join(MODEL_FOLDER, root_name+f"_l{str(l)}_bf{str(bf)}")
-            if(os.path.exists(model_path)):
-                LOGGER.warn(root_name+f"_l{str(l)}_bf{str(bf)}"+f" already exists, delete the folder if you want to traina new model with these settings.")
-                continue
-            LOGGER.log(f"Now training: {l}, {bf} ({str(np.round((i*len(base_filters)+j)/(len(base_filters)*len(layers))*100,3))}%)")
-            trainer  = Trainer(network, train_batch,validation_batch, model_name=root_name+f"_l{str(l)}_bf{str(bf)}")
-            trainer.network_settings["base_filters"] = bf
-            trainer.network_settings["num_layers"] = l
-            trainer.training_random_transform = True
-            trainer.network_settings["attention"] = True
-            trainer.init()
-            trainer.train(int(2000+1000*(1-i/len(layers))*(1-i/len(base_filters))))
-            trainer.save()
-
-def generate_model_training_map(root_name, train_batch, validation_batch, network=UNet, training=[8,16,32,48,64,80]):
-
-    for i,l in enumerate(training):
-        if l > 1:
-            l = l/len(train_batch.batch)
-        dataset, _ = train_batch.split(l)
-        l = len(dataset.batch)
-        model_path = os.path.join(MODEL_FOLDER, root_name+f"_t{str(l)}")
-        if(os.path.exists(model_path)):
-            LOGGER.warn(root_name+f"_t{str(l)}"+f" already exists, delete the folder if you want to train a new model with these settings.")
-            continue
-        LOGGER.log(f"Now training: {l}({str(np.round((i)/(len(training))*100,3))}%)")
-        trainer  = Trainer(network, dataset ,validation_batch, model_name=root_name+f"_t{str(l)}")
-        trainer.network_settings["base_filters"] = 64
-        trainer.network_settings["num_layers"] = 4
-        #trainer.network_settings["convBlock"] = DoubleConvBlock
-        trainer.training_random_transform = True
-        trainer.network_settings["attention"] = True
-        trainer.target_names = "vdens"
-        trainer.input_names = ["cdens"]
-        trainer.optimizer_name = "SGD"
-        trainer.init()
-        trainer.train(1000, batch_number=16, cache=False)
-        trainer.save()
 
 if __name__ == "__main__":
 

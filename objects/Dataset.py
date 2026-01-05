@@ -15,9 +15,8 @@ import ast
 import re
 from POLARIScore.utils.utils import NumpyEncoder, numpy_decoder, merge_dicts, split_dict
 
-BATCH_CAN_CONTAINS = ["cdens","vdens","cospectra","density","cdens_context","physize"]
 """ 
-Contains:
+Example of what a batch can contains:
 - 'cdens': tensor NxN
 - 'vdens': tensor NxN
 - 'cospectra': tensor NxNxdepth
@@ -35,10 +34,18 @@ def _open_batch(batch_name:str):
 
     files = glob.glob(batch_path+"/*.npy")
     files = [f.split("/")[-1] for f in files]
+    files = sorted(files)
 
     imgs = [[] for _ in range(len(np.unique([int(f.split("_")[0]) for f in files])))]
     order = []
-    for bc in BATCH_CAN_CONTAINS:
+
+    batch_contains = []
+    for f in files:
+        name = f.split(".")[0].split("_", 1)[1]
+        if not(name in batch_contains):
+            batch_contains.append(name)
+    
+    for bc in batch_contains:
         pot_files = [f for f in files if bc == f.split(".")[0].split("_", 1)[1]]
         if len(pot_files) <= 0 :
             continue

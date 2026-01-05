@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2025.11.17)  9 DEC 2025 13:17
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2025.11.17)  16 DEC 2025 16:07
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -841,20 +841,22 @@ Underfull \hbox (badness 5217) in paragraph at lines 322--324
  []
 
 [3 <./figures/unet_architecture.jpg>]
-Underfull \hbox (badness 1286) in paragraph at lines 371--372
+Underfull \hbox (badness 1286) in paragraph at lines 383--384
 \T1/txr/m/n/10 good per-for-mance with rel-a-tively few re-gions, whereas
  []
 
 LaTeX Font Info:    Font shape `T1/txr/b/n' in size <7> not available
-(Font)              Font shape `T1/txr/bx/n' tried instead on input line 382.
+(Font)              Font shape `T1/txr/bx/n' tried instead on input line 394.
 LaTeX Font Info:    Font shape `T1/txr/b/n' in size <5> not available
-(Font)              Font shape `T1/txr/bx/n' tried instead on input line 382.
+(Font)              Font shape `T1/txr/bx/n' tried instead on input line 394.
 
-Underfull \hbox (badness 1371) in paragraph at lines 382--383
+Underfull \hbox (badness 1371) in paragraph at lines 394--395
 []$\OML/txmi/m/it/10 N[]\OT1/txr/m/n/10 (\OML/txmi/m/it/10 n[]\OT1/txr/m/n/10 )$ \T1/txr/bx/n/10 re-la-tion (dense cores only): \T1/txr/m/n/10 Fit the pre-dicted
  []
 
-(./paper.bbl) [4]
+(./paper.bbl [4]) [5
+
+]
 Package epstopdf Info: Source file: <figures/fig_mw_correction_ld.eps>
 (epstopdf)                    date: 2025-12-02 11:43:43
 (epstopdf)                    size: 28066 bytes
@@ -862,12 +864,12 @@ Package epstopdf Info: Source file: <figures/fig_mw_correction_ld.eps>
 (epstopdf)                    date: 2025-12-02 11:43:45
 (epstopdf)                    size: 14079 bytes
 (epstopdf)             Command: <repstopdf --outfile=figures/fig_mw_correction_ld-eps-converted-to.pdf figures/fig_mw_correction_ld.eps>
-(epstopdf)             \includegraphics on input line 459.
+(epstopdf)             \includegraphics on input line 471.
 Package epstopdf Info: Output file is already uptodate.
-<figures/fig_mw_correction_ld-eps-converted-to.pdf, id=364, 361.35pt x 361.35pt>
+<figures/fig_mw_correction_ld-eps-converted-to.pdf, id=372, 361.35pt x 361.35pt>
 File: figures/fig_mw_correction_ld-eps-converted-to.pdf Graphic file (type pdf)
 <use figures/fig_mw_correction_ld-eps-converted-to.pdf>
-Package pdftex.def Info: figures/fig_mw_correction_ld-eps-converted-to.pdf  used on input line 459.
+Package pdftex.def Info: figures/fig_mw_correction_ld-eps-converted-to.pdf  used on input line 471.
 (pdftex.def)             Requested size: 122.9148pt x 122.9125pt.
 Package epstopdf Info: Source file: <figures/fig_mw_correction_nd.eps>
 (epstopdf)                    date: 2025-12-02 11:43:34
@@ -876,12 +878,12 @@ Package epstopdf Info: Source file: <figures/fig_mw_correction_nd.eps>
 (epstopdf)                    date: 2025-12-02 11:43:37
 (epstopdf)                    size: 16272 bytes
 (epstopdf)             Command: <repstopdf --outfile=figures/fig_mw_correction_nd-eps-converted-to.pdf figures/fig_mw_correction_nd.eps>
-(epstopdf)             \includegraphics on input line 466.
+(epstopdf)             \includegraphics on input line 478.
 Package epstopdf Info: Output file is already uptodate.
-<figures/fig_mw_correction_nd-eps-converted-to.pdf, id=367, 361.35pt x 361.35pt>
+<figures/fig_mw_correction_nd-eps-converted-to.pdf, id=375, 361.35pt x 361.35pt>
 File: figures/fig_mw_correction_nd-eps-converted-to.pdf Graphic file (type pdf)
 <use figures/fig_mw_correction_nd-eps-converted-to.pdf>
-Package pdftex.def Info: figures/fig_mw_correction_nd-eps-converted-to.pdf  used on input line 466.
+Package pdftex.def Info: figures/fig_mw_correction_nd-eps-converted-to.pdf  used on input line 478.
 (pdftex.def)             Requested size: 122.9148pt x 122.9125pt.
 Package epstopdf Info: Source file: <figures/fig_mw_correction_diffkonyves.eps>
 (epstopdf)                    date: 2025-11-20 15:54:25
@@ -890,14 +892,14 @@ Package epstopdf Info: Source file: <figures/fig_mw_correction_diffkonyves.eps>
 (epstopdf)                    date: 2025-11-20 15:55:40
 (epstopdf)                    size: 15442 bytes
 (epstopdf)             Command: <repstopdf --outfile=figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf figures/fig_mw_correction_diffkonyves.eps>
-(epstopdf)             \includegraphics on input line 490.
+(epstopdf)             \includegraphics on input line 502.
 Package epstopdf Info: Output file is already uptodate.
-<figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf, id=371, 722.7pt x 361.35pt>
+<figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf, id=379, 722.7pt x 361.35pt>
 File: figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf Graphic file (type pdf)
 <use figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf>
-Package pdftex.def Info: figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf  used on input line 490.
+Package pdftex.def Info: figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf  used on input line 502.
 (pdftex.def)             Requested size: 256.0748pt x 128.03477pt.
- [5
+ [6
 
  <./figures/fig_mw_correction_ld-eps-converted-to.pdf> <./figures/fig_mw_correction_nd-eps-converted-to.pdf> <./figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf>]
 Package epstopdf Info: Source file: <figures/fig_score_residuals.eps>
@@ -907,12 +909,12 @@ Package epstopdf Info: Source file: <figures/fig_score_residuals.eps>
 (epstopdf)                    date: 2025-11-24 17:09:50
 (epstopdf)                    size: 16123 bytes
 (epstopdf)             Command: <repstopdf --outfile=figures/fig_score_residuals-eps-converted-to.pdf figures/fig_score_residuals.eps>
-(epstopdf)             \includegraphics on input line 573.
+(epstopdf)             \includegraphics on input line 585.
 Package epstopdf Info: Output file is already uptodate.
-<figures/fig_score_residuals-eps-converted-to.pdf, id=495, 361.35pt x 361.35pt>
+<figures/fig_score_residuals-eps-converted-to.pdf, id=503, 361.35pt x 361.35pt>
 File: figures/fig_score_residuals-eps-converted-to.pdf Graphic file (type pdf)
 <use figures/fig_score_residuals-eps-converted-to.pdf>
-Package pdftex.def Info: figures/fig_score_residuals-eps-converted-to.pdf  used on input line 573.
+Package pdftex.def Info: figures/fig_score_residuals-eps-converted-to.pdf  used on input line 585.
 (pdftex.def)             Requested size: 122.9148pt x 122.9125pt.
 Package epstopdf Info: Source file: <figures/fig_score_accuracy.eps>
 (epstopdf)                    date: 2025-11-24 17:05:57
@@ -921,12 +923,12 @@ Package epstopdf Info: Source file: <figures/fig_score_accuracy.eps>
 (epstopdf)                    date: 2025-11-24 17:09:50
 (epstopdf)                    size: 18626 bytes
 (epstopdf)             Command: <repstopdf --outfile=figures/fig_score_accuracy-eps-converted-to.pdf figures/fig_score_accuracy.eps>
-(epstopdf)             \includegraphics on input line 579.
+(epstopdf)             \includegraphics on input line 591.
 Package epstopdf Info: Output file is already uptodate.
-<figures/fig_score_accuracy-eps-converted-to.pdf, id=496, 361.35pt x 361.35pt>
+<figures/fig_score_accuracy-eps-converted-to.pdf, id=504, 361.35pt x 361.35pt>
 File: figures/fig_score_accuracy-eps-converted-to.pdf Graphic file (type pdf)
 <use figures/fig_score_accuracy-eps-converted-to.pdf>
-Package pdftex.def Info: figures/fig_score_accuracy-eps-converted-to.pdf  used on input line 579.
+Package pdftex.def Info: figures/fig_score_accuracy-eps-converted-to.pdf  used on input line 591.
 (pdftex.def)             Requested size: 122.9148pt x 122.9125pt.
 Package epstopdf Info: Source file: <figures/fig_score_unet_diffkonyves.eps>
 (epstopdf)                    date: 2025-11-24 13:21:34
@@ -935,16 +937,16 @@ Package epstopdf Info: Source file: <figures/fig_score_unet_diffkonyves.eps>
 (epstopdf)                    date: 2025-11-24 13:26:03
 (epstopdf)                    size: 16771 bytes
 (epstopdf)             Command: <repstopdf --outfile=figures/fig_score_unet_diffkonyves-eps-converted-to.pdf figures/fig_score_unet_diffkonyves.eps>
-(epstopdf)             \includegraphics on input line 589.
+(epstopdf)             \includegraphics on input line 601.
 Package epstopdf Info: Output file is already uptodate.
-<figures/fig_score_unet_diffkonyves-eps-converted-to.pdf, id=497, 722.7pt x 361.35pt>
+<figures/fig_score_unet_diffkonyves-eps-converted-to.pdf, id=505, 722.7pt x 361.35pt>
 File: figures/fig_score_unet_diffkonyves-eps-converted-to.pdf Graphic file (type pdf)
 <use figures/fig_score_unet_diffkonyves-eps-converted-to.pdf>
-Package pdftex.def Info: figures/fig_score_unet_diffkonyves-eps-converted-to.pdf  used on input line 589.
+Package pdftex.def Info: figures/fig_score_unet_diffkonyves-eps-converted-to.pdf  used on input line 601.
 (pdftex.def)             Requested size: 256.0748pt x 128.03477pt.
- [6 <./figures/fig_score_residuals-eps-converted-to.pdf> <./figures/fig_score_accuracy-eps-converted-to.pdf>] [7
+ [7 <./figures/fig_score_residuals-eps-converted-to.pdf> <./figures/fig_score_accuracy-eps-converted-to.pdf>] [8
 
- <./figures/fig_score_unet_diffkonyves-eps-converted-to.pdf>] [8
+ <./figures/fig_score_unet_diffkonyves-eps-converted-to.pdf>] [9
 
 ] (./paper.aux)
  ***********
@@ -955,18 +957,18 @@ Package rerunfilecheck Info: File `paper.out' has not changed.
 (rerunfilecheck)             Checksum: 9BEE94F2687C202C20E68BD8186EB0EE;4479.
  ) 
 Here is how much of TeX's memory you used:
- 16573 strings out of 476106
- 264664 string characters out of 5793932
- 1968975 words of memory out of 5000000
- 38174 multiletter control sequences out of 15000+600000
+ 16582 strings out of 476106
+ 264890 string characters out of 5793932
+ 1964975 words of memory out of 5000000
+ 38180 multiletter control sequences out of 15000+600000
  656884 words of font info for 184 fonts, out of 8000000 for 9000
  59 hyphenation exceptions out of 8191
  87i,13n,93p,781b,716s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/rtcxr.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/rtxmi.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/rtxr.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/rtxr.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/t1xtt.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/txex.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/txsy.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/txsya.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/helvetic/uhvb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/helvetic/uhvr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/helvetic/uhvr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on paper.pdf (8 pages, 680707 bytes).
+Output written on paper.pdf (9 pages, 682351 bytes).
 PDF statistics:
- 722 PDF objects out of 1000 (max. 8388607)
- 396 compressed objects within 4 object streams
- 99 named destinations out of 1000 (max. 500000)
+ 731 PDF objects out of 1000 (max. 8388607)
+ 403 compressed objects within 5 object streams
+ 102 named destinations out of 1000 (max. 500000)
  254 words of extra memory for PDF output out of 10000 (max. 10000000)
 

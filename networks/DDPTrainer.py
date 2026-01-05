@@ -24,17 +24,49 @@ class DDPTrainer(Trainer):
         self.timesteps = timesteps
         self.pred_type = pred_type
 
+        self.set_scheduler(timesteps=timesteps, beta_schedule=beta_schedule,
+                           beta_start=beta_start, beta_end=beta_end)        
+        
+        self.loss_method = self.mse_loss
+        self.validation_loss_method = nn.MSELoss()
+
+    def _modify_saved_settings(self, settings):
+        settings = super()._modify_saved_settings(settings)
+        settings["ddpm_timesteps"] = self.timesteps
+        settings["ddpm_pred_type"] = self.pred_type
+        settings["ddpm_beta_schedule"] = self.beta_schedule
+        settings["ddpm_beta_start"] = self.beta_start
+        settings["ddpm_beta_end"] = self.beta_end
+        return settings
+    
+    def _modify_loaded_settings(self, settings):
+        super()._modify_loaded_settings(settings)
+
+        self.timesteps = settings["ddpm_timesteps"] if "ddpm_timesteps" in settings else 1000
+        self.pred_type = settings["ddpm_pred_type"] if "ddpm_pred_type" in settings else "v"
+        self.beta_schedule = settings["ddpm_beta_schedule"] if "ddpm_beta_schedule" in settings else "linear"
+        self.beta_start = settings["ddpm_beta_start"] if "ddpm_beta_start" in settings else 1e-4
+        self.beta_end = settings["ddpm_beta_end"] if "ddpm_beta_end" in settings else 0.02
+
+        self.set_scheduler(self.timesteps, self.beta_schedule, self.beta_start, self.beta_end)
+
+    def set_scheduler(self, timesteps:int=1000, beta_schedule:Literal["linear","cosine","quadratic"]="linear"
+                      , beta_start:float=1e-4, beta_end:float=0.02):
+        self.timesteps = timesteps
+        self.beta_schedule = beta_schedule
+        self.beta_start = beta_start
+        self.beta_end = beta_end
         if beta_schedule == "linear":
             betas = linear_beta_schedule(timesteps, beta_start=beta_start, beta_end=beta_end)
         elif beta_schedule == "quadratic":
             betas = quadratic_beta_schedule(timesteps, beta_start=beta_start, beta_end=beta_end)
         elif beta_schedule == "cosine":
-            betas = cosine_beta_schedule(timesteps, beta_start=beta_start, beta_end=beta_end)
+            betas = cosine_beta_schedule(timesteps)
         else:
             LOGGER.error(beta_schedule+" is not an option.")
             raise ValueError("Beta schedule incorrect")
         
-        self.betas = betas.float().to(self.device) #(T,)
+        self.betas = betas.float().to(self.device)
         self.alphas = 1.-self.betas #(T,)
         self.alphas_cumprod = torch.cumprod(self.alphas, dim=0) #(T,)
         self.alphas_cumprod_prev = F.pad(self.alphas_cumprod[:-1], (1,0), value=1.) # (T,)
@@ -42,8 +74,8 @@ class DDPTrainer(Trainer):
         self.sqrt_one_minus_alphas_cumprod = torch.sqrt(1.0 - self.alphas_cumprod)
         self.posterior_variance = self.betas * (1.0 - self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
 
-        self.loss_method = self.mse_loss
-        self.validation_loss_method = nn.MSELoss()
+        return self.betas
+
 
     @staticmethod
     def mse_loss(output, target):
@@ -184,8 +216,8 @@ if __name__ == "__main__":
         return mse
 
 
-    #trainer = DDPTrainer(DDPMUnet, ds1, ds2, model_name="DDPM_LinearFilter", timesteps=1000, beta_schedule='linear')
-    trainer = load_trainer("DDPM_LinearFilter", trainer_class=DDPTrainer)
+    trainer = DDPTrainer(DDPMUnet, ds1, ds2, model_name="DDPM", timesteps=1000, beta_schedule='linear')
+    #trainer = load_trainer("DDPM", trainer_class=DDPTrainer)
     #trainer.pred_type = "epsilon"
     trainer.norms = { 
         "cdens": DATA_NORMALIZATION_CDENS,
@@ -196,21 +228,21 @@ if __name__ == "__main__":
 
     trainer.ema = True
     trainer.validation_loss_method = classic_log_mse
-    trainer.ema_warmup = 300
-    trainer.learning_rate = 0.0001
+    trainer.ema_warmup = 0
+    trainer.learning_rate = 1e-4
     trainer.training_set = ds1
     trainer.validation_set = ds2
-    trainer.network_settings["base_filters"] = 64
+    trainer.network_settings["base_filters"] = 32
     trainer.network_settings["num_layers"] = 4
-    trainer.network_settings["filter_function"] = "linear"
+    #trainer.network_settings["filter_function"] = "linear"
     trainer.training_random_transform = True
     trainer.optimizer_name = "Adam"
     trainer.target_names = ["vdens"]
     trainer.input_names = ["cdens"]
-    trainer.auto_save = 200
-    trainer.scheduler = ReduceLROnPlateau(trainer.optimizer, 'min', patience=10, factor=0.1, threshold=0.0001)
-    #trainer.init()
-    #trainer.train(100,batch_number=16,compute_validation=100,early_stopping=False)
+    #trainer.auto_save = 200
+    trainer.scheduler = None
+    trainer.init()
+    trainer.train(250,batch_number=8,compute_validation=50,early_stopping=False)
     #trainer.save()
 
     trainer.plot(save=True)

@@ -261,7 +261,7 @@
       \end{equation}
       For each invertible transformation $f_k$, the change-of-variable formula gives the exact likelihood:
       \begin{equation}
-         p_\text{data}(X|c)=p_z(f(X|c))|\det\frac{\partial f(X,c)}{\partial X}|.
+         p_\text{data}(X|c)=p_z(f(X,c))|\det\frac{\partial f(X,c)}{\partial X}|.
       \end{equation}
 
       During training, the cINN maximizes the log-likelihood of the data under this model.
@@ -354,7 +354,19 @@
 
       \textbf{Some words on architecture with figure (Encoder, Noise scheduling)}
 
+      \cite{salimansProgressiveDistillationFast2022}
+
    \subsubsection{Flow matching}
+
+      \begin{equation}
+         \label{eq_flow}
+         \left\{
+         \begin{aligned}
+            \frac{d}{dt}\varphi_t(x_0) &= u_t(\varphi_t(x_0)), \\
+            \varphi_0(x_0) &= x_0,
+         \end{aligned}
+         \right.
+      \end{equation}
 
 \subsection{Application}
 \section{Results}

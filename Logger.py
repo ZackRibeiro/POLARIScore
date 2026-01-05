@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import List
 
 class Logger():
-    def __init__(self, level:int=0, auto_save:int=5):
+    def __init__(self, level:int=0, auto_save:int=5, save_path=None):
         """
         Args:
             level(int):Lower level means to keep only criticals informations. (0: just errors, 1: warns, 2: all).
@@ -17,6 +17,7 @@ class Logger():
         """Path to the log file"""
         self.auto_save:int = auto_save
         """Interval of messages needed to save logs"""
+        self.save_path:str = save_path
         self.global_color = "32m"
         self.print_borders = True
 
@@ -81,7 +82,9 @@ class Logger():
 
     def save(self):
         """Save messages previously printed in a log file."""
-        export_path = os.path.join(EXPORT_FOLDER,"logs")
+        assert self.save_path is not None, "Save path is not defined in Logger."
+        
+        export_path = os.path.join(self.save_path,"logs")
         if not(os.path.exists(export_path)):
             os.mkdir(export_path)
         self.log_file = os.path.join(export_path, f"logs_{datetime.now().strftime('%Y-%m-%d_%H-%M')}.txt")
