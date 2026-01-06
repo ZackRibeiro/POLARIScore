@@ -138,8 +138,8 @@ class DDPTrainer(Trainer):
             input = input[0]
                 
         B, C, H, W = input.shape
-        eta = 1.
-        seq = range(0, self.timesteps, 1)
+        eta = 0.5
+        seq = range(0, self.timesteps, 20)
 
         if seq is None:
             seq = list(range(self.timesteps))
@@ -201,8 +201,8 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
     from POLARIScore.objects.Dataset import getDataset
     from POLARIScore.config import DATA_NORMALIZATION_CDENS, DATA_NORMALIZATION_VDENS, DATA_NORMALIZATION_CDENS_TORCH, DATA_NORMALIZATION_VDENS_TORCH
-    ds1 = getDataset("batch_highres_2_b1")
-    ds2 = getDataset("batch_highres_2_b2")
+    ds1 = getDataset("batch_training")
+    ds2 = getDataset("batch_validation")
 
     #ds = getDataset("batch_highres_2")
     #ds2, _ = ds2.split(0.5)
@@ -216,9 +216,9 @@ if __name__ == "__main__":
         return mse
 
 
-    #trainer = DDPTrainer(DDPMUnet, ds1, ds2, model_name="BigDDPM", timesteps=1000, beta_schedule='linear')
-    trainer = load_trainer("BigDDPM", trainer_class=DDPTrainer)
-    #trainer.pred_type = "epsilon"
+    trainer = DDPTrainer(DDPMUnet, ds1, ds2, model_name="DDPM", timesteps=1000, beta_schedule='quadratic')
+    #trainer = load_trainer("BigDDPM", trainer_class=DDPTrainer)
+    trainer.pred_type = "epsilon"
     trainer.norms = { 
         "cdens": DATA_NORMALIZATION_CDENS,
         "vdens": DATA_NORMALIZATION_VDENS,
@@ -228,12 +228,12 @@ if __name__ == "__main__":
 
     trainer.ema = True
     trainer.validation_loss_method = classic_log_mse
-    trainer.ema_warmup = 0
+    trainer.ema_warmup = 30
     trainer.learning_rate = 1e-4
     trainer.training_set = ds1
     trainer.validation_set = ds2
     trainer.network_settings["base_filters"] = 64
-    trainer.network_settings["num_layers"] = 4
+    trainer.network_settings["num_layers"] = 3
     #trainer.network_settings["filter_function"] = "linear"
     trainer.training_random_transform = True
     trainer.optimizer_name = "Adam"
@@ -241,10 +241,10 @@ if __name__ == "__main__":
     trainer.input_names = ["cdens"]
     trainer.auto_save = 500
     trainer.scheduler = None
-    #trainer.init()
+    trainer.init()
+    trainer.train(1000,batch_number=8,compute_validation=100,early_stopping=False)
+    trainer.save()
     trainer.get_validation_error()
-    #trainer.train(1000,batch_number=8,compute_validation=100,early_stopping=False)
-    #trainer.save()
 
     trainer.plot(save=True)
     trainer.plot_validation(save=True, number=8, number_per_row=4)

@@ -857,7 +857,7 @@ def load_trainer(model_name, load_model=True, trainer_class=Trainer):
         except Exception as e:
             LOGGER.warn(f"Couldn't load validation set: {e}")
 
-    #TODO, REmove network options and convblock options by an auto handler
+    #TODO, Remove network options and convblock options by an auto handler
     try:
         network_options = NETWORK_OPTIONS
         network_convblock_options = CONVBLOCK_OPTIONS

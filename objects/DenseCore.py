@@ -48,7 +48,7 @@ class DenseCore():
         else:
             return np.nan
     
-    def compute_mass(self, method:Literal["gaussian","constant"]="gaussian", density_error:Union[np.ndarray, None]=None):
+    def compute_mass(self, method:Literal["gaussian","constant"]="gaussian", density_error:Union[np.ndarray, None]=None, correction:bool=True):
         """Compute mass of the core using predicted density.
         Args:
             method(str,default='constant'): Method used to compute the mass, if constant then this is just the volume*density, if gaussian: this is a 3D isotrope gaussian. 
@@ -104,8 +104,11 @@ class DenseCore():
             r_cm = self.data["radius_pc"] * pc_to_cm
             volume = (4/3) * np.pi * (r_cm**3)
             mw_density = float(self.get_center_density())
-            n = CONVERT_massn_TO_n_coldens(float(self.get_center_density(column_density=True)),10,mw_density,float(self.data["radius_pc"]), is_density=False)
-            
+            if correction:
+                n = CONVERT_massn_TO_n_coldens(float(self.get_center_density(column_density=True)),10,mw_density,float(self.data["radius_pc"]), is_density=False)
+            else:
+                n = mw_density
+
             if density_error is not None:
                 try:
                     bin_centers, q1, q2, means = density_error

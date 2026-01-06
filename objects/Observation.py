@@ -685,7 +685,8 @@ class Observation():
 
         return fig, ax
 
-    def plot_cores_hist(self, ax=None, region:Union[Tuple[float,float,float,float],None]=None, linestyle:bool=False, drawstyle:Optional[str]="steps-mid", bins:int=15, plot_catalog:bool=True, label:Optional[str]=None):
+    def plot_cores_hist(self, ax=None, region:Union[Tuple[float,float,float,float],None]=None, linestyle:bool=False, drawstyle:Optional[str]="steps-mid", bins:int=15, plot_catalog:bool=True, label:Optional[str]=None
+                        , correction:bool=True):
         """
         Args:
             ax: matplotlib axis
@@ -699,7 +700,7 @@ class Observation():
         else:
             fig = ax.figure
 
-        predicted_densities, derived_densities = self._get_cores_predicted_values(region=region)
+        predicted_densities, derived_densities = self._get_cores_predicted_values(region=region, correction=correction)
 
         def _get_hist(densities:np.ndarray):
             log_min, log_max = (3, 6.5)
@@ -746,7 +747,7 @@ class Observation():
         return fig, ax
 
     def plot_cores_baseline(self, ax=None, suffixes:Optional[Union[List[str],str]]=None, derived_cores:bool=False, density_correction:bool=True,
-                             x_coldens:bool=False, invert_xy:bool=False, mov_average:int=0, fit:bool=False ):
+                             x_coldens:bool=False, invert_xy:bool=False, mov_average:int=0, fit:bool=False, cmap_color=True, forced_label=None ):
         """
         Plot dense cores baseline with x axis depending on args. By default this plot the predicted mass-weighted average density of cores in function of their id.
         Args:
@@ -824,13 +825,14 @@ class Observation():
             ax.scatter(binned_x if fit else x, binned_y if fit else densities, marker="+", color=color, label=label)
 
         for i,s in enumerate(suffixes):
-            self.load(suffix=s)
+            if s != "" or self.prediction is None:
+                self.load(suffix=s)
             cores = self.get_cores()
             if cores is None:
                 LOGGER.warn(f"No cores found in {s}.")
                 continue
             densities = np.array([c.get_center_density(correction=density_correction) for c in cores])
-            _make_baseline(densities, s.replace("_",""), colors[i])
+            _make_baseline(densities, s.replace("_","") if forced_label is None else forced_label, colors[i] if cmap_color else None)
         if derived_cores:
             _make_baseline(np.array([c.data['average_n'] for c in cores]), "Konyves et al, 2020", "red")
 
@@ -941,7 +943,7 @@ class Observation():
 
     def plot_dcmf(self, ax=None, bins:int=10, ext_lims:Tuple[Union[float,None],Union[float,None]]=[None,None],
                    logM:bool=True, fit=True, method:Literal['constant','gaussian']="constant",
-                    monte_carlo:int=100   
+                    monte_carlo:int=100 , correction:bool=True 
                 ):
         """
         Plot the dense core mass function
@@ -962,7 +964,7 @@ class Observation():
 
         cores = self.get_cores()
 
-        predicted_masses = np.array([c.compute_mass(method=method) for c in cores])
+        predicted_masses = np.array([c.compute_mass(method=method,correction=correction) for c in cores])
         derived_cores = [c.data for c in cores]
         predicted_densities = np.array(self.get_predicted_density_at_cores(), dtype=np.float64)
         column_densities = np.array(self.get_predicted_density_at_cores(column_density=True), dtype=np.float64)
@@ -1425,10 +1427,10 @@ if __name__ == "__main__":
     #obs.plot_cores_error(ax=ax, mov_average=0, log_average=30, color="black", linestyle="--", label="UNet")
     #fig, ax = obs.plot_cores_hist(bins=15, label="UNet")
     
-    obs.load(suffix="_ddpm")
-    obs.load_error(model_name="BigDDPM")
+    obs.load(suffix="_cinn")
+    obs.load_error(model_name="cINN")
     obs.prediction = obs.rectify_error_baseline()
-    obs.plot(data=obs.prediction, norm=LogNorm(vmin=1e2, vmax=5e5))
+    #obs.plot(data=obs.prediction, norm=LogNorm(vmin=1e2, vmax=5e5))
     #obs.plot_cores_error(ax=ax, mov_average=0, log_average=50, show_errors=False, correction=True, color="black", linestyle="--", label="DDPM")
     
     #obs.load(suffix="_cinn")

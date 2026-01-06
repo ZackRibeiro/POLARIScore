@@ -4,9 +4,6 @@ import ast
 import os
 from POLARIScore.config import EXPORT_FOLDER, LOGGER
 
-from POLARIScore.objects.Dataset import Dataset
-
-
 import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--arch", required=False, default="UNet", help="Network architecture (default: 'UNet')")
