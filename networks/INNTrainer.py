@@ -1,6 +1,6 @@
 from .Trainer import Trainer, load_trainer
 import torch
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim.lr_scheduler import StepLR
 import math
 from POLARIScore.networks.architectures.nn_cINN import cINN
 import torch.nn as nn
@@ -67,6 +67,8 @@ if __name__ == "__main__":
     from POLARIScore.config import DATA_NORMALIZATION_CDENS, DATA_NORMALIZATION_VDENS, DATA_NORMALIZATION_CDENS_TORCH, DATA_NORMALIZATION_VDENS_TORCH
     #ds1 = getDataset("batch_training")
     #ds2 = getDataset("batch_validation")
+    ds = getDataset("batch_highres_2")
+    ds1, ds2 = ds.split(0.7)
 
     def classic_log_mse(output, target):
         output_phys = DATA_NORMALIZATION_VDENS_TORCH[1](output)
@@ -77,44 +79,42 @@ if __name__ == "__main__":
         return mse
 
 
-    #trainer = INNTrainer(cINN, ds1, ds2, model_name="cINN_5")
-    trainer = load_trainer("cINN_3", trainer_class=INNTrainer)
+    #trainer = INNTrainer(cINN, ds1, ds2, model_name="Fixed_cINN")
+    trainer = load_trainer("cINN", trainer_class=INNTrainer)
     trainer.norms = {
         "cdens": DATA_NORMALIZATION_CDENS,
         "vdens": DATA_NORMALIZATION_VDENS,
     }
-    ds = getDataset("batch_highres_2")
-    ds1, ds2 = ds.split(0.8)
-    trainer.validation_set = ds2
-    trainer.get_validation_error()
+    #ds = getDataset("batch_highres_2")
+    #ds1, ds2 = ds.split(0.7)
+    #trainer.validation_set = ds2
+    #trainer.get_validation_error()
 
-    """
-    #trainer.ema = True
+    trainer.ema = True
     trainer.validation_loss_method = classic_log_mse
-    #trainer.ema_warmup = 200
+    trainer.ema_warmup = 100
     trainer.learning_rate = 1e-3
     trainer.training_set = ds1
     trainer.validation_set = ds2
-    trainer.network_settings["img_dim"] = 128
-    trainer.network_settings["base_filters"] = 64
-    trainer.network_settings["num_layers"] = 3
-    trainer.network_settings["coupling_block_per_layer"] = 3
+    #trainer.network_settings["img_dim"] = 128
+    #trainer.network_settings["base_filters"] = 48
+    #trainer.network_settings["num_layers"] = 4
+    #trainer.network_settings["coupling_block_per_layer"] = 3
     trainer.training_random_transform = True
     trainer.optimizer_name = "Adam"
     trainer.target_names = ["vdens"]
     trainer.input_names = ["cdens"]
-    trainer.auto_save = 250
-    trainer.scheduler = ReduceLROnPlateau(trainer.optimizer, 'min', patience=10, factor=0.1, threshold=0.0001)
+    trainer.auto_save = 500
+    trainer.scheduler = None#StepLR(trainer.optimizer, 250, 0.1)
     #trainer.init()
 
     #unet_encoder = load_trainer("UNet").model.encoders
     #trainer.model.encoder.encoders = unet_encoder
 
-    trainer.train(1000,batch_number=8,compute_validation=10,early_stopping=False)
+    trainer.train(1500,batch_number=8,compute_validation=10,early_stopping=False)
     trainer.save()
     trainer.plot(save=True)
-    trainer.validation_set = ds1
     trainer.plot_validation(save=True, number=8, number_per_row=4)
+    trainer.get_validation_error()
 
     plt.show()
-    """

@@ -270,10 +270,10 @@ def plot_lines(x:Union[np.ndarray,List,None],y:Union[np.ndarray,List,None], ax, 
     """
     Plots lines on matplotlib plot. 
     """
-    x_max = np.max(x) if x_max is None else x_max
-    x_min = np.min(x) if x_min is None else x_min
-    y_max = np.max(y) if y_max is None else y_max
-    y_min = np.min(y) if y_min is None else y_min
+    x_max = ax.get_xlim()[1] if x_max is None else x_max
+    x_min = ax.get_xlim()[0] if x_min is None else x_min
+    y_max = ax.get_ylim()[1] if y_max is None else y_max
+    y_min = ax.get_ylim()[0] if y_min is None else y_min
     if not(lines is None):
         axisx_length = (x_max-x_min)
         axisy_length = (y_max-y_min)

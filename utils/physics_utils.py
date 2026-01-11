@@ -65,12 +65,14 @@ def CONVERT_massn_TO_n_coldens(N:Union[np.ndarray[float],float], L_d:Union[np.nd
     L_c = 2*r_c
     if is_density:
         n_d = L_d
-        n_c = n_d/2 * (1+np.sqrt(1-4*N/(L_c*n_d)*(1-n/n_d)))
+        with np.errstate(invalid='ignore'):
+            n_c = n_d/2 * (1+np.sqrt(1-4*N/(L_c*n_d)*(1-n/n_d)))
     elif is_column_density:
         alpha = N/N_d
         n_c=n*(alpha)/(alpha-1)
     else:
-        n_c = N/(L_c+L_d)*(1+np.sqrt(1-(L_d/L_c+1)*(1-(n*L_d)/(N))))
+        with np.errstate(invalid='ignore'):
+            n_c = N/(L_c+L_d)*(1+np.sqrt(1-(L_d/L_c+1)*(1-(n*L_d)/(N))))
 
     mask = np.isnan(n_c)
     if type(n) is list or type(n) is np.ndarray:

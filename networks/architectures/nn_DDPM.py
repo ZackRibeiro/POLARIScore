@@ -20,7 +20,7 @@ class ResConvBlock(nn.Module):
         self.norm1 = nn.GroupNorm(min(group_over, in_channels), in_channels)
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
 
-        self.dropout = nn.Dropout2d(p=0.01)
+        self.dropout = nn.Dropout2d(p=0.0)
 
         self.time_mlp = None
         if time_emb_dim is not None:
@@ -125,7 +125,7 @@ class SinusoidalTimeEmbedding(nn.Module):
 
 class DDPMUnet(BaseModule):
     """"""
-    def __init__(self, num_layers:int=4, base_filters:int=64, attention_layers:Optional[List[int]]=[3,4],time_emb_dim: int=256, filter_function="constant", init_method=nn.init.kaiming_uniform_):
+    def __init__(self, num_layers:int=4, base_filters:int=64, attention_layers:Optional[List[int]]=[3,4], attention_heads:Optional[List[int]]=None,time_emb_dim: int=256, filter_function="constant", init_method=nn.init.kaiming_uniform_):
         super(DDPMUnet, self).__init__()
 
         self.num_layers = num_layers
@@ -133,6 +133,9 @@ class DDPMUnet(BaseModule):
         self.out_channels = 1
         self.init_method = init_method
         self.attention_layers = attention_layers
+        self.attention_heads = attention_heads
+        if attention_layers is not None and attention_heads is not None:
+            assert len(self.attention_layers) == len(self.attention_heads), LOGGER.error("Attention heads given need to be the same length of attention_layers.")
         self.time_emb_dim = time_emb_dim
         self.filter_function = filter_function
 
@@ -181,7 +184,7 @@ class DDPMUnet(BaseModule):
                 ResConvBlock(out_ch, out_ch, time_emb_dim=time_emb_dim),
             )
             self.up_blocks.append(block)
-            self.up_attn.append(MHSAttentionBlock(out_ch) if (attention_layers and i in attention_layers) else nn.Identity())
+            self.up_attn.append(MHSAttentionBlock(out_ch, num_heads=self.attention_heads[self.attention_layers.index(i)-1] if self.attention_heads else 8) if (attention_layers and i in attention_layers) else nn.Identity())
     
         self.final_norm = nn.GroupNorm(8, filters[0]) if filters[0] % 8 == 0 else nn.GroupNorm(1, filters[0])
         self.final_act = nn.SiLU()

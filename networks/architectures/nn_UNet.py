@@ -33,7 +33,7 @@ class ConvBlock(nn.Module):
         return self.conv(x)
     
 class DoubleConvBlock(nn.Module):
-    def __init__(self, in_channels:int=1, out_channels:int=1, is3D:bool=False, init_method=init.kaiming_uniform_, dropout=0.05):
+    def __init__(self, in_channels:int=1, out_channels:int=1, is3D:bool=False, init_method=init.kaiming_uniform_, dropout=0.0):
         super(DoubleConvBlock, self).__init__()
         self.init_method = init_method
         c = nn.Conv2d

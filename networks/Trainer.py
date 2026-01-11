@@ -62,6 +62,8 @@ class Trainer():
         if model_name is None:
             self.model_name = str(uuid.uuid4())
 
+        self._has_target_in_train_output = False
+
         LOGGER.log(f"{self.device} is used for {self.model_name}")
         
         self.network_type:str = "None"
@@ -254,8 +256,8 @@ class Trainer():
                     t_input, t_target = _random_transform(t_input, t_target)
                 output = self._train_model(self.model,t_input,t_target)
                 target = t_target
-                #In some cases the train function can also returns the target (like in DDPMs where it returs the noise added).
-                if type(output) is tuple:
+                #In some cases the train function can also returns the target (like in DDPMs where it returns the noise added).
+                if self._has_target_in_train_output:
                     output, target = output
                 loss = 0
                 try:
@@ -267,7 +269,7 @@ class Trainer():
                         else:
                             loss += self.loss_method(output, target[tt])
                 if training_mode == "accumulation":
-                    loss = loss / min(minbatch_nbr, 1)
+                    loss = loss / max(minbatch_nbr, 1)
                 loss.backward()
                 if training_mode == "normal":
                     self.optimizer.step()
@@ -290,7 +292,7 @@ class Trainer():
             if self.scheduler is not None:
                 self.scheduler.step(epoch_loss)
             if training_mode == "normal":
-                epoch_loss /= min(minbatch_nbr,1)
+                epoch_loss /= max(minbatch_nbr,1)
             self.training_losses.append((total_epoch, epoch_loss))
             val_total_loss = None
             if compute_validation>0 and total_epoch % compute_validation == 0:
@@ -1150,38 +1152,30 @@ if __name__ == "__main__":
     ds = getDataset("batch_highres_2")
     ds1, ds2 = ds.split(0.7)
 
-    """
-    #trainer = Trainer(UNet, ds1, ds2, model_name="General_UNet_6")
-    #trainer = load_trainer("General_UNet")
+    #trainer = Trainer(UNet, ds1, ds2, model_name="UNet")
+    trainer = load_trainer("UNet")
     #trainer.norms = {
     #    "cdens": DATA_NORMALIZATION_CDENS,
     #    "vdens": DATA_NORMALIZATION_VDENS,
     #}
+    trainer.validation_loss_method = nn.MSELoss()
+    trainer.learning_rate = 1e-4
     trainer.training_set = ds1
     trainer.validation_set = ds2
-    #trainer.network_settings["base_filters"] = 48
-    #trainer.network_settings["num_layers"] = 6
+    #trainer.network_settings["base_filters"] = 64
+    #trainer.network_settings["num_layers"] = 5
     #trainer.network_settings["convBlock"] = ResConvBlock
     trainer.training_random_transform = True
     trainer.optimizer_name = "Adam"
     trainer.target_names = ["vdens"]
     trainer.input_names = ["cdens"]
     #trainer.init()
-    #trainer.train(1000,batch_number=16,compute_validation=10,early_stopping=False)
-    #trainer.save()
+    trainer.train(10000,batch_number=16,compute_validation=10,early_stopping=False, training_mode="normal")
+    trainer.save()
     trainer.plot(save=True)
     trainer.plot_validation(save=True)
+    trainer.get_validation_error()
     #plot_models_accuracy([load_trainer("UneK"),load_trainer("UNet")], sigmas=(0,1,20), bins=[0,2,4,8], use_linestyles=True) 
-    """
-
-    trainer_gen = load_trainer("General_UNet")
-    trainer_gen.validation_set = ds2
-    trainer = load_trainer("UNet")
-    trainer.validation_set = ds2
-    fig, _ = plot_models_accuracy([trainer, trainer_gen], use_linestyles=True)
-    fig.set_size_inches(5, 5)
-    fig, _, _ = plot_models_residuals([trainer, trainer_gen])
-    fig.set_size_inches(5,5) 
 
 
     """

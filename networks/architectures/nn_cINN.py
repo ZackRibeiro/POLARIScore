@@ -103,7 +103,7 @@ class _SubNetwork(nn.Module):
             nn.Conv2d(hidden_features, 2*split_dim, 3, padding=1),
         )
 
-        nn.init.xavier_uniform_(self.nn[-0].weight)
+        nn.init.xavier_uniform_(self.nn[0].weight)
         nn.init.constant_(self.nn[0].bias, 0.)
         nn.init.xavier_uniform_(self.nn[-4].weight)
         nn.init.constant_(self.nn[-4].bias, 0.)
@@ -123,6 +123,41 @@ class _SubNetwork(nn.Module):
         x = self.nn(x)
         s, t = x.chunk(2, dim=1)
         s = 2.*self.alpha_s/torch.pi * torch.arctan(s/self.alpha_s)
+        return s, t
+    
+class _FixedSubNetwork(nn.Module):
+    def __init__(self, split_dim, cond_dim):
+        super().__init__()
+        hidden_features = 128
+        self.nn = nn.Sequential(
+            nn.Conv2d(split_dim+cond_dim, hidden_features, 3, padding=1),
+            #nn.GroupNorm(hidden_features),
+            nn.ReLU(),
+            nn.Conv2d(hidden_features, hidden_features, 3, padding=1),
+            nn.ReLU(),
+            nn.GroupNorm(int(hidden_features/4),hidden_features),
+            nn.Conv2d(hidden_features, 2*split_dim, 3, padding=1),
+        )
+
+        nn.init.xavier_uniform_(self.nn[0].weight)
+        nn.init.constant_(self.nn[0].bias, 0.)
+        nn.init.xavier_uniform_(self.nn[-4].weight)
+        nn.init.constant_(self.nn[-4].bias, 0.)
+        nn.init.zeros_(self.nn[-1].weight)
+        nn.init.zeros_(self.nn[-1].bias)
+
+        self.register_buffer("alpha_s", torch.tensor(0.01))
+
+    def forward(self, x):
+        """
+        Args:
+            x: tensor shape: (B, split_dim+cond_dim,H,W)
+        Returns:
+            s, t each of shape (B,2.*split_dim,H,W)
+        """
+        x = self.nn(x)
+        s, t = x.chunk(2, dim=1)
+        s = self.alpha_s * torch.tanh(s)
         return s, t
 
 class ConditionalCouplingLayer(nn.Module):

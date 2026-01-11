@@ -75,7 +75,7 @@
     We aim to provide a full benchmark of these architectures, highlighting their advantages and limitations in this physical context.} 
   % methods heading (mandatory)
    {We use synthetic datasets generated from magnetohydrodynamic simulations from which column and average volume density maps were derived.
-   These datasets allows the training of different neural networks: a CNN (UNet) and three conditioned generative ones: cINNs, DDPMs and Flow Matching.
+   These datasets allows the training of different neural networks: a CNN (UNet) and two conditioned generative ones: cINNs and DDPMs.
    We apply differents numericals and physicals metrics to test the robustness, confidence and limitations of each method.
    }
   % results heading (mandatory)
@@ -193,11 +193,9 @@
    Afterward, the prediction loss is computed using the chosen loss method, and backward error propagation is performed. Then, a new epoch begins, repeating the same steps.
 
 \subsection{Machine learning}
-   In this benchmark, we explore four different neural network architectures.
+   In this benchmark, we explore three different neural network architectures.
    We start with a robust and widely used model for image-to-image regression tasks, the UNet \citep{ronnebergerUNetConvolutionalNetworks2015,oktayAttentionUNetLearning2018}.
-   We then test more recent state-of-the-art conditioned generative approaches, namely Conditional Invertible Neural Networks (cINNs) \citep{ardizzoneConditionalInvertibleNeural2021},
-   Diffusion Models \citep{hoDenoisingDiffusionProbabilistic2020},
-   and latest Flow-Matching models \citep{lipmanFlowMatchingGenerative2023}.
+   We then test more recent state-of-the-art conditioned generative approaches, namely Conditional Invertible Neural Networks (cINNs) \citep{ardizzoneConditionalInvertibleNeural2021} and Diffusion Models \citep{hoDenoisingDiffusionProbabilistic2020}.   
    
    We do not include Generative Adversarial Networks (GANs) \citep{goodfellowGenerativeAdversarialNetworks2014} in this work mainly because they are known to suffer from mode collapse \citep{kossaleModeCollapseGenerative2022}.   
    \subsubsection{Convolutional Neural Network}
@@ -355,18 +353,6 @@
       \textbf{Some words on architecture with figure (Encoder, Noise scheduling)}
 
       \cite{salimansProgressiveDistillationFast2022}
-
-   \subsubsection{Flow matching}
-
-      \begin{equation}
-         \label{eq_flow}
-         \left\{
-         \begin{aligned}
-            \frac{d}{dt}\varphi_t(x_0) &= u_t(\varphi_t(x_0)), \\
-            \varphi_0(x_0) &= x_0,
-         \end{aligned}
-         \right.
-      \end{equation}
 
 \subsection{Application}
 \section{Results}

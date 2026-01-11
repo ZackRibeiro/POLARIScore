@@ -30,6 +30,8 @@ class DDPTrainer(Trainer):
         self.loss_method = self.mse_loss
         self.validation_loss_method = nn.MSELoss()
 
+        self._has_target_in_train_output = True
+
     def _modify_saved_settings(self, settings):
         settings = super()._modify_saved_settings(settings)
         settings["ddpm_timesteps"] = self.timesteps
@@ -138,7 +140,7 @@ class DDPTrainer(Trainer):
             input = input[0]
                 
         B, C, H, W = input.shape
-        eta = 0.5
+        eta = .5
         seq = range(0, self.timesteps, 20)
 
         if seq is None:
@@ -201,8 +203,8 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
     from POLARIScore.objects.Dataset import getDataset
     from POLARIScore.config import DATA_NORMALIZATION_CDENS, DATA_NORMALIZATION_VDENS, DATA_NORMALIZATION_CDENS_TORCH, DATA_NORMALIZATION_VDENS_TORCH
-    ds1 = getDataset("batch_training")
-    ds2 = getDataset("batch_validation")
+    ds1 = getDataset("batch_highres_2_b1")
+    ds2 = getDataset("batch_highres_2_b2")
 
     #ds = getDataset("batch_highres_2")
     #ds2, _ = ds2.split(0.5)
@@ -216,9 +218,9 @@ if __name__ == "__main__":
         return mse
 
 
-    trainer = DDPTrainer(DDPMUnet, ds1, ds2, model_name="DDPM", timesteps=1000, beta_schedule='quadratic')
-    #trainer = load_trainer("BigDDPM", trainer_class=DDPTrainer)
-    trainer.pred_type = "epsilon"
+    #trainer = DDPTrainer(DDPMUnet, ds1, ds2, model_name="DDPM3", timesteps=500, beta_schedule='cosine')
+    trainer = load_trainer("DDPM3", trainer_class=DDPTrainer)
+    trainer.pred_type = "v"
     trainer.norms = { 
         "cdens": DATA_NORMALIZATION_CDENS,
         "vdens": DATA_NORMALIZATION_VDENS,
@@ -232,17 +234,19 @@ if __name__ == "__main__":
     trainer.learning_rate = 1e-4
     trainer.training_set = ds1
     trainer.validation_set = ds2
-    trainer.network_settings["base_filters"] = 64
+    trainer.network_settings["base_filters"] = 32
     trainer.network_settings["num_layers"] = 3
+    trainer.network_settings["attention_layers"] = [2]
+    trainer.network_settings["attention_heads"] = [8]
     #trainer.network_settings["filter_function"] = "linear"
     trainer.training_random_transform = True
     trainer.optimizer_name = "Adam"
     trainer.target_names = ["vdens"]
     trainer.input_names = ["cdens"]
-    trainer.auto_save = 500
+    trainer.auto_save = 5000
     trainer.scheduler = None
-    trainer.init()
-    trainer.train(1000,batch_number=8,compute_validation=100,early_stopping=False)
+    #trainer.init()
+    trainer.train(10000,batch_number=8,compute_validation=100,early_stopping=False)
     trainer.save()
     trainer.get_validation_error()
 
