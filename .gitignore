@@ -15,6 +15,8 @@ voldens5.py
 
 data/
 
+*:Zone.Identifier
+
 aa.bst
 aa.cls
 biblio.bib 

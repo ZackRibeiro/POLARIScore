@@ -16,45 +16,45 @@ Warning--empty journal in rezendeVariationalInferenceNormalizing2016
 Warning--empty journal in ronnebergerUNetConvolutionalNetworks2015
 Warning--empty journal in salimansProgressiveDistillationFast2022
 Warning--empty journal in yangImageDataAugmentation2023
-You've used 20 entries,
+You've used 22 entries,
             3039 wiz_defined-function locations,
-            790 strings with 10048 characters,
-and the built_in function-call counts, 10856 in all, are:
-= -- 889
-> -- 1016
+            804 strings with 11366 characters,
+and the built_in function-call counts, 14266 in all, are:
+= -- 1099
+> -- 1571
 < -- 9
-+ -- 340
-- -- 318
-* -- 939
-:= -- 2012
-add.period$ -- 20
-call.type$ -- 20
-change.case$ -- 199
-chr.to.int$ -- 20
-cite$ -- 32
-duplicate$ -- 400
-empty$ -- 505
-format.name$ -- 381
-if$ -- 2095
++ -- 527
+- -- 501
+* -- 1321
+:= -- 2667
+add.period$ -- 22
+call.type$ -- 22
+change.case$ -- 255
+chr.to.int$ -- 22
+cite$ -- 34
+duplicate$ -- 424
+empty$ -- 566
+format.name$ -- 569
+if$ -- 2743
 int.to.chr$ -- 1
 int.to.str$ -- 1
-missing$ -- 19
-newline$ -- 64
-num.names$ -- 80
-pop$ -- 218
+missing$ -- 21
+newline$ -- 70
+num.names$ -- 88
+pop$ -- 292
 preamble$ -- 1
-purify$ -- 186
+purify$ -- 255
 quote$ -- 0
-skip$ -- 292
+skip$ -- 316
 stack$ -- 0
-substring$ -- 340
-swap$ -- 4
+substring$ -- 361
+swap$ -- 12
 text.length$ -- 0
 text.prefix$ -- 0
 top$ -- 0
-type$ -- 180
+type$ -- 198
 warning$ -- 12
-while$ -- 70
+while$ -- 78
 width$ -- 0
-write$ -- 193
+write$ -- 208
 (There were 12 warnings)

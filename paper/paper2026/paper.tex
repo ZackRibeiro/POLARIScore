@@ -355,6 +355,30 @@
       \cite{salimansProgressiveDistillationFast2022}
 
 \subsection{Application}
+   The trained neural networks are applied to Orion~B, a giant molecular cloud located at a distance of approximately $400\,\mathrm{pc}$ \citep{mentenDistanceOrionNebula2007}. 
+   Herschel observations \citep{konyvesPropertiesDenseCore2020,andreFilamentaryCloudsPrestellar2010} reveal a fragmented filamentary structure, with star formation primarily concentrated in dense clumps.
+
+   The networks are applied to the column density map derived from dust emission. Prestellar cores are identified using multiwavelength source extraction and spectral energy distribution (SED) fitting of the dust emission, and are taken from the catalogue of \citet{konyvesPropertiesDenseCore2020}.
+
+   Because the neural networks are trained on regions with a physical size of $3.3\,\mathrm{pc}$, the column density map is downsampled by a factor of 4.4 to match the spatial resolution of the training dataset. The observation is then divided into overlapping patches of $128 \times 128$ pixels, each of which is provided independently as input to the neural network.
+
+   The patches are allowed to overlap in order to provide multiple contextual environments for each position in the map and to reduce edge effects inherent to convolutional architectures. The final prediction at each pixel is obtained by averaging the outputs from all overlapping patches covering that pixel.
+
+   In addition, we apply a parametric fit of the form
+   \begin{equation}
+   f(x) = \sum_{i=1}^{4} a_i \exp\left( -\frac{(x - \mu_i)^2}{2\sigma_i^2} \right),
+   \end{equation}
+   derived from simulations, to model the conditional distribution $\nmh(\Nh)$ (see Fig.~\ref{fig_sim_correlation}).
+
+   \begin{figure}[!ht]
+      \centering
+      \includegraphics[width=\linewidth]{figures/fig_sim_correlation.eps}
+      \caption{Gaussian-mixture fit of the simulation correlation between $\nmh$ and $\Nh$ (bottom left). 
+      The top and right panels show the cumulative probability distributions of $\nmh$ and $\Nh$, respectively.
+      The top-right panel displays the individual Gaussian components (green) and their sum (red).}
+      \label{fig_sim_correlation}
+   \end{figure}
+
 \section{Results}
 \subsection{Benchmark on simulation data}
    Errors evaluated on the validation data (subset of the simulation):
