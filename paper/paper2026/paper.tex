@@ -102,12 +102,12 @@
    In this work, because our goal is to study dense structures in molecular clouds, such as prestellar cores, 
    we choose to estimate, using neural networks, the mass-weighted average volume density along the line of sight:
    \begin{equation}
-    \label{eq_mw_density}
+    \label{eq:mw_density}
       \nmh(x,y)=\frac{\int_{0}^{L}n_H(x,y,z)m(x,y,z)dz}{\int_{0}^{L}m(x,y,z)dz},
    \end{equation}
    from the column density map derived from dust emission:
    \begin{equation}
-      \label{eq_column_density}
+      \label{eq:column_density}
       \Nh(x,y)=\int_{0}^{L}n_H(x,y,z)dz,
    \end{equation}
    where $x$ and $y$ are the plane-of-sky positions, $z$ is the position in line of sight axis, $L$ the cloud length, $\nh$ the hydrogen volume density, $m(x,y,z)=\nh(x,y,z)\mu m_\text{H}$.
@@ -129,42 +129,42 @@
    \textbf{talk about properties of the cloud Orion B}
 
    These datasets are created using magnetohydrodynamical (MHD) simulations of a star-forming molecular cloud: 
-   \textit{ORION} \citep{ntormousiCoreStellarMass2019}, publicly available through the GALACTICA\footnote{\url{http://www.galactica-simulations.eu/db/STAR_FORM/ORION/}} database and shown in Figure \ref{fig_sim_coldens}. 
+   \textit{ORION} \citep{ntormousiCoreStellarMass2019}, publicly available through the GALACTICA\footnote{\url{http://www.galactica-simulations.eu/db/STAR_FORM/ORION/}} database and shown in Figure \ref{fig:sim_coldens}. 
    \\These simulations are isothermals, model MHD turbulence and have a size of 66.1 pc with an initial resolution of 0.01 pc, reaching a few hundred AU using
    an AMR grid. The simulations were performed using RAMSES \citep{teyssierCosmologicalHydrodynamicsAdaptive2002}, with self-gravity applied, star-formation
    treated using Lagrangian sink particles and ideal MHD resolved and no chemistry.
 
    \begin{figure}[ht!]
     \centering
-     \includegraphics[width=\linewidth]{figures/fig_sim_coldens.eps}
+     \includegraphics[width=\columnwidth]{figures/fig_sim_coldens.eps}
      \caption{
       Column densities for 3 axes of the same molecular cloud from the low magnetic field ORION simulation. \citep{ntormousiCoreStellarMass2019}
      }
-    \label{fig_sim_coldens}
+    \label{fig:sim_coldens}
    \end{figure}
 
    \begin{figure}[ht!]
     \centering
-     \includegraphics[width=\linewidth]{figures/fig_sim_voldens.eps}
+     \includegraphics[width=\columnwidth]{figures/fig_sim_voldens.eps}
      \caption{
       Mass-weighted average volume densities for 3 axes of the same molecular cloud from the low magnetic field ORION simulation. \citep{ntormousiCoreStellarMass2019}
      }
-    \label{fig_sim_voldens}
+    \label{fig:sim_voldens}
    \end{figure}
 
    To facilitate data manipulation, we use a $1024^3$ density cube with a width of $25.8$pc, centered at the simulation's midpoint,
    with a resolution of $0.026$pc per pixel. To increase the amount of training data, projections along the three axes are used.
-   In other words, we generate three column density images by summing the densities along different axes as shown in Figure \ref{fig_sim_coldens}.
+   In other words, we generate three column density images by summing the densities along different axes as shown in Figure \ref{fig:sim_coldens}.
    \\ Then, images with a resolution of $128\times128$ pixels and a physical size of $3.33$pc are randomly cropped from the three faces.
    An imge is retained in the dataset if it meets several conditions:
    \begin{itemize}
       \item It is spatially distant enough from an already explored region, meaning it does not overlap with an area covered by an existing image.
       \item It does not contain a disproportionately large fraction of very low-density regions, i.e, the edges of the simulation (WNM).
-      \item It exhibits significant density variations within the explored regions. A score is based on the smoothness of the image using Laplacian of the density, favoring regions with filaments over those with nearly homogeneous density. (See Appendix~\ref{appendix_score}) 
+      \item It exhibits significant density variations within the explored regions. A score is based on the smoothness of the image using Laplacian of the density, favoring regions with filaments over those with nearly homogeneous density. (See Appendix~\ref{appendix:score}) 
    \end{itemize}  
    
    The generated dataset is then randomly shuffled and split between training set (70\%-80\%) and validation set (30\%-20\%). 
-   For example, using only the simulation shown in Figure \ref{fig_sim_coldens}, 
+   For example, using only the simulation shown in Figure \ref{fig:sim_coldens}, 
    we obtain a total of $\approx100$ covered regions, each represented by a pair of images: (column density, volume density)
 
 \subsection{Training}
@@ -207,21 +207,21 @@
       
       Mathematically, for a 2D input $X$ (e.g a column density region), the convolution operation with a filter $W$ is given by:
       \begin{equation}
-         \label{eq_convolution}
+         \label{eq:convolution}
          Y_{i,j}=f(\sum_{m=1}^{M}\sum_{n=1}^{N}W_{m,n}\cdot X_{i+m,j+n}+b),
       \end{equation} 
       where $W$ is the learnable convolutional kernel, $X$ is the input feature map, $Y$ is the output feature map, $f$ is a nonlinear activation function such as $\text{ReLU}$, $b$ is the learnable bias term.
       
-      In this work, we are using an Attention-U-Net (\cite{ronnebergerUNetConvolutionalNetworks2015},\cite{oktayAttentionUNetLearning2018}) architecture, shown in Figure~\ref{fig_unet}.
-      It features a symmetric encoder-decoder structure where the encoder captures high-level features of the column density map through convolution (Eq~\ref{eq_convolution}) and max pooling operations, while the decoder gradually reconstructs the mass-weighted density map using upsampling layers.
+      In this work, we are using an Attention-U-Net (\cite{ronnebergerUNetConvolutionalNetworks2015},\cite{oktayAttentionUNetLearning2018}) architecture, shown in Figure~\ref{fig:unet}.
+      It features a symmetric encoder-decoder structure where the encoder captures high-level features of the column density map through convolution (Eq~\ref{eq:convolution}) and max pooling operations, while the decoder gradually reconstructs the mass-weighted density map using upsampling layers.
       \\A key feature of U-Net is its \textit{skip connections}, which allow direct information flow between corresponding encoder and decoder layers, preserving spatial details lost during downsampling.
       \textbf{small sentence on Attention blocks ?}
       \begin{figure}[!ht]
          \centering
-         \includegraphics[width=\linewidth]{figures/unet_architecture.jpg}
+         \includegraphics[width=\columnwidth]{figures/unet_architecture.jpg}
          \caption{U-Net architecture \citep{ronnebergerUNetConvolutionalNetworks2015}. Each bluebox corresponds to a convolutionnal block.
          The number of channels is denoted on top of the box. The x-y-size is provided at the right or left edge of the box.}
-         \label{fig_unet}
+         \label{fig:unet}
       \end{figure}
 
    \subsubsection{Conditional Invertible Neural Network}
@@ -270,7 +270,7 @@
       Let the input of a coupling block be split (in features channels) as $u\rightleftarrows (u_1,u_2)$, and the output be $v\rightleftarrows (v_1,v_2)$.
       A typical forward transformation of a CCB is:
       \begin{equation}
-         \label{eq_cinn_ccbs_forward}
+         \label{eq:cinn_ccbs_forward}
          \left\{
          \begin{aligned}
             v_1 &= u_1\odot\exp (s_1(u_2,c))+t_1(u_2,c), \\
@@ -280,9 +280,9 @@
       \end{equation}
       where $s_i$, $t_i$ are scale and translation functions implemented by sub-networks (e.g MLPs). 
       These sub-networks do not need to be invertible because they are only evaluated in the forward pass; the coupling block itself remains analytically invertible.
-      The inverse transformation is obtained by algebraic rearrangement of Equation~\ref{eq_cinn_ccbs_forward}:
+      The inverse transformation is obtained by algebraic rearrangement of Equation~\ref{eq:cinn_ccbs_forward}:
       \begin{equation}
-         \label{eq_cinn_ccbs_reverse}
+         \label{eq:cinn_ccbs_reverse}
          \left\{
          \begin{aligned}
             u_2 &= (v_2-t_2(v_1))\odot\exp (-s_2(v_1)) \\
@@ -307,7 +307,7 @@
 
       The forward diffusion process progressively destroys structure by adding Gaussian noise with a predefined variance schedule $\beta_t$. In the continous-time limit, this process is described by the stochastic differential equation (Itô SDE):
       \begin{equation}
-         \label{eq_ddpm_sde}
+         \label{eq:ddpm_sde}
          dx=f(x,t)dt+g(t)dW_t=-\frac{1}{2}\beta(t) x_t dt+\sqrt{\beta(t)} dW_t,      
       \end{equation} 
       where $W_t$ is a Wiener process. 
@@ -322,7 +322,7 @@
 
       To generate data, DDPMs simulate the reverse-time SDE:
       \begin{equation}
-         \label{eq_ddpm_sde_reverse}
+         \label{eq:ddpm_sde_reverse}
          dx= [f(x,t)-g(t)^2\nabla_{x_t}\log p_t(x_t)]dt+g(t)d\overline{W_t},
       \end{equation}
       where $\overline{W_t}$ is a Wiener process running backward in time.
@@ -366,22 +366,56 @@
 
    In addition, we apply a parametric fit of the form
    \begin{equation}
-   f(x) = \sum_{i=1}^{4} a_i \exp\left( -\frac{(x - \mu_i)^2}{2\sigma_i^2} \right),
+      \label{eq:gaussian_fit}
+      f(x) = \sum_{i=1}^{4} a_i \exp\left( -\frac{(x - \mu_i)^2}{2\sigma_i^2} \right),
    \end{equation}
-   derived from simulations, to model the conditional distribution $\nmh(\Nh)$ (see Fig.~\ref{fig_sim_correlation}).
+   derived from simulations, to model the conditional distribution $\nmh(\Nh)$ (see Fig.~\ref{fig:sim_correlation}).
 
    \begin{figure}[!ht]
       \centering
-      \includegraphics[width=\linewidth]{figures/fig_sim_correlation.eps}
+      \includegraphics[width=\columnwidth]{figures/fig_sim_correlation.eps}
       \caption{Gaussian-mixture fit of the simulation correlation between $\nmh$ and $\Nh$ (bottom left). 
       The top and right panels show the cumulative probability distributions of $\nmh$ and $\Nh$, respectively.
       The top-right panel displays the individual Gaussian components (green) and their sum (red).}
-      \label{fig_sim_correlation}
+      \label{fig:sim_correlation}
    \end{figure}
 
 \section{Results}
 \subsection{Benchmark on simulation data}
-   Errors evaluated on the validation data (subset of the simulation):
+   In this section, we focus on the metrics evaluated using predictions on the validation set, which is a subset of the training data generated with the ORION simulation \cite{ntormousiCoreStellarMass2019}. 
+   Several representative predicted regions are shown in Fig.~\ref{fig:nn_valset_predictions}.
+   \subsubsection{General metrics}
+   During the training of all neural networks, we use the mean squared error (MSE) computed in logarithmic space to monitor the generalization performance of the models. 
+   Specifically, the MSE loss is evaluated on the validation set and is defined as
+   \begin{equation}
+      \label{eq:nn_mse}
+      \mathrm{MSE} = \mathbb{E}\left[ \left( \log Y_{\mathrm{pred}} - \log Y_{\mathrm{sim}} \right)^2 \right],
+   \end{equation}
+   where $Y_{\mathrm{pred}}$ and $Y_{\mathrm{sim}}$ denote the predicted and simulated (true) mass-weighted average volume-density maps, respectively.
+
+   If one considers only the MSE values reported in Table~\ref{tab:nn_metrics}, UNet ($0.19$) and DDPM ($0.25$) appear to be the most performant models, ahead of the cINN ($0.50$). 
+   However, the MSE is an average over all regions and environments and therefore does not fully capture the ability of a network to adapt to different physical conditions. 
+   In particular, because of its averaging nature, a model may achieve a low MSE by performing well in diffuse background regions while still exhibiting significant errors in filamentary structures, whose spatial filling factor is much smaller than that of the cold neutral medium (CNM).
+
+   We also measure the accuracy which is the fraction of pixels with an absolute error below a given threshold (e.g., 90\% of pixels within 0.5dex (in logspace)):
+   \begin{equation}
+      \label{eq:accuracy}
+      \text{Acc}=\aver{\text{Acc}_i}_\text{batch}=\frac{1}{B}\sum_{i}^{B}\frac{N\left(|Y_{\text{pred};i,j}-Y_{\text{sim};i,j}|<\sigma\right)}{N_\text{pixels}}
+   \end{equation}
+   Figure \ref{fig:accuracy_metric}
+   \begin{figure}[!ht]
+      \centering
+      \includegraphics[width=\columnwidth]{figures/Benchmark_OrionB/accuracy.jpg}
+      \caption{}
+      \label{fig:accuracy_metric}
+   \end{figure}
+
+   To diagnose whether the network underestimates high densities or low densities, and on which density interval the network works well, 
+   we plot the residuals curves. Note that the means of the residuals bins are moved to 0 by using post-prediction correction when we apply the model to observations (see Appendix~\ref{appendix:valerror}).
+   What it shows...
+
+
+
    \begin{itemize}
    \item \textbf{Mean Squared Error (MSE):} Standard regression metric.
    \item \textbf{Spatial error maps:} Residual maps used to assess whether errors are spatially random or, for example, systematically higher in filamentary regions, indicating difficulty in predicting filaments.
@@ -389,11 +423,27 @@
    \item \textbf{Residual curves:} Used to diagnose whether the network underestimates high densities or low densities.
    \item \textbf{Inference time:} Number of predictions per second, i.e., whether a full observation can be processed in minutes or hours.
    \item \textbf{Model complexity:} Number of trainable parameters, allowing us to compare architectures with similar capacity.
-   \item \textbf{Robustness to training-set variations:} Sensitivity of model performance to changes in the composition of the training set (see end of Appendix~\ref{appendix_score}).
+   \item \textbf{Robustness to training-set variations:} Sensitivity of model performance to changes in the composition of the training set (see end of Appendix~\ref{appendix:score}).
    \item \textbf{Required training-set size:} For example, UNet reaches good performance with relatively few regions, whereas cINNs typically require larger datasets.
    \item \textbf{Training stability:} For instance, UNet can be trained reliably under a wide range of settings, while cINNs require more careful choices of training parameters for stable optimization.
    \end{itemize}
 \subsection{Tests on Orion B}
+   \begin{figure*}[t]
+      \centering
+      \includegraphics[width=\textwidth]{figures/Benchmark_OrionB/region_0.jpg}
+      \caption{Neural network predictions on the NGC2068 and 2NGC071 regions.
+         Top row (left to right): the column-density map derived from dust emission, followed by the predictions of the three neural networks (UNet, cINN, and DDPM), and finally the estimate obtained from the Gaussian fit (Eq.~\ref{eq:gaussian_fit}).
+         Bottom row: an RGB composite image constructed from the three neural-network predictions (in the same order as above), followed by clipped logarithmic difference maps between the neural-network predictions.}
+      \label{fig:orionb_ngc2068}
+   \end{figure*}
+   \begin{figure*}[t]
+      \centering
+      \includegraphics[width=\textwidth]{figures/Benchmark_OrionB/region_1.jpg}
+      \caption{Neural network predictions on the Flame Nebula and The Cloak regions.
+         Top row (left to right): the column-density map derived from dust emission, followed by the predictions of the three neural networks (UNet, cINN, and DDPM), and finally the estimate obtained from the Gaussian fit (Eq.~\ref{eq:gaussian_fit}).
+         Bottom row: an RGB composite image constructed from the three neural-network predictions (in the same order as above), followed by clipped logarithmic difference maps between the neural-network predictions.}
+      \label{fig:orionb_ngc2024}
+   \end{figure*}
    \begin{itemize}
    \item \textbf{Density PDFs:} Comparison of the probability distribution functions of the predicted densities (but how ?).
    \item \textbf{Fractal dimension:} Using the relation $P = A^{D/2}$, where $P$ is the perimeter and $A$ the area, we test whether the structures follow a power-law scaling, implying a constant fractal dimension $D$ across spatial scales.
@@ -415,21 +465,21 @@
 
 \begin{appendix}
 \section{From mass-weighted averages to core densities}
-   \label{appendix_mw_correction}
+   \label{appendix:mw_correction}
 
    %Exprimer sous Nd et Ld, ecrire ce que vaut nd, changer Nh par 10^22 dans corrections, plot rapport inverse.
 
    In this work, the neural networks aim to predict the mass-weighted average volume density:
    \begin{equation}
-    \label{eq_mw_density_appendix}
+    \label{eq:mw_density_appendix}
       \nmh(x,y)=\frac{\int_{0}^{L}n_H(x,y,z)m(x,y,z)dz}{\int_{0}^{L}m(x,y,z)dz},
    \end{equation}
    where $x$ and $y$ are the plane-of-sky positions, $z$ is the position in line of sight axis, $L$ the cloud length, $\nh$ the hydrogen volume density, $m(x,y,z)=\nh(x,y,z)\mu m_H$. 
 
    If we discretize the density along the l.o.s into $M$ components with constant volume density in it
-    (e.g for a datacube simulation, $M$ corresponds to the number of cells), then Eq \ref{eq_mw_density_appendix} becomes 
+    (e.g for a datacube simulation, $M$ corresponds to the number of cells), then Eq \ref{eq:mw_density_appendix} becomes 
    \begin{equation}
-    \label{eq_mw_density_disc}
+    \label{eq:mw_density_disc}
      \nmh =\frac{\sum_{i=1}^{M}n^2_{\text{H},i}\times L_i\mu m_\text{H}}{\sum_{i=0}^{M}n_{\text{H},i}\times L_i\mu m_\text{H}}=
      \frac{\sum_{i=1}^{M}n^2_{\text{H},i}L_i}{\sum_{i=0}^{M}n_{\text{H},i}L_i},
    \end{equation}
@@ -444,22 +494,22 @@
     \item A diffuse medium with length $L_d$ and with constant density $n_d$.
     \item The dense core with length $L_c=2r_c$ where $r_c$ is the core radius, and with constant density $n_c$. 
    \end{itemize}
-   Equation \ref{eq_mw_density_disc} then reduces to
+   Equation \ref{eq:mw_density_disc} then reduces to
    \begin{equation}
-    \label{eq_mw_density_twomeds}
+    \label{eq:mw_density_twomeds}
      \nmh=
      \frac{n^2_{c}L_c+n^2_{d}L_d}{n_{c}L_c+n_{d}L_d},
    \end{equation}
    To estimate $n_c$, two parameters must be assumed: $n_d$ and $L_d$, while $L_c$ is derived from observations as two times the core radius.
    The column density: $\nh=n_{c}L_c+n_{d}L_d$ removes one degree of freedom, giving 
    \begin{equation}
-    \label{eq_mw_density_twomeds_ld}
+    \label{eq:mw_density_twomeds_ld}
      n_c=
      \Nh\left(\frac{1+\sqrt{1-(\frac{L_d}{L_c}+1)(1-\frac{\nmh L_d}{\Nh})}}{(L_c+L_d)}\right)
      ,\text{ if }L_d\text{ assumed.}
    \end{equation}
    \begin{equation}
-    \label{eq_mw_density_twomeds_nd}
+    \label{eq:mw_density_twomeds_nd}
      \text{or }n_c=
      \frac{n_d}{2}\left(1+\sqrt{1-\frac{4\Nh}{L_c n_d}(1-\frac{\nmh}{n_d})}\right)
      ,\text{ if }n_d\text{ assumed.}
@@ -469,7 +519,7 @@
 
    If one wants to assume specific values for $L_d$ and $n_d$:
    \begin{equation}
-    \label{eq_mw_density_twomeds_ndld}
+    \label{eq:mw_density_twomeds_ndld}
      n_c=
      \frac{\nmh}{2}\left(1+\sqrt{1+\frac{4L_d n_d}{L_c \nmh}(1-\frac{n_d}{\nmh})}\right)
    \end{equation}
@@ -478,30 +528,30 @@
     \centering
     \begin{subfigure}{0.48\columnwidth}
         \centering
-        \includegraphics[width=\linewidth]{figures/fig_mw_correction_ld.eps}
-        \caption{$L_d$ free (Eq.~\ref{eq_mw_density_twomeds_ld}).}
-        \label{fig_mw_correction_ld}
+        \includegraphics[width=\columnwidth]{figures/fig_mw_correction_ld.eps}
+        \caption{$L_d$ free (Eq.~\ref{eq:mw_density_twomeds_ld}).}
+        \label{fig:mw_correction_ld}
     \end{subfigure}
     \hfill
     \begin{subfigure}{0.48\columnwidth}
         \centering
-        \includegraphics[width=\linewidth]{figures/fig_mw_correction_nd.eps}
-        \caption{$n_d$ free (Eq.~\ref{eq_mw_density_twomeds_nd}).}
-        \label{fig_mw_correction_nd}
+        \includegraphics[width=\columnwidth]{figures/fig_mw_correction_nd.eps}
+        \caption{$n_d$ free (Eq.~\ref{eq:mw_density_twomeds_nd}).}
+        \label{fig:mw_correction_nd}
     \end{subfigure}
     
     \caption{Correction $\nmh\rightarrow n_c$ for different $\nmh$;
     the vertical axis shows the ratio $n_c/\nmh$.
     The used parameters are $r_c = 0.05\,\mathrm{pc}$ and $\Nh = 10^{22}\,\mathrm{cm}^{-2}$.
     }
-    \label{fig_mw_correction}
+    \label{fig:mw_correction}
    \end{figure}
 
-   Figure~\ref{fig_mw_correction} displays the functions $n_c(L_d)$ (left) and $n_c(n_d)$ (right) for various values of $\nmh$. 
+   Figure~\ref{fig:mw_correction} displays the functions $n_c(L_d)$ (left) and $n_c(n_d)$ (right) for various values of $\nmh$. 
    A notable feature is that $n_c$ rapidly converges toward an upper limit when $L_d$ becomes large or when $n_d$ is small.
    The limits are
    \begin{equation}
-    \label{eq_mw_density_twomeds_ld_lim}
+    \label{eq:mw_density_twomeds_ld_lim}
      \lim_{L_d\rightarrow+\infty}n_c
      =\lim_{n_d\rightarrow0}n_c
      =\sqrt{\frac{\nmh \Nh}{L_c}},
@@ -509,27 +559,28 @@
 
    \begin{figure}[ht!]
     \centering
-     \includegraphics[width=\linewidth]{figures/fig_mw_correction_diffkonyves.eps}
+     \includegraphics[width=\columnwidth]{figures/fig_mw_correction_diffkonyves.eps}
      \caption{
       Differences in log space between the catalog core densities and the neural-network-predicted densities as a function of column density.
       The cloud is Orion B, neural network is UNet, and the dense-core catalog is from \citet{konyvesPropertiesDenseCore2020}.
-      The thick black line shows the density difference using the correction (Eq.~\ref{eq_mw_density_twomeds_ld}: $L_d=10\mathrm{pc}$); the dotted black line shows the result without the correction.
+      The thick black line shows the density difference using the correction (Eq.~\ref{eq:mw_density_twomeds_ld}: $L_d=10\mathrm{pc}$); the dotted black line shows the result without the correction.
       The red horizontal line indicates zero difference, i.e., where the neural-network prediction matches the catalog density.
       }
-    \label{fig_mw_correction_diffkonyves}
+    \label{fig:mw_correction_diffkonyves}
    \end{figure}
 
-   We see in Figure \ref{fig_mw_correction_diffkonyves} that the correction indeed increases the dense-core density by an order of magnitude in diffuse regions, i.e., at low column densities.
+   We see in Figure \ref{fig:mw_correction_diffkonyves} that the correction indeed increases the dense-core density by an order of magnitude in diffuse regions, i.e., at low column densities.
    However, at high column densities, the two-medium approximation no longer holds, and therefore we can define an upper threshold,
    for example $3\times10^{22}\mathrm{cm}^{-2}$, above which the density correction should not be applied.
 
 \section{Validation error and bias}
+   \label{appendix:valerror}
    Residuals distributions; Correction of the bias; Residuals error propagation to metrics (MC);
 \section{U-Net architecture variations}
    \subsection{U-Net with Kolmogorov Arnold Networks}
    \subsection{Size and Context embedding in U-Net}
 \section{Score-based training set}
-   \label{appendix_score}
+   \label{appendix:score}
    Creating a training dataset is a crucial step in building an effective model. In the particular case of molecular clouds structures,
    we want to avoid overtraining on the borders of the simulation (WNM), as these regions contain less valuable information for our objective compared to the dense regions with filaments and cores.
    To achieve this, we implement an additional filtering step:
@@ -556,16 +607,16 @@
    \\ To ensure that each selected image contains both diffuse regions and some filaments, we use the variance of the smoothness as a criterion.
    The smoothness itself is defined as the Laplacian of the image, which highlights areas with sharp density changes (such as filaments).
    \begin{equation}
-      \label{eq_score_smoothness}
+      \label{eq:score_smoothness}
       s_\Delta(x)=\mathrm{Var}[\Delta(\mathrm{log}(1+x)-\mathrm{min}[\mathrm{log}(1+x)])],
    \end{equation}
-   where x is the pixel value. The variance in equation~\ref{eq_score_smoothness} is to get a mix of dense and high-density regions.
+   where x is the pixel value. The variance in equation~\ref{eq:score_smoothness} is to get a mix of dense and high-density regions.
    \paragraph{Difference score}
-   A basic criterion that can be chosen is the difference between the normalized column density and the normalized average volume density (Eq~\ref{eq_score_difference}).
+   A basic criterion that can be chosen is the difference between the normalized column density and the normalized average volume density (Eq~\ref{eq:score_difference}).
    This helps identify regions where the local density distribution differs significantly between the two representations.
    \\For example, when using mass-weighted average density, this criterion will highlight dense regions, since areas with high volume density but relatively lower column density indicate localized dense structures along the l.o.s.
    \begin{equation}
-      \label{eq_score_difference}
+      \label{eq:score_difference}
       s_{\mathrm{ref}}=\mathrm{Var}[\frac{\Nh-\mathrm{min}(\Nh)}{\mathrm{max}(\Nh)-\mathrm{min}(\Nh)}-\frac{\nmh-\mathrm{min}(\nmh)}{\mathrm{max}(\nmh)-\mathrm{min}(\nmh)}]
    \end{equation}
 
@@ -592,30 +643,30 @@
             \centering
             \begin{subfigure}{0.48\columnwidth}
                \centering
-               \includegraphics[width=\linewidth]{figures/fig_score_residuals.eps}
+               \includegraphics[width=\columnwidth]{figures/fig_score_residuals.eps}
                \caption{Residuals}
             \end{subfigure}
             \hfill
             \begin{subfigure}{0.48\columnwidth}
                \centering
-               \includegraphics[width=\linewidth]{figures/fig_score_accuracy.eps}
+               \includegraphics[width=\columnwidth]{figures/fig_score_accuracy.eps}
                \caption{Accuracy}
             \end{subfigure}
             
             \caption{}
-            \label{fig_score_metrics}
+            \label{fig:score_metrics}
          \end{figure}
 
          \begin{figure}[ht!]
             \centering
-            \includegraphics[width=\linewidth]{figures/fig_score_unet_diffkonyves.eps}
+            \includegraphics[width=\columnwidth]{figures/fig_score_unet_diffkonyves.eps}
             \caption{
                Differences in log space between the catalog core densities and the neural-network-predicted densities as a function of column density.
                Cloud is Orion B, model is UNet, and the dense-core catalog is from \citet{konyvesPropertiesDenseCore2020}.
                Thick black line: dataset without WNM; dotted black line: dataset with WNM.
                The red horizontal line indicates zero difference.
                }
-            \label{fig_score_unet_diffkonyves}
+            \label{fig:score_unet_diffkonyves}
          \end{figure}
       
       \paragraph{cINN}

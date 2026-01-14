@@ -1,15 +1,15 @@
 # Fdb version 4
-["bibtex paper"] 1768215490.82682 "paper.aux" "paper.bbl" "paper" 1768215492.14937 0
+["bibtex paper"] 1768397006.82114 "paper.aux" "paper.bbl" "paper" 1768397112.81287 0
   "./aa.bst" 1760088440 32103 296074362bd3e822c5209e1570c1d28f ""
   "./biblio.bib" 1768211788.47815 202237 4c931c401991583c24ebb471e548e981 ""
-  "paper.aux" 1768215491.92822 22916 fbe7774ac601d06890d6a58916869818 "pdflatex"
+  "paper.aux" 1768397112.54987 26395 f2c07ce6bd2c481376f50152400ed3e3 "pdflatex"
   (generated)
   "paper.bbl"
   "paper.blg"
   (rewritten before read)
-["pdflatex"] 1768215490.88474 "/home/zack/Documents/POLARIScore/paper/paper2026/paper.tex" "paper.pdf" "paper" 1768215492.14966 0
+["pdflatex"] 1768397111.38717 "/home/zack/Documents/POLARIScore/paper/paper2026/paper.tex" "paper.pdf" "paper" 1768397112.81321 0
   "/etc/texmf/web2c/texmf.cnf" 1742201012.88803 475 c0e671620eb5563b2130f56340a5fde8 ""
-  "/home/zack/Documents/POLARIScore/paper/paper2026/paper.tex" 1768215489.15724 39366 63841e0c326bbb3099f116c11bc5d89f ""
+  "/home/zack/Documents/POLARIScore/paper/paper2026/paper.tex" 1768397110.98827 43355 15c9f750b85cb13c7bb95e9de00f3362 ""
   "/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc" 1165713224 4850 80dc9bab7f31fb78a000ccfed0e27cab ""
   "/usr/share/texlive/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/jknappen/ec/ecrm1000.tfm" 1136768653 3584 adb004a0c8e7c46ee66cad73671f37b4 ""
@@ -55,6 +55,7 @@
   "/usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/txex.pfb" 1136849748 17531 c91f2d6943f51d7c46d6b7b9cedd50ba ""
   "/usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/txsy.pfb" 1136849748 20336 69267d8a81bca8b24c9b42694a4a28f9 ""
   "/usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/txsya.pfb" 1136849748 18865 ebb26de41fddbc82c044d680eec38cec ""
+  "/usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/txsyb.pfb" 1136849748 24244 ffc0312cbd155e940e16287bb7cbb16c ""
   "/usr/share/texlive/texmf-dist/fonts/type1/urw/helvetic/uhvb8a.pfb" 1136849748 35941 f27169cc74234d5bd5e4cca5abafaabb ""
   "/usr/share/texlive/texmf-dist/fonts/type1/urw/helvetic/uhvr8a.pfb" 1136849748 44648 23115b2a545ebfe2c526c3ca99db8b95 ""
   "/usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmb8a.pfb" 1136849748 44729 811d6c62865936705a31c797a1d5dada ""
@@ -168,6 +169,9 @@
   "/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map" 1742201034.89803 165012 f177baa1c39a3ebd62c3096a43521a0d ""
   "/var/lib/texmf/web2c/pdftex/pdflatex.fmt" 1763388005 6830979 a4f1f75ab054d6edc19f3a4b437db4d7 ""
   "aa.cls" 1760088440 65757 6b6580dfce58ecb7185e444b8c7f79b2 ""
+  "figures/Benchmark_OrionB/accuracy.jpg" 1768381252.00582 40429 1f5b9289efa585495b5a2e835a17cc23 ""
+  "figures/Benchmark_OrionB/region_0.jpg" 1768381252.03382 503216 6ddfd840cbcfabe38edd7e72a8f11aec ""
+  "figures/Benchmark_OrionB/region_1.jpg" 1768381252.03782 540660 553a8d22ddc927be77307548fe49eb53 ""
   "figures/fig_mw_correction_diffkonyves.eps" 1768206637.37121 27119 a8efacf9b5321ded5c7ff479eae0c289 ""
   "figures/fig_mw_correction_ld.eps" 1768206637.37121 28066 8c80b952dca250ff8aa1364f397b4ad1 ""
   "figures/fig_mw_correction_nd.eps" 1768206637.37184 32848 7d01542826c79f30d86be6a846ed0c3e ""
@@ -180,10 +184,10 @@
   "figures/unet_architecture.jpg" 1768206637.44247 247154 d0e632fc890598a7cb4b1f068631efec ""
   "lineno.sty" 1760088440 151723 f406be88dbdad6c97fb774bd975d0393 ""
   "linenoaa.sty" 1760088440 4221 64fc978f7ff26cff65f5a8f1adc2a33b ""
-  "paper.aux" 1768215491.92822 22916 fbe7774ac601d06890d6a58916869818 "pdflatex"
-  "paper.bbl" 1768215490.86223 4796 2f6c5f96c021a8b84c83482a4cce113a "bibtex paper"
-  "paper.out" 1768215491.94322 4343 f93473264e69347dc70afe863e19a9cf "pdflatex"
-  "paper.tex" 1768215489.15724 39366 63841e0c326bbb3099f116c11bc5d89f ""
+  "paper.aux" 1768397112.54987 26395 f2c07ce6bd2c481376f50152400ed3e3 "pdflatex"
+  "paper.bbl" 1768397006.85528 4796 2f6c5f96c021a8b84c83482a4cce113a "bibtex paper"
+  "paper.out" 1768397112.5612 4489 ee0721864c9dcb6b778c2b27b3901451 "pdflatex"
+  "paper.tex" 1768397110.98827 43355 15c9f750b85cb13c7bb95e9de00f3362 ""
   (generated)
   "paper.aux"
   "paper.log"

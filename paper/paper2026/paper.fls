@@ -316,6 +316,7 @@ INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/t1xss.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/t1xbss.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/t1xss.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/t1xr.tfm
+INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/t1xb.tfm
 INPUT /usr/share/texlive/texmf-dist/tex/latex/txfonts/t1txtt.fd
 INPUT /usr/share/texlive/texmf-dist/tex/latex/txfonts/t1txtt.fd
 INPUT /usr/share/texlive/texmf-dist/tex/latex/txfonts/t1txtt.fd
@@ -323,7 +324,6 @@ INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/t1xtt.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/t1xtt.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/t1xss.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/t1xsssl.tfm
-INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/t1xb.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/t1xi.tfm
 INPUT ./figures/fig_sim_coldens.eps
 INPUT ./figures/fig_sim_coldens.eps
@@ -395,6 +395,9 @@ INPUT /usr/share/texlive/texmf-dist/fonts/vf/public/txfonts/txr.vf
 INPUT /usr/share/texlive/texmf-dist/fonts/vf/public/txfonts/t1xss.vf
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxphvr.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxss.tfm
+INPUT /usr/share/texlive/texmf-dist/fonts/vf/public/txfonts/t1xb.vf
+INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxptmb.tfm
+INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxb.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/vf/public/txfonts/txmi.vf
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxmi.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxptmri.tfm
@@ -404,9 +407,6 @@ INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxr.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/vf/public/txfonts/t1xsssl.vf
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxphvro.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxsssl.tfm
-INPUT /usr/share/texlive/texmf-dist/fonts/vf/public/txfonts/t1xb.vf
-INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxptmb.tfm
-INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxb.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/vf/public/txfonts/t1xi.vf
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxi.tfm
 INPUT ./figures/unet_architecture.jpg
@@ -435,6 +435,21 @@ INPUT ./figures/fig_sim_correlation-eps-converted-to.pdf
 INPUT /usr/share/texlive/texmf-dist/fonts/vf/public/txfonts/txmi.vf
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxmi.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxptmri.tfm
+INPUT ./figures/Benchmark_OrionB/accuracy.jpg
+INPUT ./figures/Benchmark_OrionB/accuracy.jpg
+INPUT ./figures/Benchmark_OrionB/accuracy.jpg
+INPUT ./figures/Benchmark_OrionB/accuracy.jpg
+INPUT ./figures/Benchmark_OrionB/accuracy.jpg
+INPUT ./figures/Benchmark_OrionB/region_0.jpg
+INPUT ./figures/Benchmark_OrionB/region_0.jpg
+INPUT ./figures/Benchmark_OrionB/region_0.jpg
+INPUT ./figures/Benchmark_OrionB/region_0.jpg
+INPUT ./figures/Benchmark_OrionB/region_0.jpg
+INPUT ./figures/Benchmark_OrionB/region_1.jpg
+INPUT ./figures/Benchmark_OrionB/region_1.jpg
+INPUT ./figures/Benchmark_OrionB/region_1.jpg
+INPUT ./figures/Benchmark_OrionB/region_1.jpg
+INPUT ./figures/Benchmark_OrionB/region_1.jpg
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/t1xb.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/t1xb.tfm
 INPUT ./paper.bbl
@@ -528,6 +543,7 @@ INPUT /usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/t1xtt.pfb
 INPUT /usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/txex.pfb
 INPUT /usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/txsy.pfb
 INPUT /usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/txsya.pfb
+INPUT /usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/txsyb.pfb
 INPUT /usr/share/texlive/texmf-dist/fonts/type1/urw/helvetic/uhvb8a.pfb
 INPUT /usr/share/texlive/texmf-dist/fonts/type1/urw/helvetic/uhvr8a.pfb
 INPUT /usr/share/texlive/texmf-dist/fonts/type1/urw/helvetic/uhvr8a.pfb
