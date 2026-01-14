@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from POLARIScore.utils.utils import *
 from POLARIScore.utils.observation_utils import get_clumps
-from matplotlib.colors import LogNorm, NoNorm
+from matplotlib.colors import LogNorm, NoNorm, CenteredNorm
 import torch
 import torch.nn.functional as F
 from astropy.coordinates import SkyCoord, Angle
@@ -431,10 +431,12 @@ class Observation():
 
     #-------PLOT-------
 
-    def plot(self, data:np.ndarray=None, norm=None, 
-             plot_cores:Union[bool,Tuple[Union[float,None],Union[float,None]]]=False,
+    def plot(self, data:np.ndarray=None, norm=LogNorm(), ax:'axes.Axes'=None,
+             plot_cores:Union[bool,Tuple[Union[float,None],Union[float,None]]]=False, cores_color:Optional[str]=None,
              plot_skeleton:bool= False,
-             crop:Union[Tuple[float,float,float,float],None]=None, force_vol:bool=False, force_col:bool=False):
+             crop:Union[Tuple[float,float,float,float],None]=None, force_vol:bool=False, force_col:bool=False,
+             cbar:bool=True, sbar:float=5., show_ax_labels:bool=True, toplabel:Optional[str]=None,
+             sbar_transparent:bool=False, cmap:Optional[str]=None, clabel:Optional[str]=None):
         """
         Plot observation.
         Args:
@@ -445,6 +447,12 @@ class Observation():
             crop: [ra_min, ra_max, dec_min, dec_max]
             force_vol: Force volume density labels.
             force_col: Force column density labels.
+            cbar: Plot the color bar
+            clabel: Label of the color map
+            sbar: Plot a scale bar with size being sbar
+            sbar_transparent: If True no opaque box behind the scale
+            show_ax_labels: Plot ticks
+            toplabel: Add text at the top left of the region.
         """
 
         if plot_cores is not None:
@@ -453,51 +461,80 @@ class Observation():
                 if((type(plot_cores) is tuple or type(plot_cores) is list) and len(plot_cores) >= 2):
                     plot_cores_lims = plot_cores
                 plot_cores = True
-     
-        fig = plt.figure(figsize=(10,10))
-        ax = plt.subplot(projection=self.wcs)
+
         data = self.data if data is None else data
+
+        if crop is not None:
+            x_min, x_max, y_min, y_max = _crop(self.wcs, crop)
+
+            x_min, x_max = int(x_min), int(x_max)
+            y_min, y_max = int(y_min), int(y_max)
+
+            data = data[y_min:y_max, x_min:x_max]
+            wcs = self.wcs.slice((slice(y_min, y_max), slice(x_min, x_max)))
+        else:
+            wcs = self.wcs
+
+        if ax is None:
+            fig = plt.figure()
+            ax = fig.add_subplot(projection=wcs)
+        else:
+            fig = ax.figure
+
+
         flag_vol_density = False
-        label = r"$N_H(cm^{-2})$"
-        norm = norm if not(norm is None) else LogNorm()
+        label = r"$N_H(cm^{-2})$" if clabel is None else clabel
         if not(force_col) and (np.nanpercentile(data,50) < 1e10 or force_vol):
             flag_vol_density = True
-            label=r"$<n_H>_m(cm^{-3})$"
-        im = ax.imshow(data, cmap="rainbow", norm=norm)
+            label=r"$<n_H>_m(cm^{-3})$"  if clabel is None else clabel
+        im = ax.imshow(data, cmap="rainbow" if cmap is None and len(data.shape) == 2 else cmap, norm=norm if len(data.shape) == 2 else None)
         overlay = ax.get_coords_overlay('fk5')
-        overlay.grid(color='black', ls='dotted')
-        overlay[0].set_axislabel('Right Ascension (J2000)')
-        #overlay[1].set_axislabel('Declination (J2000)')
-        plt.colorbar(im, label=label)
-        fig.tight_layout()
+        if show_ax_labels:
+            overlay.grid(color='black', ls='dotted')
+            overlay[0].set_axislabel('ra')
+            overlay[1].set_axislabel('dec')
+        else:
+            for coord in overlay:
+                coord.set_ticks_visible(False)
+                coord.set_ticklabel_visible(False)
+                coord.set_axislabel('')
+            for coord in ax.coords:
+                coord.set_ticks_visible(False)
+                coord.set_ticklabel_visible(False)
+                coord.set_axislabel('')
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
+
+        if cbar and len(data.shape) == 2:
+            plt.colorbar(im, label=label)
 
         if plot_skeleton:
             self.plot_skeleton(ax)
 
         if plot_cores:
-            self.plot_cores(ax, norm=norm, vol_density=flag_vol_density, lims=plot_cores_lims)
+            self.plot_cores(ax, norm=norm, vol_density=flag_vol_density, lims=plot_cores_lims, color=cores_color, opacity=0.7)
 
-        if not(crop is None):
-            x_min, x_max, y_min, y_max = _crop(self.wcs, crop)
-            ax.set_xlim((x_min, x_max))
-            ax.set_ylim((y_min, y_max))
+        if sbar > 0.:
+            scale_bar_px = self.pc_to_pixels(sbar)
+            fontprops = fm.FontProperties(size=9)
 
-        scale_bar_px = self.pc_to_pixels(5.)
-        fontprops = fm.FontProperties(size=9)
+            scalebar = AnchoredSizeBar(
+                ax.transData,
+                scale_bar_px,
+                f"{sbar:.0f} pc",
+                loc="lower right",
+                pad=0.4,
+                color="black",
+                frameon=not(sbar_transparent),
+                size_vertical=.0,
+                fontproperties=fontprops,
+            )
 
-        scalebar = AnchoredSizeBar(
-            ax.transData,
-            scale_bar_px,
-            f"{5.:.0f} pc",
-            loc="lower right",
-            pad=0.4,
-            color="black",
-            frameon=True,
-            size_vertical=.0,
-            fontproperties=fontprops,
-        )
+            ax.add_artist(scalebar)
 
-        ax.add_artist(scalebar)
+        if toplabel is not None:
+            ax.text(0.02, 0.98,toplabel,transform=ax.transAxes,
+            ha="left",va="top",fontsize=10,color="black",)
 
         return fig, ax
     
@@ -519,13 +556,14 @@ class Observation():
 
             plt.colorbar(hist, ax=ax, label="counts")
             ax = plt.gca()
+            ax.set_xlim([20, 24])
+            ax.set_ylim([1, 8])
 
             plot_lines(data, pred, ax, lines=lines)
 
             ax.grid(True)
             ax.set_axisbelow(True)
-            ax.set_xlim([20, 24])
-            ax.set_ylim([1, 8])
+
             ax.set_xlabel(r"measured $N_H$ ($cm^{-2}$)")
             ax.set_ylabel(r"predicted $<n_H>_m$ ($cm^{-3}$)")
 
@@ -625,7 +663,8 @@ class Observation():
         return fig, ax
 
     def plot_cores(self,ax:"axes.Axes",cores:Union[List[Dict],None]=None,norm=None,vol_density:bool=False,
-                   show_text:bool=False, lims:Tuple[Union[None,float],Union[None,float]]=[None,None]):
+                   show_text:bool=False, lims:Tuple[Union[None,float],Union[None,float]]=[None,None],
+                   color:Optional[str]=None, opacity:float=1.):
         """
         Plot the cores as dots on a Matplotlib Axes.
         Args:
@@ -636,8 +675,6 @@ class Observation():
             show_text (bool): If True, annotate each dot with its value next to it.
             lims: A core is drawn only if his column density is in lims
         """
-        if cores is None:
-            cores = [c.data for c in self.cores]
         if cores is None:
             cores = [c.data for c in self.get_cores()]
             if cores is None:
@@ -676,7 +713,7 @@ class Observation():
             colors = plt.cm.rainbow(norm(values))
 
 
-        ax.scatter(x_pix, y_pix, s=radius/pixel_scale, facecolors=colors, edgecolors="black")
+        ax.scatter(x_pix, y_pix, s=radius/pixel_scale, facecolors=colors if color is None else color, alpha=opacity, edgecolors="black")
         if show_text:
             for i,c in enumerate(cores):
                 ax.text(x_pix[i], y_pix[i], f"${values[i]:.2e}$", color='black')
@@ -813,7 +850,7 @@ class Observation():
         return fig, ax
 
     def plot_cores_baseline(self, ax=None, suffixes:Optional[Union[List[str],str]]=None, derived_cores:bool=False, density_correction:bool=True,
-                             x_coldens:bool=False, invert_xy:bool=False, mov_average:int=0, fit:bool=False, cmap_color=True, forced_label=None ):
+                             x_coldens:bool=False, invert_xy:bool=False, mov_average:int=0, fit:bool=False, cmap_color=True, forced_label=None):
         """
         Plot dense cores baseline with x axis depending on args. By default this plot the predicted mass-weighted average density of cores in function of their id.
         Args:
@@ -876,7 +913,8 @@ class Observation():
                         c_cs = fit_a* ((c_mu*c_mh*6.674e-8)/np.pi)**(0.5)
                         c_kb = 1.38e-16 
                         c_T = c_cs**2*(c_mu*c_mh/c_kb)
-                        label = rf"{label}: T={c_T:.3}K, $\sum_{{i\neq c}} n_i l_i$={fit_b:.3} cm$^{{-2}}$, $\alpha$={fit_alpha:.3}"
+                        #label = rf"{label}: T={c_T:.3}K, $\sum_{{i\neq c}} n_i l_i$={fit_b:.3} cm$^{{-2}}$, $\alpha$={fit_alpha:.3}"
+                        label = rf"{label}: T={c_T:.3}K, $\alpha$={fit_alpha:.3}"
                     else:
                         popt, _ = curve_fit(_fit_function, binned_x, binned_y, p0=[1., 0.])
                         fit_a, fit_b = popt
@@ -925,7 +963,7 @@ class Observation():
 
         return fig, ax
 
-    def plot_fractal_dim(self, ax=None, suffixes:Optional[List[str]]=None, distance:Optional[float]=None, thresholds:List[float]=[0.85]):
+    def plot_fractal_dim(self, ax=None, suffixes:Optional[List[str]]=None, distance:Optional[float]=None, thresholds:List[float]=[0.85], colors:Optional[List[str]]=None):
         """
         Plot Perimeter vs Area of clumps identified in predicted volume density map(or in column density if suffixes='!COLUMN_DENSITY'). 
         If thresholds contains more than one threshold, then this will plot Fractal Dimension vs thresholds. 
@@ -959,7 +997,7 @@ class Observation():
         pixscale_rad = np.deg2rad(pixscale_deg)
         pc_per_pix = distance * pixscale_rad
 
-        colors = FIGURE_CMAP(np.linspace(FIGURE_CMAP_MIN, FIGURE_CMAP_MAX, len(suffixes)))
+        colors = FIGURE_CMAP(np.linspace(FIGURE_CMAP_MIN, FIGURE_CMAP_MAX, len(suffixes))) if colors is None else colors
 
         def _fit_function(x, a, b):
             return a*x+b
@@ -1007,6 +1045,7 @@ class Observation():
             ax.set_ylabel("D")
             ax.set_xscale("log")
         ax.legend()
+        ax.grid()
 
         return fig, ax
 
@@ -1461,25 +1500,40 @@ if __name__ == "__main__":
     # Orion B cropped_regions
     #cropped_region = [Angle("5h49m").deg, Angle("5h45").deg, Angle("-0d19m").deg, Angle("0d53m").deg]
     #script_data_and_figures("OrionB", suffix="NGC20712068_cores", normcol=[1e21,None], normvol=[0.5e1,1e5], save_fig=True, crop=cropped_region, show=True, plot_cores=True)
-    #cropped_region = [Angle("5h42m56s").deg, Angle("5h40m28s").deg, Angle("-2d32m").deg, Angle("-1d28m").deg]
+    #cropped_region = [Angle("5h48m").deg, Angle("5h39m").deg, Angle("-3d09m").deg, Angle("-0d58m").deg]
     #script_data_and_figures("OrionB", suffix="NGC20232024_cores", normcol=[1e21,None], normvol=[0.5e1,1e5], save_fig=True, crop=cropped_region, show=True, plot_cores=True)
 
     #script_data_and_figures("Taurus_L1495", normcol=[0.5e21,3e22], normvol=[1e1,2.5e4], save_fig=True, plot_cores=False, show=True)
+    
+    def gamma_correct(rgb, gamma=0.8):
+        rgb = rgb ** gamma
+        return rgb/np.max(rgb)
 
-    from POLARIScore.networks.Trainer import load_trainer, plot_models_accuracy
+    from POLARIScore.networks.Trainer import load_trainer
     from POLARIScore.networks.INNTrainer import INNTrainer
     from POLARIScore.networks.DDPTrainer import DDPTrainer
     from POLARIScore.config import DATA_NORMALIZATION_CDENS, DATA_NORMALIZATION_VDENS
-    obs = Observation("Aquila","column_density_map")
-    obs.distance = 436
-    #obs.plot_fractal_dim(suffixes=["_unet","_cinn"], thresholds=[l for l in np.logspace(np.log10(30), np.log10(1e5), 30)])
+    obs = Observation("OrionB","column_density_map")
+    obs.distance = 400
+    cinn_pred = np.log10(np.nan_to_num(obs.load("_cinn"), nan=1.))
+    dpmm_pred = np.log10(np.nan_to_num(obs.load("_ddpm"), nan=1.))
+    unet_pred = np.log10(np.nan_to_num(obs.load("_unet"), nan=1.))
+    maxi = np.max([np.max(cinn_pred),np.max(dpmm_pred),np.max(unet_pred)])
+    rgb = np.stack((unet_pred/ np.max(unet_pred), dpmm_pred/ np.max(dpmm_pred), cinn_pred/ np.max(cinn_pred)), axis=-1)
+    #rgb = percentile_stretch(rgb, 2, 98)
+    rgb = gamma_correct(rgb, gamma=1.3)
+    obs.plot(data=rgb)
+    #obs.plot(np.clip(cinn_pred-unet_pred,-.5,.5), cmap="coolwarm", norm=CenteredNorm(), plot_cores=False, show_ax_labels=False, clabel="log(cINN)-log(UNet)", cores_color="purple")
+    #obs.plot(np.clip(cinn_pred-dpmm_pred,-.5,.5), cmap="coolwarm", norm=CenteredNorm(), plot_cores=False, show_ax_labels=False, clabel="log(cINN)-log(DDPM)", cores_color="purple")
+    #obs.plot(np.clip(unet_pred-dpmm_pred,-.5,.5), cmap="coolwarm", norm=CenteredNorm(), plot_cores=False, show_ax_labels=False, clabel="log(UNet)-log(DDPM)", cores_color="purple")
 
     #obs.load_error(model_name="UNet")
     #delta = obs.rectify_error_baseline() - obs.predict(trainer,patch_size=(128,128), overlap=0.5, downsample_factor=obs.find_scale(3.30474,128,400), nan_value=-1., apply_baseline=True)
     #print(delta)
 
+    """
     trainer = load_trainer("UNet", trainer_class=Trainer)
-    obs.predict(trainer,patch_size=(128,128), overlap=0.5, downsample_factor=obs.find_scale(3.30474,128,436), nan_value=1e20, apply_baseline=True)
+    obs.predict(trainer,patch_size=(128,128), overlap=0.5, downsample_factor=obs.find_scale(3.30474,128,400), nan_value=1e20, apply_baseline=True)
     obs.save(suffix="_unet")
     obs.plot(data=obs.prediction, norm=LogNorm(vmin=1e2, vmax=3e5), plot_skeleton=False)
 
@@ -1488,7 +1542,7 @@ if __name__ == "__main__":
        "cdens": DATA_NORMALIZATION_CDENS,
         "vdens": DATA_NORMALIZATION_VDENS,
     }
-    obs.predict(trainer,patch_size=(128,128), overlap=0.25, downsample_factor=obs.find_scale(3.30474,128,436), nan_value=1e20, apply_baseline=True)
+    obs.predict(trainer,patch_size=(128,128), overlap=0.25, downsample_factor=obs.find_scale(3.30474,128,400), nan_value=1e20, apply_baseline=True)
     obs.save(suffix="_ddpm")
     obs.plot(data=obs.prediction, norm=LogNorm(vmin=1e2, vmax=3e5), plot_skeleton=False)
 
@@ -1497,24 +1551,10 @@ if __name__ == "__main__":
        "cdens": DATA_NORMALIZATION_CDENS,
         "vdens": DATA_NORMALIZATION_VDENS,
     }
-    obs.predict(trainer,patch_size=(128,128), overlap=0.25, downsample_factor=obs.find_scale(3.30474,128,436), nan_value=1e20, apply_baseline=True)
+    obs.predict(trainer,patch_size=(128,128), overlap=0.25, downsample_factor=obs.find_scale(3.30474,128,400), nan_value=1e20, apply_baseline=True)
     obs.save(suffix="_cinn")
     obs.plot(data=obs.prediction, norm=LogNorm(vmin=1e2, vmax=3e5), plot_skeleton=False)
-
-
-    #obs.load(suffix="_unet")
-    #obs.load_error(model_name="UNet")
-    #obs.plot_cores_error(mov_average=10)
-    #obs.plot_cores_mass(bins_mean=20)
-    #obs.plot_density_distributions(offset_method="max", monte_carlo=0, label="cINN")
-
-    #obs.plot_fractal_dim(suffixes=["_fit"])
-    #obs.load_error(model_name="cINN_3")
-    #obs.prediction_error = None
-    #fig, ax = obs.plot_cores_error(mov_average=0, log_average=50, show_errors=False, correction=True, color="black", linestyle="-", label="few WNM")
-    #obs.load(suffix="_generalunet")
-    #obs.plot_cores_error(ax=ax, mov_average=0, log_average=50, show_errors=False, correction=True, color="black", linestyle="--", label="all WNM")
-    #fig.set_size_inches(10, 5)
+    """
 
     #print(obs.get_cores()[200].data["name"])
 

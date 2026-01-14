@@ -875,8 +875,14 @@ def openSimulation(name_root:str, global_size:float, use_cache:bool=True,cache_n
 
 if __name__ == "__main__":
     sim = Simulation_DC(name="orionMHD_lowB_0.39_512", global_size=66.0948, init=True)
-    #fct = sim.fit_correlation()
-    sim.plot_pdf_2D()
+    fct = sim.fit_correlation()
+    
+    from POLARIScore.objects.Observation import Observation
+    obs = Observation("OrionB","column_density_map")
+    obs.predict_using_function(fct)
+    obs.save(suffix="_fit")
+    
+    #sim.plot_pdf_2D()
     #sim.plot(plot_pdf=False, axis=[0,1,2], color_bar=True)
     #sim.plot(method=compute_mass_weighted_density, axis=[0,1,2], plot_pdf=False)
     #sim.init(loadTemp=True, loadVel=True)

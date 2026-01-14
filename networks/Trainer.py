@@ -138,6 +138,7 @@ class Trainer():
         self.training_losses:List[float] = []
         self.validation_losses:List[float] = []
         self.last_epoch:int = 0
+        self.inference_time:Union[float,None] = None
 
     def init(self, model=None)->bool:
         """
@@ -444,11 +445,16 @@ class Trainer():
         Returns:
             prediction_batch:[(target_img1, prediction_img1), (target_img2, prediction_img2), ...]
         """
+        
         if not(self.prediction_batch is None or force_compute):
             return self.prediction_batch
         
+        start_time = time.process_time()
         self.prediction_batch = self.predict(self.validation_set)
-    
+        end_time = time.process_time()
+
+        self.inference_time = (end_time - start_time)/len(self.prediction_batch[0])
+
         return self.prediction_batch
 
     def predict(self, dataset:Dataset, batch_number:int=1)->List[Tuple[List[np.ndarray],List[np.ndarray]]]:
@@ -834,7 +840,7 @@ class Trainer():
     def load(model_name, load_model=True):
         return load_trainer(model_name, load_model)
 
-def load_trainer(model_name, load_model=True, trainer_class=Trainer):
+def load_trainer(model_name, load_model=True, trainer_class=Trainer)->Trainer:
 
     folder_model_name = model_name
 
@@ -961,8 +967,10 @@ def plot_models_residuals_extended(trainers = []):
 
     plt.tight_layout()
     return fig, ax
+    
 
-def plot_models_accuracy(trainers=[], ax=None, sigmas=(0., 1., 20), show_errors=False, bins=None, dens=None, use_linestyles=False):
+def plot_accuracy(trainers=[], ax=None, sigmas=(0., 1., 20), show_errors=False, bins=None, col_dens=None,
+                   use_linestyles=False, linestyle=None, color="black", marker=None, legend=True, xlabel="Error allowed (in log10)", ylabel="Accuracy" ):
     if ax is None:
         fig, ax = plt.subplots()
     else:
@@ -970,20 +978,20 @@ def plot_models_accuracy(trainers=[], ax=None, sigmas=(0., 1., 20), show_errors=
 
     sigmas = np.linspace(sigmas[0], sigmas[1], sigmas[2])
     colors = FIGURE_CMAP(np.linspace(FIGURE_CMAP_MIN, FIGURE_CMAP_MAX, len(trainers)))
-    linestyles = ['-', '--', '-.', ':']  # line styles to cycle through
+    linestyles = ['-', '--', '-.', ':'] 
 
     for i, t in enumerate(trainers):
         if bins is None:
             accuracies, accuracies_error = [], []
             for s in sigmas:
-                acc_mean, acc_std = compute_batch_accuracy(t.get_prediction_batch(), sigma=s, bins=None, col_dens=dens)
+                acc_mean, acc_std = compute_batch_accuracy(t.get_prediction_batch(), sigma=s, bins=None, col_dens=col_dens)
                 accuracies.append(acc_mean)
                 accuracies_error.append(acc_std)
             accuracies = np.array(accuracies)
             accuracies_error = np.array(accuracies_error)
 
-            style = linestyles[i % len(linestyles)] if use_linestyles else '-'
-            color = 'black' if use_linestyles else colors[i]
+            style = linestyles[i % len(linestyles)] if use_linestyles else linestyle
+            color = color if use_linestyles or linestyle is not None else colors[i]
 
             if show_errors:
                 ax.fill_between(
@@ -993,14 +1001,13 @@ def plot_models_accuracy(trainers=[], ax=None, sigmas=(0., 1., 20), show_errors=
                     color=color,
                     alpha=0.15 if use_linestyles else 0.2
                 )
-            ax.plot(sigmas, accuracies, linestyle=style, color=color, label=t.model_name)
-            ax.scatter(sigmas, accuracies, color=color, s=15)
+            ax.plot(sigmas, accuracies, marker=marker, linestyle=style, color=color, label=t.model_name)
 
         else:
             # Multiple bins per trainer
             all_bin_means, all_bin_stds = [], []
             for s in sigmas:
-                result = compute_batch_accuracy(t.get_prediction_batch(), sigma=s, bins=bins, col_dens=dens)
+                result = compute_batch_accuracy(t.get_prediction_batch(), sigma=s, bins=bins, col_dens=col_dens)
                 means = [r[0] for r in result]
                 stds = [r[1] for r in result]
                 all_bin_means.append(means)
@@ -1014,7 +1021,7 @@ def plot_models_accuracy(trainers=[], ax=None, sigmas=(0., 1., 20), show_errors=
                 acc_mean = all_bin_means[:, b]
                 acc_std = all_bin_stds[:, b]
                 style = linestyles[b % len(linestyles)] if use_linestyles else '-'
-                color = 'black' if use_linestyles else plt.cm.tab20b((i*(n_bins-1)+b)/len(trainers)/(n_bins - 1))
+                color = color if use_linestyles else plt.cm.tab20b((i*(n_bins-1)+b)/len(trainers)/(n_bins - 1))
                 label = f"{t.model_name} - bin {b+1}"
 
                 if show_errors:
@@ -1025,16 +1032,15 @@ def plot_models_accuracy(trainers=[], ax=None, sigmas=(0., 1., 20), show_errors=
                         color=color,
                         alpha=0.1 if use_linestyles else 0.15
                     )
-                ax.plot(sigmas, acc_mean, linestyle=style, color=color, label=label)
-                ax.scatter(sigmas, acc_mean, color=color, s=15)
+                ax.plot(sigmas, acc_mean, marker=marker, linestyle=style, color=color, label=label)
 
-    ax.set_xlabel("Error allowed (in log10)")
-    ax.set_ylabel("Accuracy")
-    ax.legend(fontsize=8)
-    plt.tight_layout()
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    if legend:
+        ax.legend()
+    ax.grid()
 
     return fig, ax
-    
 
 import re
 from scipy.interpolate import griddata
