@@ -444,3 +444,62 @@ def step_fill(x, y_lower, y_upper, log_bins=False, offset=1):
     y_upper_step = np.repeat(y_upper, 2)
     
     return x_step, y_lower_step, y_upper_step
+
+def plot_map(map, ax=None, cmap=None, norm=None, toplabel=None, show_ax_labels=True, return_im=True):
+    if ax is None:
+        fig = plt.figure()
+        ax = fig.add_subplot()
+    else:
+        fig = ax.figure
+
+    im = ax.imshow(map, norm=norm, cmap=cmap)
+
+    if not(show_ax_labels):
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
+
+    if toplabel is not None:
+        ax.text(0.02, 0.98,toplabel,transform=ax.transAxes,
+        ha="left",va="top",fontsize=10,color="black", bbox=dict(facecolor="white",edgecolor="black", boxstyle="round,pad=0.2",alpha=1.))
+
+    if return_im:
+        return im
+    
+    return fig, ax
+    
+from matplotlib.patches import Rectangle, FancyBboxPatch
+
+def plot_rect_bg(fig, axes, color, pad=0.01, text=None, opacity=0.3, text_offset=+0.05):
+    bboxes = [ax.get_position() for ax in axes]
+
+    xmin = min(bb.x0 for bb in bboxes)
+    ymin = min(bb.y0 for bb in bboxes)
+    xmax = max(bb.x1 for bb in bboxes)
+    ymax = max(bb.y1 for bb in bboxes)
+
+    rect = FancyBboxPatch(
+        (xmin-pad, ymin-pad),
+        (xmax - xmin) +2*pad,
+        (ymax - ymin) +2*pad,
+        boxstyle="round,pad=0.01",
+        transform=fig.transFigure,
+        facecolor=color,
+        alpha=opacity,
+        zorder=0
+    )
+
+    if text is not None:
+        fig.text(
+            xmin + 0.005,ymax + text_offset,
+            text,ha="left",va="top",
+            fontsize=10,fontweight="bold",color="black",
+            zorder=1,
+            #bbox=dict(
+            #    facecolor="white",
+            #    alpha=0.8,
+            #    edgecolor="none",
+            #    pad=2
+            #)
+        )
+
+    fig.add_artist(rect)

@@ -1,10 +1,10 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2025.11.17)  14 JAN 2026 14:25
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2026.1.9)  15 JAN 2026 00:18
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
  %&-line parsing enabled.
-**/home/zack/Documents/POLARIScore/paper/paper2026/paper.tex
-(/home/zack/Documents/POLARIScore/paper/paper2026/paper.tex
+**/home/zack/POLARIScore/paper/paper2026/paper.tex
+(/home/zack/POLARIScore/paper/paper2026/paper.tex
 LaTeX2e <2023-11-01> patch level 1
 L3 programming layer <2024-01-22>
 (./aa.cls
@@ -223,7 +223,7 @@ Package: xspace 2014/10/28 v1.13 Space after command names (DPC,MH)
 Package: babel 2024/01/07 v24.1 The Babel package
 \babel@savecnt=\count298
 \U@D=\dimen167
-\l@unhyphenated=\language9
+\l@unhyphenated=\language5
  (/usr/share/texlive/texmf-dist/tex/generic/babel/txtbabel.def)
 \bbl@readstream=\read2
 \bbl@dirlevel=\count299
@@ -597,7 +597,11 @@ Package uniquecounter Info: New unique counter `rerunfilecheck' on input line 28
 LaTeX Font Info:    Trying to load font information for T1+txr on input line 38.
  (/usr/share/texlive/texmf-dist/tex/latex/txfonts/t1txr.fd
 File: t1txr.fd 2000/12/15 v3.1
-) (./paper.aux)
+) (./paper.aux
+
+LaTeX Warning: Label `fig:accuracy_metric' multiply defined.
+
+)
 \openout1 = `paper.aux'.
 
 LaTeX Font Info:    Checking defaults for OML/txmi/m/it on input line 38.
@@ -747,14 +751,8 @@ LaTeX Font Info:    Font shape `T1/txss/bx/n' will be
 (Font)              scaled to size 10.40245pt on input line 97.
 LaTeX Font Info:    Font shape `T1/txss/m/n' will be
 (Font)              scaled to size 6.64998pt on input line 97.
-LaTeX Font Info:    Font shape `T1/txr/b/n' in size <10> not available
-(Font)              Font shape `T1/txr/bx/n' tried instead on input line 116.
-
-
-LaTeX Warning: Reference `appendix_mw_correction' on page 1 undefined on input line 116.
-
 LaTeX Font Info:    Trying to load font information for T1+txtt on input line 119.
-(/usr/share/texlive/texmf-dist/tex/latex/txfonts/t1txtt.fd
+ (/usr/share/texlive/texmf-dist/tex/latex/txfonts/t1txtt.fd
 File: t1txtt.fd 2000/12/15 v3.1
 )
 LaTeX Font Info:    Font shape `T1/txss/m/n' will be
@@ -763,21 +761,23 @@ LaTeX Font Info:    Font shape `T1/txss/m/it' in size <10> not available
 (Font)              Font shape `T1/txss/m/sl' tried instead on input line 122.
 LaTeX Font Info:    Font shape `T1/txss/m/sl' will be
 (Font)              scaled to size 9.49997pt on input line 122.
+LaTeX Font Info:    Font shape `T1/txr/b/n' in size <10> not available
+(Font)              Font shape `T1/txr/bx/n' tried instead on input line 129.
 
 Underfull \hbox (badness 10000) in paragraph at lines 132--132
 [][][][]$\T1/txtt/m/n/9 http : / / www . galactica-[]simulations . eu / db / STAR _ FORM /
  []
 
 Package epstopdf Info: Source file: <figures/fig_sim_coldens.eps>
-(epstopdf)                    date: 2026-01-12 09:30:37
+(epstopdf)                    date: 2025-11-21 13:51:54
 (epstopdf)                    size: 1243209 bytes
 (epstopdf)             Output file: <figures/fig_sim_coldens-eps-converted-to.pdf>
-(epstopdf)                    date: 2026-01-12 10:35:52
+(epstopdf)                    date: 2026-01-14 16:14:56
 (epstopdf)                    size: 90387 bytes
 (epstopdf)             Command: <repstopdf --outfile=figures/fig_sim_coldens-eps-converted-to.pdf figures/fig_sim_coldens.eps>
 (epstopdf)             \includegraphics on input line 139.
 Package epstopdf Info: Output file is already uptodate.
-<figures/fig_sim_coldens-eps-converted-to.pdf, id=121, 841.1425pt x 276.03125pt>
+<figures/fig_sim_coldens-eps-converted-to.pdf, id=122, 841.1425pt x 276.03125pt>
 File: figures/fig_sim_coldens-eps-converted-to.pdf Graphic file (type pdf)
 <use figures/fig_sim_coldens-eps-converted-to.pdf>
 Package pdftex.def Info: figures/fig_sim_coldens-eps-converted-to.pdf  used on input line 139.
@@ -788,15 +788,15 @@ Underfull \hbox (badness 1024) in paragraph at lines 142--142
  []
 
 Package epstopdf Info: Source file: <figures/fig_sim_voldens.eps>
-(epstopdf)                    date: 2026-01-12 09:30:37
+(epstopdf)                    date: 2025-11-21 13:54:22
 (epstopdf)                    size: 1322293 bytes
 (epstopdf)             Output file: <figures/fig_sim_voldens-eps-converted-to.pdf>
-(epstopdf)                    date: 2026-01-12 10:35:54
+(epstopdf)                    date: 2026-01-14 16:14:58
 (epstopdf)                    size: 112193 bytes
 (epstopdf)             Command: <repstopdf --outfile=figures/fig_sim_voldens-eps-converted-to.pdf figures/fig_sim_voldens.eps>
 (epstopdf)             \includegraphics on input line 148.
 Package epstopdf Info: Output file is already uptodate.
-<figures/fig_sim_voldens-eps-converted-to.pdf, id=126, 867.24pt x 252.945pt>
+<figures/fig_sim_voldens-eps-converted-to.pdf, id=127, 867.24pt x 252.945pt>
 File: figures/fig_sim_voldens-eps-converted-to.pdf Graphic file (type pdf)
 <use figures/fig_sim_voldens-eps-converted-to.pdf>
 Package pdftex.def Info: figures/fig_sim_voldens-eps-converted-to.pdf  used on input line 148.
@@ -809,7 +809,7 @@ Underfull \hbox (badness 4699) in paragraph at lines 202--207
 \T1/txr/m/n/10 Convolutional Neu-ral Net-works (CNNs) were in-tro-duced
  []
 
-<figures/unet_architecture.jpg, id=190, 655.69969pt x 602.25pt>
+<figures/unet_architecture.jpg, id=191, 655.69969pt x 602.25pt>
 File: figures/unet_architecture.jpg Graphic file (type jpg)
 <use figures/unet_architecture.jpg>
 Package pdftex.def Info: figures/unet_architecture.jpg  used on input line 221.
@@ -850,148 +850,164 @@ Underfull \hbox (badness 2707) in paragraph at lines 358--360
  []
 
 Package epstopdf Info: Source file: <figures/fig_sim_correlation.eps>
-(epstopdf)                    date: 2026-01-12 09:30:37
+(epstopdf)                    date: 2025-11-26 19:05:52
 (epstopdf)                    size: 11591368 bytes
 (epstopdf)             Output file: <figures/fig_sim_correlation-eps-converted-to.pdf>
-(epstopdf)                    date: 2026-01-12 11:52:24
+(epstopdf)                    date: 2026-01-14 16:15:10
 (epstopdf)                    size: 82710 bytes
 (epstopdf)             Command: <repstopdf --outfile=figures/fig_sim_correlation-eps-converted-to.pdf figures/fig_sim_correlation.eps>
 (epstopdf)             \includegraphics on input line 376.
 Package epstopdf Info: Output file is already uptodate.
-<figures/fig_sim_correlation-eps-converted-to.pdf, id=350, 505.89pt x 505.89pt>
+<figures/fig_sim_correlation-eps-converted-to.pdf, id=351, 505.89pt x 505.89pt>
 File: figures/fig_sim_correlation-eps-converted-to.pdf Graphic file (type pdf)
 <use figures/fig_sim_correlation-eps-converted-to.pdf>
 Package pdftex.def Info: figures/fig_sim_correlation-eps-converted-to.pdf  used on input line 376.
 (pdftex.def)             Requested size: 256.0748pt x 256.07838pt.
+<figures/Benchmark_OrionB/ds_0.jpg, id=355, 722.7pt x 433.62pt>
+File: figures/Benchmark_OrionB/ds_0.jpg Graphic file (type jpg)
+<use figures/Benchmark_OrionB/ds_0.jpg>
+Package pdftex.def Info: figures/Benchmark_OrionB/ds_0.jpg  used on input line 391.
+(pdftex.def)             Requested size: 256.0748pt x 153.64174pt.
+<figures/Benchmark_OrionB/ds_1.jpg, id=356, 722.7pt x 433.62pt>
+File: figures/Benchmark_OrionB/ds_1.jpg Graphic file (type jpg)
+<use figures/Benchmark_OrionB/ds_1.jpg>
+Package pdftex.def Info: figures/Benchmark_OrionB/ds_1.jpg  used on input line 397.
+(pdftex.def)             Requested size: 256.0748pt x 153.64174pt.
 
-LaTeX Warning: Reference `fig:nn_valset_predictions' on page 4 undefined on input line 386.
-
-
-LaTeX Warning: Reference `tab:nn_metrics' on page 4 undefined on input line 396.
+LaTeX Warning: Reference `tab:nn_metrics' on page 4 undefined on input line 412.
 
 [4 <./figures/fig_sim_correlation-eps-converted-to.pdf>]
-<figures/Benchmark_OrionB/accuracy.jpg, id=399, 462.528pt x 346.896pt>
+<figures/Benchmark_OrionB/accuracy.jpg, id=404, 462.528pt x 346.896pt>
 File: figures/Benchmark_OrionB/accuracy.jpg Graphic file (type jpg)
 <use figures/Benchmark_OrionB/accuracy.jpg>
-Package pdftex.def Info: figures/Benchmark_OrionB/accuracy.jpg  used on input line 408.
+Package pdftex.def Info: figures/Benchmark_OrionB/accuracy.jpg  used on input line 424.
+(pdftex.def)             Requested size: 256.0748pt x 192.06375pt.
+<figures/Benchmark_OrionB/residuals.jpg, id=406, 462.528pt x 346.896pt>
+File: figures/Benchmark_OrionB/residuals.jpg Graphic file (type jpg)
+<use figures/Benchmark_OrionB/residuals.jpg>
+Package pdftex.def Info: figures/Benchmark_OrionB/residuals.jpg  used on input line 435.
 (pdftex.def)             Requested size: 256.0748pt x 192.06375pt.
 
-Underfull \hbox (badness 1286) in paragraph at lines 427--428
+Underfull \hbox (badness 1286) in paragraph at lines 450--451
 \T1/txr/m/n/10 good per-for-mance with rel-a-tively few re-gions, whereas
  []
 
-<figures/Benchmark_OrionB/region_0.jpg, id=402, 993.7125pt x 433.62pt>
+<figures/Benchmark_OrionB/region_0.jpg, id=408, 903.375pt x 433.62pt>
 File: figures/Benchmark_OrionB/region_0.jpg Graphic file (type jpg)
 <use figures/Benchmark_OrionB/region_0.jpg>
-Package pdftex.def Info: figures/Benchmark_OrionB/region_0.jpg  used on input line 433.
-(pdftex.def)             Requested size: 523.5307pt x 228.4545pt.
-<figures/Benchmark_OrionB/region_1.jpg, id=405, 993.7125pt x 433.62pt>
+Package pdftex.def Info: figures/Benchmark_OrionB/region_0.jpg  used on input line 456.
+(pdftex.def)             Requested size: 523.5307pt x 251.30789pt.
+<figures/Benchmark_OrionB/region_1.jpg, id=411, 903.375pt x 433.62pt>
 File: figures/Benchmark_OrionB/region_1.jpg Graphic file (type jpg)
 <use figures/Benchmark_OrionB/region_1.jpg>
-Package pdftex.def Info: figures/Benchmark_OrionB/region_1.jpg  used on input line 441.
-(pdftex.def)             Requested size: 523.5307pt x 228.4545pt.
-LaTeX Font Info:    Font shape `T1/txr/b/n' in size <7> not available
-(Font)              Font shape `T1/txr/bx/n' tried instead on input line 454.
-LaTeX Font Info:    Font shape `T1/txr/b/n' in size <5> not available
-(Font)              Font shape `T1/txr/bx/n' tried instead on input line 454.
+Package pdftex.def Info: figures/Benchmark_OrionB/region_1.jpg  used on input line 464.
+(pdftex.def)             Requested size: 523.5307pt x 251.30789pt.
+[5 <./figures/Benchmark_OrionB/ds_0.jpg> <./figures/Benchmark_OrionB/ds_1.jpg> <./figures/Benchmark_OrionB/accuracy.jpg> <./figures/Benchmark_OrionB/residuals.jpg>]
+Underfull \vbox (badness 10000) has occurred while \output is active []
 
-Underfull \hbox (badness 1371) in paragraph at lines 454--455
+ [6 <./figures/Benchmark_OrionB/region_0.jpg> <./figures/Benchmark_OrionB/region_1.jpg>]
+LaTeX Font Info:    Font shape `T1/txr/b/n' in size <7> not available
+(Font)              Font shape `T1/txr/bx/n' tried instead on input line 477.
+LaTeX Font Info:    Font shape `T1/txr/b/n' in size <5> not available
+(Font)              Font shape `T1/txr/bx/n' tried instead on input line 477.
+
+Underfull \hbox (badness 1371) in paragraph at lines 477--478
 []$\OML/txmi/m/it/10 N[]\OT1/txr/m/n/10 (\OML/txmi/m/it/10 n[]\OT1/txr/m/n/10 )$ \T1/txr/bx/n/10 re-la-tion (dense cores only): \T1/txr/m/n/10 Fit the pre-dicted
  []
 
-(./paper.bbl) [5 <./figures/Benchmark_OrionB/accuracy.jpg>] [6 <./figures/Benchmark_OrionB/region_0.jpg> <./figures/Benchmark_OrionB/region_1.jpg>]
-Underfull \vbox (badness 10000) has occurred while \output is active []
+(./paper.bbl) [7
 
+]
 Package epstopdf Info: Source file: <figures/fig_mw_correction_ld.eps>
-(epstopdf)                    date: 2026-01-12 09:30:37
+(epstopdf)                    date: 2025-12-02 10:43:42
 (epstopdf)                    size: 28066 bytes
 (epstopdf)             Output file: <figures/fig_mw_correction_ld-eps-converted-to.pdf>
-(epstopdf)                    date: 2026-01-12 10:35:54
+(epstopdf)                    date: 2026-01-14 16:15:11
 (epstopdf)                    size: 14079 bytes
 (epstopdf)             Command: <repstopdf --outfile=figures/fig_mw_correction_ld-eps-converted-to.pdf figures/fig_mw_correction_ld.eps>
-(epstopdf)             \includegraphics on input line 531.
+(epstopdf)             \includegraphics on input line 554.
 Package epstopdf Info: Output file is already uptodate.
-<figures/fig_mw_correction_ld-eps-converted-to.pdf, id=430, 361.35pt x 361.35pt>
+<figures/fig_mw_correction_ld-eps-converted-to.pdf, id=442, 361.35pt x 361.35pt>
 File: figures/fig_mw_correction_ld-eps-converted-to.pdf Graphic file (type pdf)
 <use figures/fig_mw_correction_ld-eps-converted-to.pdf>
-Package pdftex.def Info: figures/fig_mw_correction_ld-eps-converted-to.pdf  used on input line 531.
+Package pdftex.def Info: figures/fig_mw_correction_ld-eps-converted-to.pdf  used on input line 554.
 (pdftex.def)             Requested size: 122.9148pt x 122.9125pt.
 Package epstopdf Info: Source file: <figures/fig_mw_correction_nd.eps>
-(epstopdf)                    date: 2026-01-12 09:30:37
+(epstopdf)                    date: 2025-12-02 10:43:34
 (epstopdf)                    size: 32848 bytes
 (epstopdf)             Output file: <figures/fig_mw_correction_nd-eps-converted-to.pdf>
-(epstopdf)                    date: 2026-01-12 10:35:54
+(epstopdf)                    date: 2026-01-14 16:15:11
 (epstopdf)                    size: 16272 bytes
 (epstopdf)             Command: <repstopdf --outfile=figures/fig_mw_correction_nd-eps-converted-to.pdf figures/fig_mw_correction_nd.eps>
-(epstopdf)             \includegraphics on input line 538.
+(epstopdf)             \includegraphics on input line 561.
 Package epstopdf Info: Output file is already uptodate.
-<figures/fig_mw_correction_nd-eps-converted-to.pdf, id=433, 361.35pt x 361.35pt>
+<figures/fig_mw_correction_nd-eps-converted-to.pdf, id=445, 361.35pt x 361.35pt>
 File: figures/fig_mw_correction_nd-eps-converted-to.pdf Graphic file (type pdf)
 <use figures/fig_mw_correction_nd-eps-converted-to.pdf>
-Package pdftex.def Info: figures/fig_mw_correction_nd-eps-converted-to.pdf  used on input line 538.
+Package pdftex.def Info: figures/fig_mw_correction_nd-eps-converted-to.pdf  used on input line 561.
 (pdftex.def)             Requested size: 122.9148pt x 122.9125pt.
 Package epstopdf Info: Source file: <figures/fig_mw_correction_diffkonyves.eps>
-(epstopdf)                    date: 2026-01-12 09:30:37
+(epstopdf)                    date: 2025-11-20 14:54:24
 (epstopdf)                    size: 27119 bytes
 (epstopdf)             Output file: <figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf>
-(epstopdf)                    date: 2026-01-12 10:35:55
+(epstopdf)                    date: 2026-01-14 16:15:11
 (epstopdf)                    size: 15442 bytes
 (epstopdf)             Command: <repstopdf --outfile=figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf figures/fig_mw_correction_diffkonyves.eps>
-(epstopdf)             \includegraphics on input line 562.
+(epstopdf)             \includegraphics on input line 585.
 Package epstopdf Info: Output file is already uptodate.
-<figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf, id=437, 722.7pt x 361.35pt>
+<figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf, id=449, 722.7pt x 361.35pt>
 File: figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf Graphic file (type pdf)
 <use figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf>
-Package pdftex.def Info: figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf  used on input line 562.
+Package pdftex.def Info: figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf  used on input line 585.
 (pdftex.def)             Requested size: 256.0748pt x 128.03477pt.
- [7
+ [8
 
-] [8 <./figures/fig_mw_correction_ld-eps-converted-to.pdf> <./figures/fig_mw_correction_nd-eps-converted-to.pdf> <./figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf>]
+ <./figures/fig_mw_correction_ld-eps-converted-to.pdf> <./figures/fig_mw_correction_nd-eps-converted-to.pdf> <./figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf>]
 Package epstopdf Info: Source file: <figures/fig_score_residuals.eps>
-(epstopdf)                    date: 2026-01-12 09:30:37
+(epstopdf)                    date: 2025-11-24 16:05:40
 (epstopdf)                    size: 28712 bytes
 (epstopdf)             Output file: <figures/fig_score_residuals-eps-converted-to.pdf>
-(epstopdf)                    date: 2026-01-12 10:35:55
+(epstopdf)                    date: 2026-01-14 16:15:11
 (epstopdf)                    size: 16123 bytes
 (epstopdf)             Command: <repstopdf --outfile=figures/fig_score_residuals-eps-converted-to.pdf figures/fig_score_residuals.eps>
-(epstopdf)             \includegraphics on input line 646.
+(epstopdf)             \includegraphics on input line 669.
 Package epstopdf Info: Output file is already uptodate.
 <figures/fig_score_residuals-eps-converted-to.pdf, id=573, 361.35pt x 361.35pt>
 File: figures/fig_score_residuals-eps-converted-to.pdf Graphic file (type pdf)
 <use figures/fig_score_residuals-eps-converted-to.pdf>
-Package pdftex.def Info: figures/fig_score_residuals-eps-converted-to.pdf  used on input line 646.
+Package pdftex.def Info: figures/fig_score_residuals-eps-converted-to.pdf  used on input line 669.
 (pdftex.def)             Requested size: 122.9148pt x 122.9125pt.
 Package epstopdf Info: Source file: <figures/fig_score_accuracy.eps>
-(epstopdf)                    date: 2026-01-12 09:30:37
+(epstopdf)                    date: 2025-11-24 16:05:56
 (epstopdf)                    size: 22063 bytes
 (epstopdf)             Output file: <figures/fig_score_accuracy-eps-converted-to.pdf>
-(epstopdf)                    date: 2026-01-12 10:35:55
+(epstopdf)                    date: 2026-01-14 16:15:11
 (epstopdf)                    size: 18626 bytes
 (epstopdf)             Command: <repstopdf --outfile=figures/fig_score_accuracy-eps-converted-to.pdf figures/fig_score_accuracy.eps>
-(epstopdf)             \includegraphics on input line 652.
+(epstopdf)             \includegraphics on input line 675.
 Package epstopdf Info: Output file is already uptodate.
 <figures/fig_score_accuracy-eps-converted-to.pdf, id=574, 361.35pt x 361.35pt>
 File: figures/fig_score_accuracy-eps-converted-to.pdf Graphic file (type pdf)
 <use figures/fig_score_accuracy-eps-converted-to.pdf>
-Package pdftex.def Info: figures/fig_score_accuracy-eps-converted-to.pdf  used on input line 652.
+Package pdftex.def Info: figures/fig_score_accuracy-eps-converted-to.pdf  used on input line 675.
 (pdftex.def)             Requested size: 122.9148pt x 122.9125pt.
 Package epstopdf Info: Source file: <figures/fig_score_unet_diffkonyves.eps>
-(epstopdf)                    date: 2026-01-12 09:30:37
+(epstopdf)                    date: 2025-11-24 12:21:34
 (epstopdf)                    size: 29556 bytes
 (epstopdf)             Output file: <figures/fig_score_unet_diffkonyves-eps-converted-to.pdf>
-(epstopdf)                    date: 2026-01-12 10:35:55
+(epstopdf)                    date: 2026-01-14 16:15:12
 (epstopdf)                    size: 16771 bytes
 (epstopdf)             Command: <repstopdf --outfile=figures/fig_score_unet_diffkonyves-eps-converted-to.pdf figures/fig_score_unet_diffkonyves.eps>
-(epstopdf)             \includegraphics on input line 662.
+(epstopdf)             \includegraphics on input line 685.
 Package epstopdf Info: Output file is already uptodate.
 <figures/fig_score_unet_diffkonyves-eps-converted-to.pdf, id=575, 722.7pt x 361.35pt>
 File: figures/fig_score_unet_diffkonyves-eps-converted-to.pdf Graphic file (type pdf)
 <use figures/fig_score_unet_diffkonyves-eps-converted-to.pdf>
-Package pdftex.def Info: figures/fig_score_unet_diffkonyves-eps-converted-to.pdf  used on input line 662.
+Package pdftex.def Info: figures/fig_score_unet_diffkonyves-eps-converted-to.pdf  used on input line 685.
 (pdftex.def)             Requested size: 256.0748pt x 128.03477pt.
- [9
+ [9 <./figures/fig_score_residuals-eps-converted-to.pdf> <./figures/fig_score_accuracy-eps-converted-to.pdf>] [10
 
- <./figures/fig_score_residuals-eps-converted-to.pdf> <./figures/fig_score_accuracy-eps-converted-to.pdf> <./figures/fig_score_unet_diffkonyves-eps-converted-to.pdf>] [10
+ <./figures/fig_score_unet_diffkonyves-eps-converted-to.pdf>] [11
 
 ] (./paper.aux)
  ***********
@@ -1002,22 +1018,25 @@ L3 programming layer <2024-01-22>
 
 LaTeX Warning: There were undefined references.
 
+
+LaTeX Warning: There were multiply-defined labels.
+
 Package rerunfilecheck Info: File `paper.out' has not changed.
 (rerunfilecheck)             Checksum: EE0721864C9DCB6B778C2B27B3901451;4489.
  ) 
 Here is how much of TeX's memory you used:
- 16638 strings out of 476106
- 266740 string characters out of 5793932
- 1965975 words of memory out of 5000000
- 38228 multiletter control sequences out of 15000+600000
+ 16668 strings out of 476182
+ 267745 string characters out of 5795596
+ 1957975 words of memory out of 5000000
+ 38246 multiletter control sequences out of 15000+600000
  657206 words of font info for 185 fonts, out of 8000000 for 9000
- 59 hyphenation exceptions out of 8191
- 87i,13n,93p,782b,716s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 14 hyphenation exceptions out of 8191
+ 87i,13n,93p,772b,717s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/rtcxr.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/rtxmi.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/rtxr.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/rtxr.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/t1xtt.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/txex.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/txsy.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/txsya.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/txsyb.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/helvetic/uhvb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/helvetic/uhvr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/helvetic/uhvr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on paper.pdf (10 pages, 1856868 bytes).
+Output written on paper.pdf (11 pages, 2628731 bytes).
 PDF statistics:
- 796 PDF objects out of 1000 (max. 8388607)
- 437 compressed objects within 5 object streams
- 110 named destinations out of 1000 (max. 500000)
- 274 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 807 PDF objects out of 1000 (max. 8388607)
+ 444 compressed objects within 5 object streams
+ 113 named destinations out of 1000 (max. 500000)
+ 289 words of extra memory for PDF output out of 10000 (max. 10000000)
 

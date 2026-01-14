@@ -916,7 +916,7 @@ def load_trainer(model_name, load_model=True, trainer_class=Trainer)->Trainer:
 
     return trainer
 
-def plot_models_residuals(trainers = [], ax=None):
+def plot_models_residuals(trainers:List['Trainer'] = [], ax=None, colors:Union[List[str],None]=None):
     if ax is None:
         fig, ax = plt.subplots()
     else:
@@ -935,7 +935,7 @@ def plot_models_residuals(trainers = [], ax=None):
     positions = np.arange(len(models_name))
 
     vp = ax.violinplot(models_residuals, positions=positions, showmeans=True, showmedians=True)
-    colors = FIGURE_CMAP(np.linspace(FIGURE_CMAP_MIN, FIGURE_CMAP_MAX, len(models_name)))
+    colors = FIGURE_CMAP(np.linspace(FIGURE_CMAP_MIN, FIGURE_CMAP_MAX, len(models_name))) if colors is None else colors
     for i, body in enumerate(vp['bodies']):
         body.set_facecolor(colors[i])
         body.set_alpha(0.8)
@@ -947,23 +947,25 @@ def plot_models_residuals(trainers = [], ax=None):
         vp[part].set_linewidth(1.2)
     ax.set_xticks(positions)
     ax.set_xticklabels(models_name)
-    ax.set_ylabel("Residuals (prediction-target)")
+    ax.set_ylabel("Residuals (log(prediction)-log(target))")
     ax.grid(True, linestyle="--", alpha=0.5)
 
     return fig, ax, colors
 
-def plot_models_residuals_extended(trainers = []):
+def plot_models_residuals_extended(trainers = [], colors=None):
     fig = plt.figure()
 
     ax1 = plt.subplot2grid((len(trainers), 2), (0, 0), rowspan=len(trainers))
-    _,_, colors = plot_models_residuals(trainers=trainers, ax=ax1)
-    ax1.set_title("Comparison of different models")
+    _,_, colors = plot_models_residuals(trainers=trainers, ax=ax1, colors=colors)
+    #ax1.set_title("Comparison of different models")
 
     for i,t in enumerate(trainers):
         ax = plt.subplot(len(trainers),2, (i+1)*2)
         t.plot_residuals(ax=ax, color=colors[i], bins_inter=(1.5,7.5))
         ax.set_ylim((-1.25, 1.25))
         ax.set_ylabel("")
+        if i != len(trainers)-1:
+            ax.set_xlabel("")
 
     plt.tight_layout()
     return fig, ax

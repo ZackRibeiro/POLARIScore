@@ -113,7 +113,7 @@
    where $x$ and $y$ are the plane-of-sky positions, $z$ is the position in line of sight axis, $L$ the cloud length, $\nh$ the hydrogen volume density, $m(x,y,z)=\nh(x,y,z)\mu m_\text{H}$.
 
    Thus, our benchmark focuses on a $\mathrm{2D}\rightarrow\mathrm{2D}$ learning problem.
-    Note also that the mass-weighted average density can be converted into the average density of dense cores using a small correction (see Appendix~\ref{appendix_mw_correction}).
+    Note also that the mass-weighted average density can be converted into the average density of dense cores using a small correction (see Appendix~\ref{appendix:mw_correction}).
 
    Except for making the simulations, all steps, from creating the datasets and
    training neural networks to applying them to observations, are performed using our code \texttt{POLARIScore}\footnote{\url{https://github.com/ZackRibeiro/POLARIScore}}
@@ -384,6 +384,22 @@
 \subsection{Benchmark on simulation data}
    In this section, we focus on the metrics evaluated using predictions on the validation set, which is a subset of the training data generated with the ORION simulation \cite{ntormousiCoreStellarMass2019}. 
    Several representative predicted regions are shown in Fig.~\ref{fig:nn_valset_predictions}.
+   \begin{figure}[!ht]
+      \centering
+      \begin{subfigure}{\columnwidth}
+         \centering
+         \includegraphics[width=\columnwidth]{figures/Benchmark_OrionB/ds_0.jpg}
+         \label{fig:nn_valset_predictions_a}
+      \end{subfigure}
+      \hfill
+      \begin{subfigure}{\columnwidth}
+         \centering
+         \includegraphics[width=\columnwidth]{figures/Benchmark_OrionB/ds_1.jpg}
+         \label{fig:nn_valset_predictions_b}
+      \end{subfigure}
+      \caption{Neural network validation set predictions.}
+      \label{fig:nn_valset_predictions}
+   \end{figure}
    \subsubsection{General metrics}
    During the training of all neural networks, we use the mean squared error (MSE) computed in logarithmic space to monitor the generalization performance of the models. 
    Specifically, the MSE loss is evaluated on the validation set and is defined as
@@ -414,6 +430,13 @@
    we plot the residuals curves. Note that the means of the residuals bins are moved to 0 by using post-prediction correction when we apply the model to observations (see Appendix~\ref{appendix:valerror}).
    What it shows...
 
+   \begin{figure}[!ht]
+      \centering
+      \includegraphics[width=\columnwidth]{figures/Benchmark_OrionB/residuals.jpg}
+      \caption{}
+      \label{fig:accuracy_metric}
+   \end{figure}
+
 
 
    \begin{itemize}
@@ -431,7 +454,7 @@
    \begin{figure*}[t]
       \centering
       \includegraphics[width=\textwidth]{figures/Benchmark_OrionB/region_0.jpg}
-      \caption{Neural network predictions on the NGC2068 and 2NGC071 regions.
+      \caption{Neural network predictions on the NGC2068 and NGC2071 regions.
          Top row (left to right): the column-density map derived from dust emission, followed by the predictions of the three neural networks (UNet, cINN, and DDPM), and finally the estimate obtained from the Gaussian fit (Eq.~\ref{eq:gaussian_fit}).
          Bottom row: an RGB composite image constructed from the three neural-network predictions (in the same order as above), followed by clipped logarithmic difference maps between the neural-network predictions.}
       \label{fig:orionb_ngc2068}

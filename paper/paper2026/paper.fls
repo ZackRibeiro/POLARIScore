@@ -1,9 +1,9 @@
-PWD /home/zack/Documents/POLARIScore/paper/paper2026
+PWD /home/zack/POLARIScore/paper/paper2026
 INPUT /etc/texmf/web2c/texmf.cnf
 INPUT /usr/share/texmf/web2c/texmf.cnf
 INPUT /usr/share/texlive/texmf-dist/web2c/texmf.cnf
 INPUT /var/lib/texmf/web2c/pdftex/pdflatex.fmt
-INPUT /home/zack/Documents/POLARIScore/paper/paper2026/paper.tex
+INPUT /home/zack/POLARIScore/paper/paper2026/paper.tex
 OUTPUT paper.log
 INPUT ./aa.cls
 INPUT aa.cls
@@ -316,7 +316,6 @@ INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/t1xss.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/t1xbss.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/t1xss.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/t1xr.tfm
-INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/t1xb.tfm
 INPUT /usr/share/texlive/texmf-dist/tex/latex/txfonts/t1txtt.fd
 INPUT /usr/share/texlive/texmf-dist/tex/latex/txfonts/t1txtt.fd
 INPUT /usr/share/texlive/texmf-dist/tex/latex/txfonts/t1txtt.fd
@@ -324,6 +323,7 @@ INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/t1xtt.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/t1xtt.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/t1xss.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/t1xsssl.tfm
+INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/t1xb.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/t1xi.tfm
 INPUT ./figures/fig_sim_coldens.eps
 INPUT ./figures/fig_sim_coldens.eps
@@ -395,9 +395,6 @@ INPUT /usr/share/texlive/texmf-dist/fonts/vf/public/txfonts/txr.vf
 INPUT /usr/share/texlive/texmf-dist/fonts/vf/public/txfonts/t1xss.vf
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxphvr.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxss.tfm
-INPUT /usr/share/texlive/texmf-dist/fonts/vf/public/txfonts/t1xb.vf
-INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxptmb.tfm
-INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxb.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/vf/public/txfonts/txmi.vf
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxmi.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxptmri.tfm
@@ -407,6 +404,9 @@ INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxr.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/vf/public/txfonts/t1xsssl.vf
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxphvro.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxsssl.tfm
+INPUT /usr/share/texlive/texmf-dist/fonts/vf/public/txfonts/t1xb.vf
+INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxptmb.tfm
+INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxb.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/vf/public/txfonts/t1xi.vf
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxi.tfm
 INPUT ./figures/unet_architecture.jpg
@@ -432,6 +432,16 @@ INPUT ./figures/fig_sim_correlation.eps
 INPUT ./figures/fig_sim_correlation-eps-converted-to.pdf
 INPUT ./figures/fig_sim_correlation-eps-converted-to.pdf
 INPUT ./figures/fig_sim_correlation-eps-converted-to.pdf
+INPUT ./figures/Benchmark_OrionB/ds_0.jpg
+INPUT ./figures/Benchmark_OrionB/ds_0.jpg
+INPUT ./figures/Benchmark_OrionB/ds_0.jpg
+INPUT ./figures/Benchmark_OrionB/ds_0.jpg
+INPUT ./figures/Benchmark_OrionB/ds_0.jpg
+INPUT ./figures/Benchmark_OrionB/ds_1.jpg
+INPUT ./figures/Benchmark_OrionB/ds_1.jpg
+INPUT ./figures/Benchmark_OrionB/ds_1.jpg
+INPUT ./figures/Benchmark_OrionB/ds_1.jpg
+INPUT ./figures/Benchmark_OrionB/ds_1.jpg
 INPUT /usr/share/texlive/texmf-dist/fonts/vf/public/txfonts/txmi.vf
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxmi.tfm
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/txfonts/rtxptmri.tfm
@@ -440,6 +450,11 @@ INPUT ./figures/Benchmark_OrionB/accuracy.jpg
 INPUT ./figures/Benchmark_OrionB/accuracy.jpg
 INPUT ./figures/Benchmark_OrionB/accuracy.jpg
 INPUT ./figures/Benchmark_OrionB/accuracy.jpg
+INPUT ./figures/Benchmark_OrionB/residuals.jpg
+INPUT ./figures/Benchmark_OrionB/residuals.jpg
+INPUT ./figures/Benchmark_OrionB/residuals.jpg
+INPUT ./figures/Benchmark_OrionB/residuals.jpg
+INPUT ./figures/Benchmark_OrionB/residuals.jpg
 INPUT ./figures/Benchmark_OrionB/region_0.jpg
 INPUT ./figures/Benchmark_OrionB/region_0.jpg
 INPUT ./figures/Benchmark_OrionB/region_0.jpg

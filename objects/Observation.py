@@ -534,7 +534,7 @@ class Observation():
 
         if toplabel is not None:
             ax.text(0.02, 0.98,toplabel,transform=ax.transAxes,
-            ha="left",va="top",fontsize=10,color="black",)
+            ha="left",va="top",fontsize=10,color="black", bbox=dict(facecolor="white",edgecolor="black", boxstyle="round,pad=0.2",alpha=1.) if not(sbar_transparent) else None)
 
         return fig, ax
     
