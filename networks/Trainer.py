@@ -588,8 +588,8 @@ class Trainer():
             fig = ax.figure
         if batch is None:
             batch = self.get_prediction_batch()
-        d_target = np.array([np.log(b[0])/np.log(10) for b in batch]).flatten()
-        d_prediction = np.array([np.log(b[1])/np.log(10) for b in batch]).flatten()
+        d_target = np.array([np.log10(b[0]) for b in batch]).flatten()
+        d_prediction = np.array([np.log10(b[1]) for b in batch]).flatten()
 
         residuals = d_prediction-d_target
         violin_num_bins = 5
@@ -952,7 +952,7 @@ def plot_models_residuals(trainers:List['Trainer'] = [], ax=None, colors:Union[L
 
     return fig, ax, colors
 
-def plot_models_residuals_extended(trainers = [], colors=None):
+def plot_models_residuals_extended(trainers:List['Trainer'] = [], colors=None):
     fig = plt.figure()
 
     ax1 = plt.subplot2grid((len(trainers), 2), (0, 0), rowspan=len(trainers))

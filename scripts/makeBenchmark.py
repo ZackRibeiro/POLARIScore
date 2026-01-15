@@ -1,6 +1,7 @@
 import os
 from POLARIScore.config import EXPORT_FOLDER, LOGGER, DATA_NORMALIZATION_CDENS, DATA_NORMALIZATION_VDENS
 from POLARIScore.utils.utils import dictsToString, plot_map, plot_rect_bg
+from POLARIScore.networks.utils.nn_utils import find_error_for_batch_accuracy
 import uuid
 from typing import Tuple, List
 from matplotlib.colors import LogNorm, CenteredNorm
@@ -302,6 +303,7 @@ for i,t,m in zip(range(len(trainers)),trainers, args.models):
         "inference_speed(img/s)": str(1/trainer.inference_time),
         "parameters":  sum(p.numel() for p in trainer.model.parameters()),
         "MSE": trainer.validation_losses[-1],
+        "Error (Acc=80%)": find_error_for_batch_accuracy(trainer.get_prediction_batch(), accuracy=0.8) ,
     })
 
     if observation is not None :
@@ -387,7 +389,7 @@ for name, ax in zip(global_axes.keys(), global_axes.values()):
 string = dictsToString(in_files)
 with open(os.path.join(BENCHMARK_PATH, "benchmark.txt"), "w") as file:
     file.write(f"Benchmark done in {_format_time(time.process_time()-start_time)}"+"\n")
-    file.write(f"What was plot: "+str(args.toplot)+".\n")
+    file.write(f"What was drawed: "+str(args.toplot)+".\n")
     file.write(f"---------------------------------------------"+"\n")
     file.write(string)
 

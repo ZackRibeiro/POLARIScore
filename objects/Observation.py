@@ -1533,7 +1533,7 @@ if __name__ == "__main__":
 
     """
     trainer = load_trainer("UNet", trainer_class=Trainer)
-    obs.predict(trainer,patch_size=(128,128), overlap=0.5, downsample_factor=obs.find_scale(3.30474,128,400), nan_value=1e20, apply_baseline=True)
+    obs.predict(trainer,patch_size=(128,128), overlap=0.5, downsample_factor=obs.find_scale(3.30474,128,obs.distance), nan_value=1e20, apply_baseline=True)
     obs.save(suffix="_unet")
     obs.plot(data=obs.prediction, norm=LogNorm(vmin=1e2, vmax=3e5), plot_skeleton=False)
 
@@ -1542,7 +1542,7 @@ if __name__ == "__main__":
        "cdens": DATA_NORMALIZATION_CDENS,
         "vdens": DATA_NORMALIZATION_VDENS,
     }
-    obs.predict(trainer,patch_size=(128,128), overlap=0.25, downsample_factor=obs.find_scale(3.30474,128,400), nan_value=1e20, apply_baseline=True)
+    obs.predict(trainer,patch_size=(128,128), overlap=0.25, downsample_factor=obs.find_scale(3.30474,128,obs.distance), nan_value=1e20, apply_baseline=True)
     obs.save(suffix="_ddpm")
     obs.plot(data=obs.prediction, norm=LogNorm(vmin=1e2, vmax=3e5), plot_skeleton=False)
 
@@ -1551,7 +1551,7 @@ if __name__ == "__main__":
        "cdens": DATA_NORMALIZATION_CDENS,
         "vdens": DATA_NORMALIZATION_VDENS,
     }
-    obs.predict(trainer,patch_size=(128,128), overlap=0.25, downsample_factor=obs.find_scale(3.30474,128,400), nan_value=1e20, apply_baseline=True)
+    obs.predict(trainer,patch_size=(128,128), overlap=0.25, downsample_factor=obs.find_scale(3.30474,128,obs.distance), nan_value=1e20, apply_baseline=True)
     obs.save(suffix="_cinn")
     obs.plot(data=obs.prediction, norm=LogNorm(vmin=1e2, vmax=3e5), plot_skeleton=False)
     """
