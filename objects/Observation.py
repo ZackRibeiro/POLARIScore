@@ -205,11 +205,12 @@ class Observation():
 
         return scale
 
-    def get_cores(self, force_compute:bool=False)->Union[List['DenseCore'], None]:
+    def get_cores(self, force_compute:bool=False, use_deconvolved_values:bool=False)->Union[List['DenseCore'], None]:
         """
-        Get cores from files "observed_core_catalog.txt" and "derived_core_catalog.txt"
+        Get cores from files "observed_core_catalog.txt" and "derived_core_catalog.txt" (works with Herschel Gound Belt Survey)
         Args:
             force_compute (bool): If False, the function will return the cached version of cores if available.
+            use_deconvolved_values (bool): If True, use deconvolved radius and density.
         Returns:
             cores
         """
@@ -279,9 +280,9 @@ class Observation():
                 pc = {
                     "name": properties[1],
                     "peak_n": float(properties[13+offset_index])*1e4*2,
-                    "average_n": float(properties[14+offset_index])*1e4*2,
+                    "average_n": float(properties[(15 if use_deconvolved_values else 14)+offset_index])*1e4*2,
                     "mass": float(properties[6+offset_index]),
-                    "radius_pc": float(properties[5+offset_index]),
+                    "radius_pc": float(properties[(4 if use_deconvolved_values else 5)+offset_index]),
                     "bonnorebert": float(properties[16+offset_index]),
                     "comment": properties[18+offset_index] if len(properties) > (18+offset_index) else "" 
                 }
@@ -1513,19 +1514,14 @@ if __name__ == "__main__":
     from POLARIScore.networks.INNTrainer import INNTrainer
     from POLARIScore.networks.DDPTrainer import DDPTrainer
     from POLARIScore.config import DATA_NORMALIZATION_CDENS, DATA_NORMALIZATION_VDENS
-    obs = Observation("OrionB","column_density_map")
-    obs.distance = 400
-    cinn_pred = np.log10(np.nan_to_num(obs.load("_cinn"), nan=1.))
-    dpmm_pred = np.log10(np.nan_to_num(obs.load("_ddpm"), nan=1.))
-    unet_pred = np.log10(np.nan_to_num(obs.load("_unet"), nan=1.))
-    maxi = np.max([np.max(cinn_pred),np.max(dpmm_pred),np.max(unet_pred)])
-    rgb = np.stack((unet_pred/ np.max(unet_pred), dpmm_pred/ np.max(dpmm_pred), cinn_pred/ np.max(cinn_pred)), axis=-1)
-    #rgb = percentile_stretch(rgb, 2, 98)
-    rgb = gamma_correct(rgb, gamma=1.3)
-    obs.plot(data=rgb)
-    #obs.plot(np.clip(cinn_pred-unet_pred,-.5,.5), cmap="coolwarm", norm=CenteredNorm(), plot_cores=False, show_ax_labels=False, clabel="log(cINN)-log(UNet)", cores_color="purple")
-    #obs.plot(np.clip(cinn_pred-dpmm_pred,-.5,.5), cmap="coolwarm", norm=CenteredNorm(), plot_cores=False, show_ax_labels=False, clabel="log(cINN)-log(DDPM)", cores_color="purple")
-    #obs.plot(np.clip(unet_pred-dpmm_pred,-.5,.5), cmap="coolwarm", norm=CenteredNorm(), plot_cores=False, show_ax_labels=False, clabel="log(UNet)-log(DDPM)", cores_color="purple")
+    obs = Observation("Serpens","column_density_map")
+    obs.distance = 436
+    obs.load("_unet")
+    obs.get_cores(use_deconvolved_values=False)
+    obs.plot_dcmf(monte_carlo=0, bins=15, fit=False) 
+    obs.get_cores(use_deconvolved_values=True, force_compute=True)
+    obs.plot_dcmf(monte_carlo=0, bins=15, fit=False) 
+    #obs.plot_cores_error(mov_average=0, log_average=50, show_errors=False, show_model_errors=False,correction=True, color="black") 
 
     #obs.load_error(model_name="UNet")
     #delta = obs.rectify_error_baseline() - obs.predict(trainer,patch_size=(128,128), overlap=0.5, downsample_factor=obs.find_scale(3.30474,128,400), nan_value=-1., apply_baseline=True)
@@ -1537,7 +1533,7 @@ if __name__ == "__main__":
     obs.save(suffix="_unet")
     obs.plot(data=obs.prediction, norm=LogNorm(vmin=1e2, vmax=3e5), plot_skeleton=False)
 
-    trainer = load_trainer("DDPM3", trainer_class=DDPTrainer)
+    trainer = load_trainer("DDPM", trainer_class=DDPTrainer)
     trainer.norms = {
        "cdens": DATA_NORMALIZATION_CDENS,
         "vdens": DATA_NORMALIZATION_VDENS,

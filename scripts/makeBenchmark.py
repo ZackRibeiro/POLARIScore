@@ -14,16 +14,16 @@ from POLARIScore.objects.Dataset import Dataset
 
 """
 Usage:
-python -m POLARIScore.scripts.makeBenchmark --models UNet cINN DDPM --obs_name OrionB --obs_suffixes unet cinn ddpm --obs_repair no yes yes --name Benchmark_OrionB
+#python -m POLARIScore.scripts.makeBenchmark --models UNet cINN DDPM --obs_name OrionB --obs_suffixes unet cinn ddpm --obs_repair no yes yes --name Benchmark_OrionB
 """
 
 #If you want to add zoom in regions
 from astropy.coordinates import Angle
 REGIONS = [
-[Angle("5h50m").deg, Angle("5h45").deg, Angle("-0d19m").deg, Angle("0d53m").deg],[Angle("5h48m").deg, Angle("5h39m").deg, Angle("-3d10m").deg, Angle("-0d58m").deg]
+#[Angle("5h50m").deg, Angle("5h45").deg, Angle("-0d19m").deg, Angle("0d53m").deg],[Angle("5h48m").deg, Angle("5h39m").deg, Angle("-3d10m").deg, Angle("-0d58m").deg]
 ]
 
-MONTE_CARLO = 0
+MONTE_CARLO = 50
 
 start_time = time.process_time()
 def _format_time(seconds:float)->str:
@@ -75,6 +75,7 @@ observation:'Observation' = None
 if args.obs_name is not None:
     observation = Observation(args.obs_name,"column_density_map")
     observation.catalog_name = args.obs_catalog
+    observation.get_cores(use_deconvolved_values=False)
     observation.distance = float(args.obs_dist)
     assert args.obs_suffixes is not None, LOGGER.error("If an observation is given then you must also give corresponding prediction suffixes.")
     assert len(args.obs_suffixes) == len(trainers), LOGGER.error("Given suffixes must have the same length than given trainers/models.")
@@ -370,8 +371,11 @@ if observation is not None:
         fig.savefig(os.path.join(BENCHMARK_PATH,"column_density."+args.format))
 
     if ("fractal" in args.toplot or "all" in args.toplot) and not("-fractal" in args.toplot):
-        fig, _ = observation.plot_fractal_dim(suffixes=["_"+s for s in args.obs_suffixes], thresholds=[l for l in np.logspace(np.log10(30), np.log10(1e5), 30)], colors=colors)
-        fig.savefig(os.path.join(BENCHMARK_PATH,"fractal_dim."+args.format))
+        try:
+            fig, _ = observation.plot_fractal_dim(suffixes=["_"+s for s in args.obs_suffixes], thresholds=[l for l in np.logspace(np.log10(30), np.log10(1e5), 30)], colors=colors)
+            fig.savefig(os.path.join(BENCHMARK_PATH,"fractal_dim."+args.format))
+        except:
+            LOGGER.warn("Fractal dim can't be plotted, error.")
 
 if ("accuracy" in args.toplot or "all" in args.toplot) and not("-accuracy" in args.toplot):
     accuracy_fig.savefig(os.path.join(BENCHMARK_PATH,"accuracy."+args.format))
