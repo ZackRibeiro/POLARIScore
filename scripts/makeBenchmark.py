@@ -168,7 +168,7 @@ def make_obs_benchmark(suffix,model_name=None,i=0):
             global_axes["core_relations"] = ax
 
         if ("distribution" in args.toplot or "all" in args.toplot) and not("-distribution" in args.toplot):
-            _, ax = observation.plot_density_distributions(ax=global_axes["density_dists"], monte_carlo=0, offset_method="wout_ncol", draw_style=None, color=None, label=m)
+            _, ax = observation.plot_density_distributions(ax=global_axes["density_dists"], monte_carlo=0, offset_method="wout_ncol", color=None, label=m)
             global_axes["density_dists"] = ax
 
         if ("c_diff" in args.toplot or "all" in args.toplot) and not("-c_diff" in args.toplot):
@@ -198,7 +198,7 @@ def make_obs_benchmark(suffix,model_name=None,i=0):
             plt.close(fig)
 
         if ("distribution" in args.toplot or "all" in args.toplot) and not("-distribution" in args.toplot):
-            fig, _ = observation.plot_density_distributions(monte_carlo=0, offset_method="max", color="red", label=m, marker="+")
+            fig, _ = observation.plot_density_distributions(monte_carlo=0, offset_method="max", color=colors[i], label=m, marker="+")
             fig.savefig(os.path.join(F_DENSITY_DISTS,"density_dists_"+m+"."+args.format))
             plt.close(fig)
 
@@ -393,7 +393,7 @@ for name, ax in zip(global_axes.keys(), global_axes.values()):
 string = dictsToString(in_files)
 with open(os.path.join(BENCHMARK_PATH, "benchmark.txt"), "w") as file:
     file.write(f"Benchmark done in {_format_time(time.process_time()-start_time)}"+"\n")
-    file.write(f"What was drawed: "+str(args.toplot)+".\n")
+    file.write(f"What was drawn: "+str(args.toplot)+".\n")
     file.write(f"---------------------------------------------"+"\n")
     file.write(string)
 

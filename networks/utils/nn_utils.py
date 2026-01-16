@@ -89,7 +89,7 @@ def find_error_for_batch_accuracy(batch, accuracy=0.8, epsilon=0.01):
         ite += 1
         sigma = (sigma1-sigma0)/2
         acc = compute_batch_accuracy(batch, sigma=sigma)[0]-accuracy
-        if acc*acc0 < 0:
+        if acc*acc0 >= 0:
             acc0 = acc
             sigma0 = sigma
         else:

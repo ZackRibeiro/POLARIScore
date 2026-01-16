@@ -617,10 +617,10 @@ class Observation():
         bin_centers_pr = _normalize_x(hist_pr, bin_centers_pr)
 
         if offset_method != "wout_ncol":
-            ax.plot(10**bin_centers_cd, hist_cd, drawstyle=draw_style, marker=marker, color="blue", label=r"$N_H$ [$cm^{-2}$]")
+            ax.plot(10**bin_centers_cd, hist_cd, drawstyle=draw_style, marker=marker, color="black", label=r"$N_H$ [$cm^{-2}$]")
             ax.errorbar(10**bin_centers_cd, hist_cd, yerr=hist_cd_stats_error*hist_cd, fmt='none', color="black")
         ax.plot(10**bin_centers_pr, hist_pr, drawstyle=draw_style, marker=marker, color=color, label=r"$<n_H>_m$ [$cm^{-3}$]" if label is None else label)
-        ax.errorbar(10**bin_centers_pr, hist_pr, yerr=hist_pred_stats_error*hist_pr, fmt='none', color="black")
+        ax.errorbar(10**bin_centers_pr, hist_pr, yerr=hist_pred_stats_error*hist_pr, fmt='none', color=color)
 
         if self.prediction_error is not None and monte_carlo > 0:
             try:
@@ -653,6 +653,8 @@ class Observation():
         else:
             ax.set_xlabel(r"($x-max(x)) / (max(x)-min(x))$")
         ax.set_ylabel("density")
+
+        plot_lines(ax=ax, lines= [0, -1, -2], logspace=True)
 
         ax.set_xscale("log")
         ax.set_yscale("log")
