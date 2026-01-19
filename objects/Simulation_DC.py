@@ -14,7 +14,7 @@ from astropy import units as u
 import numpy as np
 from POLARIScore.objects.SpectrumMap import getSimulationSpectra
 from POLARIScore.objects.Dataset import Dataset
-from typing import Dict,List,Tuple,Callable,Union, Literal
+from typing import Dict,List,Tuple,Callable,Union, Literal, Optional
 from matplotlib.widgets import Slider
 from scipy.ndimage import zoom
 from scipy.optimize import curve_fit
@@ -202,7 +202,10 @@ class Simulation_DC():
             self.volumic_density[axis] = method(self.data, axis=axis)
         return self.volumic_density[axis]
 
-    def generate_batch(self,name:str=None,method:Callable=compute_mass_weighted_density,what_to_compute:Dict={"cospectra":False,"density":False,"context":10.},number:int=8,size:Union[float,Tuple[float,float]]=0.,img_size:int=128,random_rotate:bool=True,limit_area:Tuple=(None,None,None),nearest_size_factor:float=0.75,axis:Union[int,List[int]]=[0,1,2])->bool:
+    def generate_batch(self,name:str=None,method:Callable=compute_mass_weighted_density,what_to_compute:Dict={"cospectra":False,"density":False,"context":10.}
+                       ,number:int=8,size:Union[float,Tuple[float,float]]=0.,img_size:int=128,random_rotate:bool=True,limit_area:Tuple=(None,None,None),
+                       nearest_size_factor:float=0.75,axis:Union[int,List[int]]=[0,1,2],
+                       beam:Optional[Tuple[float,float]]=None)->bool:
         """
         Generate a batch, i.e pairs of images (2D matrix) like [(col_dens_1, vol_dens_1),(col_dens_2, vol_dens_2)]
         using this simulation. This will take randoms positions images in simulation.
@@ -231,6 +234,11 @@ class Simulation_DC():
 
         column_density = [self._compute_c_density(axis=0),self._compute_c_density(axis=1),self._compute_c_density(axis=2)]
         volume_density = [self._compute_v_density(method, axis=0),self._compute_v_density(method, axis=1),self._compute_v_density(method, axis=2)]
+
+        if beam != None:
+            LOGGER.warn(f"Column and volume density maps convolved to beam size: {beam[0]} arcsec at distance: {beam[1]} pc.")
+            column_density = [convolve_map(c, self.cell_size*3.24078e-19, beam_size=beam[0], distance=beam[1]) for c in column_density]
+            volume_density = [convolve_map(v, self.cell_size*3.24078e-19, beam_size=beam[0], distance=beam[1]) for v in volume_density]
 
         flag_cospectra = what_to_compute["cospectra"] if "cospectra" in what_to_compute else False
         if flag_cospectra:
@@ -603,7 +611,7 @@ class Simulation_DC():
 
         ax = plt.gca()
 
-        plot_lines(column_density, volume_density, ax, lines=lines, logspace=True)
+        plot_lines(ax, x=column_density, y=volume_density, lines=lines, logspace=True)
 
         ax.grid(True)
         ax.set_axisbelow(True)
@@ -874,21 +882,17 @@ def openSimulation(name_root:str, global_size:float, use_cache:bool=True,cache_n
     return sim
 
 if __name__ == "__main__":
-    sim = Simulation_DC(name="orionMHD_lowB_0.39_512", global_size=66.0948, init=True)
-    fct = sim.fit_correlation()
+    #sim = Simulation_DC(name="orionMHD_lowB_0.39_512", global_size=66.0948, init=True)
     
-    from POLARIScore.objects.Observation import Observation
-    obs = Observation("OrionB","column_density_map")
-    obs.predict_using_function(fct)
-    obs.save(suffix="_fit")
     
     #sim.plot_pdf_2D()
     #sim.plot(plot_pdf=False, axis=[0,1,2], color_bar=True)
     #sim.plot(method=compute_mass_weighted_density, axis=[0,1,2], plot_pdf=False)
     #sim.init(loadTemp=True, loadVel=True)
-    #sim = openSimulation("orionMHDt2_lowB_multi", global_size=66.0948, cache_name="sim_memory_2")
+    sim = openSimulation("orionMHD_lowB_multi", global_size=66.0948, cache_name="sim_memory")
     #sim.plotSlice(axis=2, enable_slider=True)
-    #sim.generate_batch(name="highres_sim2_32px_val",number=10000, img_size=32,what_to_compute={"cospectra":False, "density":False,"context":None},axis=[2])
+    sim.generate_batch(name="convolved_perseus",number=10000, img_size=128,what_to_compute={"cospectra":False, "density":False,"context":10},axis=[0,1,2], beam=(18.2,300),
+                       limit_area=([27,40,26,39],[26.4,40,22.5,44.3],[26.4,39,21,44.5]))
     #sim.plot(derivate=2, axis=0)
     #plt.figure()
     #sim.plot_correlation(method=compute_mass_weighted_density, contour_levels=3)

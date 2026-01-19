@@ -50,6 +50,32 @@ def compute_derivative(data_slice:np.ndarray, order:int=1, axis:int=0):
         d = np.gradient(d)[axis]
     return d
 
+from scipy.ndimage import gaussian_filter
+
+def convolve_map(map, resolution, beam_size=18.2, distance=400):
+    """
+    Convolve map with a Gaussian beam to match observational resolution.
+
+    Args:
+        map (2D array): The map to convolve.
+        resolution (float): Pixel size in parsec (pc/pixel) of the map.
+        beam_size (float): Observational beam size in arcseconds (default 18.2").
+        distance (float): Distance to the cloud in parsec (default 400 pc).
+        replace (bool): If True, replace self.data with the smoothed map.
+
+    Returns:
+        2D array: The convolved map.
+    """
+    beam_rad = np.deg2rad(beam_size / 3600.0)
+    beam_pc = distance * beam_rad
+
+    sigma_pixels = beam_pc / resolution / (2.0 * np.sqrt(2.0 * np.log(2.0)))  
+    print(sigma_pixels)
+    # Gaussian sigma = FWHM / (2*sqrt(2*ln2))
+
+    smoothed = gaussian_filter(map, sigma=sigma_pixels)
+    return smoothed
+
 def rotate_cube(data_cube:np.ndarray, angle:float, axis:int)->np.ndarray:
     """Rotates the cube around a given axis (0=X, 1=Y, 2=Z) by a given angle in degrees."""
     return rotate(data_cube, angle, axes=axis, reshape=False, mode="nearest")
@@ -266,7 +292,7 @@ def plot_function(function:Callable, ax=None, res:int=100, lims:Tuple[float]=[0,
     return fig, ax
 
 
-def plot_lines(x:Union[np.ndarray,List,None],y:Union[np.ndarray,List,None], ax, lines:List[float]=[0,1,2], x_max:float=None, x_min:float=None, y_max:float=None, y_min:float=None, logspace=False):
+def plot_lines(ax, x:Union[np.ndarray,List,None]=None,y:Union[np.ndarray,List,None]=None, lines:List[float]=[0,1,2], x_max:float=None, x_min:float=None, y_max:float=None, y_min:float=None, logspace=False):
     """
     Plots lines on matplotlib plot. 
     """

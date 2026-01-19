@@ -179,7 +179,7 @@ class Observation():
         sigma_pixels = (original_beam*factor / (2*np.sqrt(2*np.log(2)))) / (pixscale_deg*3600)
         
         if method == "gaussian":
-            smoothed = gaussian_filter(self.datadata, sigma=sigma_pixels)
+            smoothed = gaussian_filter(self.data, sigma=sigma_pixels)
             if replace:
                 self.data = smoothed
             return smoothed
@@ -560,7 +560,7 @@ class Observation():
             ax.set_xlim([20, 24])
             ax.set_ylim([1, 8])
 
-            plot_lines(data, pred, ax, lines=lines)
+            plot_lines(ax,x=data, y=pred, lines=lines)
 
             ax.grid(True)
             ax.set_axisbelow(True)
@@ -644,8 +644,6 @@ class Observation():
                 hist_pr + 2*hist_std, log_bins=True, offset=1.0)
             ax.fill_between(x_step, y_lower_step, y_upper_step, color=color, alpha=0.3)
             
-        #plot_lines(10**bin_centers_pr,hist_pr,ax=ax, lines = [0,-.5, -1], logspace=True)
-
         if offset_method == "mean":
             ax.set_xlabel(r"($x-\mu) / (max(x)-min(x))$")
         elif offset_method == "wout_ncol":
@@ -654,7 +652,7 @@ class Observation():
             ax.set_xlabel(r"($x-max(x)) / (max(x)-min(x))$")
         ax.set_ylabel("density")
 
-        plot_lines(ax=ax, lines= [0, -1, -2], logspace=True)
+        plot_lines(ax=ax, lines= [0, -1, -2], logspace=False)
 
         ax.set_xscale("log")
         ax.set_yscale("log")
@@ -791,7 +789,7 @@ class Observation():
 
         return fig, ax
 
-    def plot_cores_hist(self, ax=None, region:Union[Tuple[float,float,float,float],None]=None, linestyle:bool=False, drawstyle:Optional[str]="steps-mid", bins:int=15, plot_catalog:bool=True, label:Optional[str]=None
+    def plot_cores_hist(self, ax:Optional["axes.Axes"]=None, region:Union[Tuple[float,float,float,float],None]=None, linestyle:bool=False, drawstyle:Optional[str]="steps-mid", bins:int=15, plot_catalog:bool=True, label:Optional[str]=None
                         , correction:bool=True):
         """
         Args:
@@ -831,7 +829,7 @@ class Observation():
 
         return fig, ax
     
-    def plot_cores_hist2d(self, ax=None, region:Union[Tuple[float,float,float,float],None]=None):
+    def plot_cores_hist2d(self, ax:Optional["axes.Axes"]=None, region:Union[Tuple[float,float,float,float],None]=None):
         """
         Args:
             ax: matplotlib axis
@@ -852,7 +850,7 @@ class Observation():
 
         return fig, ax
 
-    def plot_cores_baseline(self, ax=None, suffixes:Optional[Union[List[str],str]]=None, derived_cores:bool=False, density_correction:bool=True,
+    def plot_cores_baseline(self, ax:Optional["axes.Axes"]=None, suffixes:Optional[Union[List[str],str]]=None, derived_cores:bool=False, density_correction:bool=True,
                              x_coldens:bool=False, invert_xy:bool=False, mov_average:int=0, fit:bool=False, cmap_color=True, forced_label=None):
         """
         Plot dense cores baseline with x axis depending on args. By default this plot the predicted mass-weighted average density of cores in function of their id.
@@ -966,7 +964,7 @@ class Observation():
 
         return fig, ax
 
-    def plot_fractal_dim(self, ax=None, suffixes:Optional[List[str]]=None, distance:Optional[float]=None, thresholds:List[float]=[0.85], colors:Optional[List[str]]=None):
+    def plot_fractal_dim(self, ax:Optional["axes.Axes"]=None, suffixes:Optional[List[str]]=None, distance:Optional[float]=None, thresholds:List[float]=[0.85], colors:Optional[List[str]]=None):
         """
         Plot Perimeter vs Area of clumps identified in predicted volume density map(or in column density if suffixes='!COLUMN_DENSITY'). 
         If thresholds contains more than one threshold, then this will plot Fractal Dimension vs thresholds. 
@@ -1052,7 +1050,7 @@ class Observation():
 
         return fig, ax
 
-    def plot_dcmf(self, ax=None, bins:int=10, ext_lims:Tuple[Union[float,None],Union[float,None]]=[None,None],
+    def plot_dcmf(self, ax:Optional["axes.Axes"]=None, bins:int=10, ext_lims:Tuple[Union[float,None],Union[float,None]]=[None,None],
                    logM:bool=True, fit=True, method:Literal['constant','gaussian']="constant",
                     monte_carlo:int=100 , correction:bool=True 
                 ):
@@ -1197,7 +1195,7 @@ class Observation():
 
         return fig, ax
 
-    def plot_cores_mass(self, ax=None, method:Literal['constant','gaussian']="constant", mov_average:int=0, bins_mean:int=0,
+    def plot_cores_mass(self, ax:Optional["axes.Axes"]=None, method:Literal['constant','gaussian']="constant", mov_average:int=0, bins_mean:int=0,
                          label:Optional[str]=None, show_errors:bool=False, linestyle:Optional[str]="-"):
         """
         Plot the derived versus predicted mass
@@ -1297,7 +1295,7 @@ class Observation():
 
         return fig, ax
 
-    def plot_cores_space(self, ax=None, region:Union[Tuple[float,float,float,float],None]=None):
+    def plot_cores_space(self, ax:Optional["axes.Axes"]=None, region:Union[Tuple[float,float,float,float],None]=None):
         """
         Args:
             ax: matplotlib axis
@@ -1331,13 +1329,13 @@ class Observation():
 
         merged_list = [d for d in derived_densities]
         merged_list.extend([c for c in predicted_densities])
-        plot_lines(column_densities, merged_list, ax)
+        plot_lines(ax, x=column_densities, y=merged_list)
 
         #ax.grid()
 
         return fig, ax
     
-    def plot_cores_error(self, ax=None, region:Union[Tuple[float,float,float,float],None]=None, alpha:float=1.,
+    def plot_cores_error(self, ax:Optional["axes.Axes"]=None, region:Union[Tuple[float,float,float,float],None]=None, alpha:float=1.,
                           mov_average:int=5, log_average:int=0 ,show_errors:bool=True, show_model_errors:bool=False,
                             correction:bool=True, color=None, linestyle=None, label=None):
         """
@@ -1389,6 +1387,68 @@ class Observation():
         ax.set_ylabel(r"$\log_{10}(n_{\mathrm{neural network}})-\log_{10}(n_{\mathrm{catalog}})$")
         ax.set_xscale("log")
         ax.grid(True, which='both', axis='x')
+
+        ax.legend()
+
+        return fig, ax
+
+    def plot_power_spectrum(self, ax:Optional["axes.Axes"]=None, bins:int=30, label:Optional[str]="$<n_H>_m$", color:Optional[str]=None, plot_coldens:bool=True, normalize:bool=True):
+        if ax is None:
+            fig, ax = plt.subplots()
+        else:
+            fig = ax.figure
+
+        pixel_size = 1./self.pc_to_pixels(1)
+        def _power_spectrum_2d(map2d):
+            mask = np.isnan(map2d)
+            map2d[mask] = np.nanmean(map2d)
+            
+            map2d = map2d - np.mean(map2d)
+            fft_map = np.fft.fft2(map2d)
+            fft_map = np.fft.fftshift(fft_map)
+            power = np.abs(fft_map)**2
+
+            ny, nx = map2d.shape
+            kx = np.fft.fftfreq(nx, d=pixel_size)
+            ky = np.fft.fftfreq(ny, d=pixel_size)
+            kx, ky = np.meshgrid(kx, ky)
+            k = np.sqrt(kx**2 + ky**2)
+            k = np.fft.fftshift(k)
+
+            k_bins = np.linspace(0, k.max(), bins)
+            Pk = np.zeros(len(k_bins)-1)
+            k_centers = 0.5 * (k_bins[1:] + k_bins[:-1])
+
+            for i in range(len(k_bins)-1):
+                mask = (k >= k_bins[i]) & (k < k_bins[i+1])
+                Pk[i] = power[mask].mean()
+
+            return k_centers, Pk
+
+        if plot_coldens:
+            k_coldens, Pk_coldens = _power_spectrum_2d(self.data)
+            if normalize:
+                Pk_coldens = Pk_coldens / np.max(Pk_coldens)
+            ax.plot(k_coldens, Pk_coldens, color="black", label="$N_H$")
+
+        if self.prediction is not None:
+            k_voldens, Pk_voldens = _power_spectrum_2d(self.prediction)
+            if normalize:
+                Pk_voldens = Pk_voldens / np.max(Pk_voldens)
+            ax.plot(k_voldens, Pk_voldens, label=label, color=color)
+        else:
+            LOGGER.warn("Can't plot the power spectrum of prediction map > there is no pred map loaded.")
+
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+
+        ax.set_xlabel(r"$k\ \mathrm{[pc^{-1}]}$")
+        ylabel = r"$P(k)$"
+        if normalize:
+            ylabel += " (normalized)"
+        ax.set_ylabel(ylabel)
+        ax.grid(visible=True)
+
 
         ax.legend()
 
@@ -1516,25 +1576,42 @@ if __name__ == "__main__":
     from POLARIScore.networks.INNTrainer import INNTrainer
     from POLARIScore.networks.DDPTrainer import DDPTrainer
     from POLARIScore.config import DATA_NORMALIZATION_CDENS, DATA_NORMALIZATION_VDENS
-    obs = Observation("Serpens","column_density_map")
-    obs.distance = 436
+    obs = Observation("OrionB","column_density_map")
+    obs.distance = 400
+    obs.load("_ddpm")
+    fig, ax = obs.plot_power_spectrum(plot_coldens=False, label="ddpm", normalize=False)
+    obs.load("_cinn")
+    obs.plot_power_spectrum(ax=ax, plot_coldens=False, label="cinn", normalize=False)
     obs.load("_unet")
-    obs.get_cores(use_deconvolved_values=False)
-    obs.plot_dcmf(monte_carlo=0, bins=15, fit=False) 
-    obs.get_cores(use_deconvolved_values=True, force_compute=True)
-    obs.plot_dcmf(monte_carlo=0, bins=15, fit=False) 
+    obs.plot_power_spectrum(ax=ax, plot_coldens=False, label="unet", normalize=False)
+    obs.load("_fit")
+    obs.plot_power_spectrum(ax=ax, plot_coldens=False, label="fit", normalize=False)
+
+    #obs.get_cores(use_deconvolved_values=False)
+    #obs.plot_dcmf(monte_carlo=0, bins=15, fit=False) 
+    #obs.get_cores(use_deconvolved_values=True, force_compute=True)
+    #obs.plot_dcmf(monte_carlo=0, bins=15, fit=False) 
     #obs.plot_cores_error(mov_average=0, log_average=50, show_errors=False, show_model_errors=False,correction=True, color="black") 
 
     #obs.load_error(model_name="UNet")
     #delta = obs.rectify_error_baseline() - obs.predict(trainer,patch_size=(128,128), overlap=0.5, downsample_factor=obs.find_scale(3.30474,128,400), nan_value=-1., apply_baseline=True)
     #print(delta)
 
-    """
-    trainer = load_trainer("UNet", trainer_class=Trainer)
-    obs.predict(trainer,patch_size=(128,128), overlap=0.5, downsample_factor=obs.find_scale(3.30474,128,obs.distance), nan_value=1e20, apply_baseline=True)
-    obs.save(suffix="_unet")
-    obs.plot(data=obs.prediction, norm=LogNorm(vmin=1e2, vmax=3e5), plot_skeleton=False)
 
+    #trainer = load_trainer("cINN", trainer_class=INNTrainer)
+    #trainer.norms = {
+    #    "cdens": DATA_NORMALIZATION_CDENS,
+    #    "vdens": DATA_NORMALIZATION_VDENS,
+    #}
+    #for f in [1.5,2,3]:
+    #    obs = Observation("OrionB","column_density_map")
+    #    obs.distance = 400
+    #    obs.apply_filter(factor=f)
+    #    obs.predict(trainer,patch_size=(128,128), overlap=0.5, downsample_factor=obs.find_scale(3.30474,128,obs.distance), nan_value=1e20, apply_baseline=True)
+    #    obs.save(suffix=f"_cinn_{str(f)}")
+    #    obs.plot(data=obs.prediction, norm=LogNorm(vmin=1e2, vmax=3e5), plot_skeleton=False)
+
+    """
     trainer = load_trainer("DDPM", trainer_class=DDPTrainer)
     trainer.norms = {
        "cdens": DATA_NORMALIZATION_CDENS,

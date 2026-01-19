@@ -112,6 +112,8 @@ global_axes = {
     "core_relations": None,
     "density_dists": None,
     "core_diffs": None,
+    "power_spectra":None,
+    "power_spectra_normalized":None,
 }
 
 in_files = []
@@ -174,6 +176,12 @@ def make_obs_benchmark(suffix,model_name=None,i=0):
         if ("c_diff" in args.toplot or "all" in args.toplot) and not("-c_diff" in args.toplot):
             _, ax = observation.plot_cores_mass(ax=global_axes["core_diffs"], bins_mean=20, label=m, show_errors=False, linestyle=linestyles[i])
             global_axes["core_diffs"] = ax
+
+        if ("power_spectra" in args.toplot or "all" in args.toplot) and not("-power_spectra" in args.toplot):
+            _, ax = observation.plot_power_spectrum(ax=global_axes["power_spectra"], bins=40, label=m, color=colors[i], normalize=False, plot_coldens=False)
+            global_axes["power_spectra"] = ax
+            _, ax = observation.plot_power_spectrum(ax=global_axes["power_spectra_normalized"], bins=40, label=m, color=colors[i], normalize=True, plot_coldens=global_axes["power_spectra_normalized"] is None)
+            global_axes["power_spectra_normalized"] = ax
 
         #One figure per model:
 
@@ -304,7 +312,7 @@ for i,t,m in zip(range(len(trainers)),trainers, args.models):
         "inference_speed(img/s)": str(1/trainer.inference_time),
         "parameters":  sum(p.numel() for p in trainer.model.parameters()),
         "MSE": trainer.validation_losses[-1],
-        "Error (Acc=80%)": find_error_for_batch_accuracy(trainer.get_prediction_batch(), accuracy=0.8) ,
+        "Error(Acc=80%)": find_error_for_batch_accuracy(trainer.get_prediction_batch(), accuracy=0.8) ,
     })
 
     if observation is not None :
