@@ -3,7 +3,6 @@ Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
 The top-level auxiliary file: paper.aux
 The style file: aa.bst
 Database file #1: biblio.bib
-Warning--I didn't find a database entry for "<reference>"
 Reallocated wiz_functions (elt_size=4) to 6000 items from 3000.
 Warning--empty journal in ardizzoneConditionalInvertibleNeural2021
 Warning--empty journal in gachesProbabilisticModelEstimate2024
@@ -15,47 +14,46 @@ Warning--empty journal in orkiszVolumeDensityStar2024
 Warning--empty journal in paszkePyTorchImperativeStyle2019
 Warning--empty journal in rezendeVariationalInferenceNormalizing2016
 Warning--empty journal in ronnebergerUNetConvolutionalNetworks2015
-Warning--empty journal in salimansProgressiveDistillationFast2022
 Warning--empty journal in yangImageDataAugmentation2023
-You've used 22 entries,
+You've used 26 entries,
             3039 wiz_defined-function locations,
-            805 strings with 11377 characters,
-and the built_in function-call counts, 14266 in all, are:
-= -- 1099
-> -- 1571
-< -- 9
-+ -- 527
-- -- 501
-* -- 1321
-:= -- 2667
-add.period$ -- 22
-call.type$ -- 22
-change.case$ -- 255
-chr.to.int$ -- 22
-cite$ -- 34
-duplicate$ -- 424
-empty$ -- 566
-format.name$ -- 569
-if$ -- 2743
+            837 strings with 12278 characters,
+and the built_in function-call counts, 15852 in all, are:
+= -- 1236
+> -- 1653
+< -- 11
++ -- 559
+- -- 525
+* -- 1437
+:= -- 2965
+add.period$ -- 26
+call.type$ -- 26
+change.case$ -- 279
+chr.to.int$ -- 26
+cite$ -- 37
+duplicate$ -- 493
+empty$ -- 673
+format.name$ -- 597
+if$ -- 3060
 int.to.chr$ -- 1
 int.to.str$ -- 1
-missing$ -- 21
-newline$ -- 70
-num.names$ -- 88
-pop$ -- 292
+missing$ -- 25
+newline$ -- 82
+num.names$ -- 104
+pop$ -- 309
 preamble$ -- 1
-purify$ -- 255
+purify$ -- 279
 quote$ -- 0
-skip$ -- 316
+skip$ -- 385
 stack$ -- 0
-substring$ -- 361
-swap$ -- 12
+substring$ -- 462
+swap$ -- 11
 text.length$ -- 0
 text.prefix$ -- 0
 top$ -- 0
-type$ -- 198
-warning$ -- 12
-while$ -- 78
+type$ -- 234
+warning$ -- 11
+while$ -- 95
 width$ -- 0
-write$ -- 208
-(There were 13 warnings)
+write$ -- 249
+(There were 11 warnings)

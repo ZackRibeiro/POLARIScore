@@ -1,4 +1,4 @@
-\begin{thebibliography}{22}
+\begin{thebibliography}{26}
 \expandafter\ifx\csname natexlab\endcsname\relax\def\natexlab#1{#1}\fi
 
 \bibitem[{Alina {et~al.}(2022)Alina, Shomanov, \& Baimukhametova}]{alinaMaLeFiSentaMachineLearning2022}
@@ -9,6 +9,15 @@ Andr{\'e}, {\relax Ph}., Men'shchikov, A., Bontemps, S., {et~al.} 2010, Astronom
 
 \bibitem[{Ardizzone {et~al.}(2021)Ardizzone, Kruse, L{\"u}th, Bracher, Rother, \& K{\"o}the}]{ardizzoneConditionalInvertibleNeural2021}
 Ardizzone, L., Kruse, J., L{\"u}th, C., {et~al.} 2021 [\eprint[arXiv]{2105.02104}]
+
+\bibitem[{Burkhart(2018)}]{burkhartStarFormationRate2018}
+Burkhart, B. 2018, The Astrophysical Journal, 863, 118
+
+\bibitem[{Falgarone {et~al.}(1991)Falgarone, Phillips, \& Walker}]{falgaroneEdgesMolecularClouds1991}
+Falgarone, E., Phillips, T.~G., \& Walker, C.~K. 1991, The Astrophysical Journal, 378, 186
+
+\bibitem[{Federrath(2013)}]{federrathUniversalitySupersonicTurbulence2013}
+Federrath, C. 2013, Monthly Notices of the Royal Astronomical Society, 436, 1245
 
 \bibitem[{Fukushima(1980)}]{fukushimaNeocognitronSelforganizingNeural1980}
 Fukushima, K. 1980, Biological Cybernetics, 36, 193
@@ -21,6 +30,9 @@ Goodfellow, I.~J., {Pouget-Abadie}, J., Mirza, M., {et~al.} 2014
 
 \bibitem[{Ho {et~al.}(2020)Ho, Jain, \& Abbeel}]{hoDenoisingDiffusionProbabilistic2020}
 Ho, J., Jain, A., \& Abbeel, P. 2020
+
+\bibitem[{Kainulainen {et~al.}(2009)Kainulainen, Beuther, Henning, \& Plume}]{kainulainenProbingEvolutionMolecular2009}
+Kainulainen, J., Beuther, H., Henning, T., \& Plume, R. 2009, Astronomy \& Astrophysics, 508, L35
 
 \bibitem[{Kingma \& Ba(2017)}]{kingmaAdamMethodStochastic2017}
 Kingma, D.~P. \& Ba, J. 2017 [\eprint[arXiv]{1412.6980}]
@@ -55,14 +67,14 @@ Rezende, D.~J. \& Mohamed, S. 2016 [\eprint[arXiv]{1505.05770}]
 \bibitem[{Ronneberger {et~al.}(2015)Ronneberger, Fischer, \& Brox}]{ronnebergerUNetConvolutionalNetworks2015}
 Ronneberger, O., Fischer, P., \& Brox, T. 2015 [\eprint[arXiv]{1505.04597}]
 
-\bibitem[{Salimans \& Ho(2022)}]{salimansProgressiveDistillationFast2022}
-Salimans, T. \& Ho, J. 2022 [\eprint[arXiv]{2202.00512}]
-
 \bibitem[{Teyssier(2002)}]{teyssierCosmologicalHydrodynamicsAdaptive2002}
 Teyssier, R. 2002, Astronomy \& Astrophysics, 385, 337
 
 \bibitem[{Uhlenbeck \& Ornstein(1930)}]{uhlenbeckTheoryBrownianMotion1930}
 Uhlenbeck, G.~E. \& Ornstein, L.~S. 1930, Physical Review, 36, 823
+
+\bibitem[{{Vazquez-Semadeni}(1994)}]{vazquez-semadeniHierarchicalStructureNearly1994}
+{Vazquez-Semadeni}, E. 1994, The Astrophysical Journal, 423, 681
 
 \bibitem[{Yang {et~al.}(2023)Yang, Xiao, Zhang, Guo, Zhao, \& Shen}]{yangImageDataAugmentation2023}
 Yang, S., Xiao, W., Zhang, M., {et~al.} 2023 [\eprint[arXiv]{2204.08610}]

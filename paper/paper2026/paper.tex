@@ -130,7 +130,7 @@
 
    These datasets are created using magnetohydrodynamical (MHD) simulations of a star-forming molecular cloud: 
    \textit{ORION} \citep{ntormousiCoreStellarMass2019}, publicly available through the GALACTICA\footnote{\url{http://www.galactica-simulations.eu/db/STAR_FORM/ORION/}} database and shown in Figure \ref{fig:sim_coldens}. 
-   \\These simulations are not isothermals with cooling on and $\gamma=1.667$, model MHD turbulence and have a size of 66.1 pc with an initial resolution of 0.01 pc, reaching a few hundred AU using
+   \\These simulations are not isothermals with cooling on and $\gamma=5/3$, model MHD turbulence and have a size of 66.1 pc with an initial resolution of 0.01 pc, reaching a few hundred AU using
    an AMR grid. The simulations were performed using RAMSES \citep{teyssierCosmologicalHydrodynamicsAdaptive2002}, with self-gravity applied, star-formation
    treated using Lagrangian sink particles and ideal MHD resolved and no chemistry.
 
@@ -351,8 +351,6 @@
 
       \textbf{Some words on architecture with figure (Encoder, Noise scheduling)}
 
-      \cite{salimansProgressiveDistillationFast2022}
-
 \subsection{Application}
    The trained neural networks are applied to Orion~B, a giant molecular cloud located at a distance of approximately $400\,\mathrm{pc}$ \citep{mentenDistanceOrionNebula2007}. 
    Herschel observations \citep{konyvesPropertiesDenseCore2020,andreFilamentaryCloudsPrestellar2010} reveal a fragmented filamentary structure, with star formation primarily concentrated in dense clumps.
@@ -387,13 +385,13 @@
       \centering
       \begin{subfigure}{\columnwidth}
          \centering
-         \includegraphics[width=\columnwidth]{figures/Benchmark_OrionB/ds_0.jpg}
+         \includegraphics[width=\columnwidth]{figures/Benchmark_OrionB/ds_3.jpg}
          \label{fig:nn_valset_predictions_a}
       \end{subfigure}
       \hfill
       \begin{subfigure}{\columnwidth}
          \centering
-         \includegraphics[width=\columnwidth]{figures/Benchmark_OrionB/ds_1.jpg}
+         \includegraphics[width=\columnwidth]{figures/Benchmark_OrionB/ds_5.jpg}
          \label{fig:nn_valset_predictions_b}
       \end{subfigure}
       \caption{Neural network validation set predictions on two regions of the validation dataset ($3.33$pc of width)}.
@@ -448,7 +446,7 @@
 
    This behaviour is also visible in the spatial error maps shown in Fig.~\ref{fig:nn_valset_predictions}, which further highlight network-specific artifacts.
    For UNet (and partially masked in the other models by larger-scale artifacts), small-scale convolutional artifacts are visible.
-   The cINN exhibits characteristic stride patterns, which may indicate early signs of non-invertibility and suggest that some information is missing to accurately infer the mass-weighted average volume density from the column-density map alone.
+   The cINN exhibits characteristic stride patterns and a structure noise for low densities, which may indicate early signs of non-invertibility and suggest that some information is missing to accurately infer the mass-weighted average volume density from the column-density map alone.
    Finally, the DDPM displays a white-noise like artifact pattern, which is inherent to the stochastic nature of the method.
 
    \begin{table}[!ht]
@@ -501,9 +499,12 @@
    
       \subsubsection{Large-scale structures}
 
-   The density probability distribution functions (PDFs) of molecular clouds are known to follow a lognormal shape at low densities, with a power-law tail at high densities, both for column density and volume density \citep{<reference>}.
-   However, for the mass-weighted average volume-density PDF, we observe an excess at high densities, appearing as a bump in the power-law regime at $n_\mathrm{H} \sim \ldots$.
-
+   The density probability distribution functions (PDFs) of molecular clouds are known to follow a lognormal shape at low densities, with a power-law tail at high densities, both for column density and volume density \citep{vazquez-semadeniHierarchicalStructureNearly1994,kainulainenProbingEvolutionMolecular2009,federrathUniversalitySupersonicTurbulence2013,burkhartStarFormationRate2018}.
+   However, for the mass-weighted average volume-density PDF, we observe an excess at high densities, appearing as a bump in the power-law regime at $\nmh \sim 10^{3}\,\mathrm{cm}^{-3}$ in Figure~\ref{fig:density_distributions}.
+   This excess arises because the predicted quantity is a mass-weighted average along the line of sight, which gives greater weight to dense structures and, in particular, to dense cores.
+      
+   One can also note that the fit-predicted $\nmh$ differs from the densities predicted by all neural networks, indicating that the networks rely on spatial structures in the maps to estimate $\nmh$, rather than solely on the relation $\nmh(\Nh)$.   
+   
    \begin{figure}[!ht]
       \centering
       \begin{subfigure}{0.49\columnwidth}
@@ -531,14 +532,36 @@
       \label{fig:density_distributions}
    \end{figure}
 
+   We can also test whether the structures follow a power-law scaling implying a constant fractal dimension $D$ across spatial scales where $D$ is given by the relation:
+   \begin{equation}
+      P=A^{D/2},
+   \end{equation}
+   where $P$ is the perimeter and $A$ the area \citep{falgaroneEdgesMolecularClouds1991}.
+
+   \begin{figure}[!ht]
+      \centering
+      \begin{subfigure}{.49\columnwidth}
+         \centering
+         \includegraphics[width=\columnwidth]{figures/Benchmark_OrionB/fractal_dim.jpg}
+         \caption{Fit example of $P(A)$ for a treshold of $\dots$}
+         \label{fig:fractal_dim_fit}
+      \end{subfigure}
+      \begin{subfigure}{.49\columnwidth}
+         \centering
+         \includegraphics[width=\columnwidth]{figures/Benchmark_OrionB/fractal_dim.jpg}
+         \caption{$D$ for different minimum thresholds}
+      \end{subfigure}
+      \label{fig:fractal_dim}
+      \caption{Fractal dimensions measured on predicted $\nmh$ maps}
+   \end{figure}
+
    \subsubsection{Prestellar cores}
+
+   
    
 
    \begin{itemize}
-   \item \textbf{Density PDFs:} Comparison of the probability distribution functions of the predicted densities (but how ?).
    \item \textbf{Turb ?}
-   \item \textbf{Fractal dimension:} Using the relation $P = A^{D/2}$, where $P$ is the perimeter and $A$ the area, we test whether the structures follow a power-law scaling, implying a constant fractal dimension $D$ across spatial scales.
-   \item \textbf{Typical size of structures (?):} Evaluate characteristic spatial scales (e.g., whether filament widths cluster around $\sim 0.1$ pc).
    \item \textbf{Comparison with the core catalog of Könyves et al.:} Differences between predicted core densities and catalogued values.
    \item \textbf{Core morphology:} Visual inspection to determine whether predicted cores are embedded within density clumps or appear isolated (hierarchical picture).
    \item \textbf{Robustness to resolution changes: } Evaluate how the predictions vary when the observational resolution is modified, using both the validation set and real observations.
