@@ -85,13 +85,13 @@ def find_error_for_batch_accuracy(batch, accuracy=0.8, epsilon=0.01):
     sigma0 = 0.
     sigma1 = 1.
     acc0 = compute_batch_accuracy(batch, sigma=sigma0)[0]-accuracy
-    while acc > epsilon and ite < 100:
+    while abs(acc) > epsilon and ite < 100:
         ite += 1
-        sigma = (sigma1-sigma0)/2
+        sigma = (sigma1+sigma0)/2
         acc = compute_batch_accuracy(batch, sigma=sigma)[0]-accuracy
         if acc*acc0 >= 0:
             acc0 = acc
             sigma0 = sigma
         else:
             sigma1 = sigma
-    return acc+accuracy
+    return sigma

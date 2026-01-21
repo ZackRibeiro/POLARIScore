@@ -232,6 +232,7 @@
       \end{figure}
 
    \subsubsection{Conditional Invertible Neural Network}
+      \label{sec:cinn}
 
       However, state-of-art networks used today are not deterministic architectures such as UNet, but stochastic models that sample from probability distributions.
       
@@ -704,7 +705,6 @@
    We see in Figure \ref{fig:mw_correction_diffkonyves} that the correction indeed increases the dense-core density by an order of magnitude in diffuse regions, i.e., at low column densities.
    However, at high column densities, the two-medium approximation no longer holds, and therefore we can define an upper threshold,
    for example $3\times10^{22}\mathrm{cm}^{-2}$, above which the density correction should not be applied.
-
 \section{Validation error and bias}
    \label{appendix:valerror}
    Residuals distributions; Correction of the bias; Residuals error propagation to metrics (MC);
@@ -803,8 +803,37 @@
       
       \paragraph{cINN}
       \textbf{train a cINN with less data}
+\FloatBarrier
+
+\section{Characteristics of the Trained Networks}
+
+In this appendix, we summarize the training settings and important details for all networks, to facilitate reproducibility. 
+All networks were trained on an NVIDIA GeForce RTX 2070 SUPER with 8~GB of VRAM.
+
+   \subsection{UNet}
+      UNet is a straightforward model to train, consistently converging to the loss minima.
+      \begin{enumerate}
+         \item Number of layers: 5
+         \item Number of base features (scaling with depth: $\text{base\_features} \times 2^i$): 64
+         \item Convolutional block used: DoubleConvBlock (two convolution layers with ReLU per block)
+         \item Attention: Gated Attention Block applied at each layer \citep{oktayAttentionUNetLearning2018}
+         \item Learning rate: $1\times10^{-4}$ at initialization, using the ADAM optimizer
+         \item Data normalization: logarithmic scale (base 10)
+      \end{enumerate}
+   \subsection{cINN}
+      When choosing the cINN parameters, a trade-off must be made between the number of layers in the encoder and the number of base features. 
+      This is because the MLP subnetworks in the coupling blocks concatenate the conditions provided by the encoder with the input data $u$ or $v$ (see Section~\ref{sec:cinn}). 
+      Consequently, the encoder should remain relatively shallow so as not to overload the data flow within the coupling blocks.
+      \begin{enumerate}
+         \item Encoder number of layers: 3
+         \item Encoder number of base features: /
+         \item Attention: No attention 
+      \end{enumerate}
+
+   \subsection{DDPM}
 
 \onecolumn
+
 \section{Examples of dense core predictions}
       Figure: horizontal: Powerlaw, Unet, cINN, DDPM
       vertical: top: column density, bot: average volume density.

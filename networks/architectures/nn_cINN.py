@@ -56,7 +56,7 @@ class RandomPermutation(nn.Module):
 # use residuals blocks?
 class Encoder(nn.Module):
     """Encoder which returns 'num_layers' features in a list"""
-    def __init__(self, num_layers:int=5, base_filters:int=64):
+    def __init__(self, num_layers:int=3, base_filters:int=48):
         super(Encoder, self).__init__()
 
         self.num_layers = num_layers

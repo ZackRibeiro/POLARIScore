@@ -1569,24 +1569,20 @@ if __name__ == "__main__":
 
     #script_data_and_figures("Taurus_L1495", normcol=[0.5e21,3e22], normvol=[1e1,2.5e4], save_fig=True, plot_cores=False, show=True)
     
-    def gamma_correct(rgb, gamma=0.8):
-        rgb = rgb ** gamma
-        return rgb/np.max(rgb)
-
     from POLARIScore.networks.Trainer import load_trainer
     from POLARIScore.networks.INNTrainer import INNTrainer
     from POLARIScore.networks.DDPTrainer import DDPTrainer
     from POLARIScore.config import DATA_NORMALIZATION_CDENS, DATA_NORMALIZATION_VDENS
     obs = Observation("OrionB","column_density_map")
     obs.distance = 400
-    obs.load("_ddpm")
-    fig, ax = obs.plot_power_spectrum(plot_coldens=False, label="ddpm", normalize=False)
-    obs.load("_cinn")
-    obs.plot_power_spectrum(ax=ax, plot_coldens=False, label="cinn", normalize=False)
-    obs.load("_unet")
-    obs.plot_power_spectrum(ax=ax, plot_coldens=False, label="unet", normalize=False)
-    obs.load("_fit")
-    obs.plot_power_spectrum(ax=ax, plot_coldens=False, label="fit", normalize=False)
+    #obs.load("_ddpm")
+    #fig, ax = obs.plot_power_spectrum(plot_coldens=False, label="ddpm", normalize=False)
+    #obs.load("_cinn")
+    #obs.plot_power_spectrum(ax=ax, plot_coldens=False, label="cinn", normalize=False)
+    #obs.load("_unet")
+    #obs.plot_power_spectrum(plot_coldens=False, label="unet", normalize=False)
+    #obs.load("_fit")
+    #obs.plot_power_spectrum(ax=ax, plot_coldens=False, label="fit", normalize=False)
 
     #obs.get_cores(use_deconvolved_values=False)
     #obs.plot_dcmf(monte_carlo=0, bins=15, fit=False) 

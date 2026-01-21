@@ -891,10 +891,43 @@ if __name__ == "__main__":
     #sim.init(loadTemp=True, loadVel=True)
     sim = openSimulation("orionMHD_lowB_multi", global_size=66.0948, cache_name="sim_memory")
     #sim.plotSlice(axis=2, enable_slider=True)
-    sim.generate_batch(name="convolved_perseus",number=10000, img_size=128,what_to_compute={"cospectra":False, "density":False,"context":10},axis=[0,1,2], beam=(18.2,300),
+    sim.generate_batch(name="midres",number=10000, img_size=128, size=6.4, what_to_compute={"cospectra":False, "density":False,"context":10},axis=[0,1,2],
                        limit_area=([27,40,26,39],[26.4,40,22.5,44.3],[26.4,39,21,44.5]))
+    
+    from POLARIScore.objects.Dataset import getDataset
+    ds = getDataset("batch_midres")
+    ds1, ds2 = ds.split(ds, 0.7)
+    ds1.save()
+    ds2.save()
+
+    from POLARIScore.networks.Trainer import Trainer
+    from POLARIScore.networks.architectures.nn_UNet import UNet
+    trainer = Trainer(UNet, ds1, ds2, "UNet_midres")
+    trainer.learning_rate = 1e-4
+    trainer.network_settings["base_filters"] = 64
+    trainer.network_settings["num_layers"] = 4
+    trainer.training_random_transform = True
+    trainer.optimizer_name = "Adam"
+    trainer.target_names = ["vdens"]
+    trainer.input_names = ["cdens"]
+    trainer.init()
+    trainer.train(1000,batch_number=8,compute_validation=10,early_stopping=False, training_mode="normal")
+    trainer.save()
+    trainer.get_validation_error()
+
+    from POLARIScore.objects.Observation import Observation
+    obs = Observation("OrionB", "column_density_map")
+    obs.predict(trainer, overlap=0.5, downsample_factor=obs.find_scale(6.4,128,obs.distance))
+    obs.save("unet_midres")
+
+    obs.plot_power_spectrum(plot_coldens=False, normalize=False)
+
+    plt.show()
+
+    
+    
     #sim.plot(derivate=2, axis=0)
     #plt.figure()
     #sim.plot_correlation(method=compute_mass_weighted_density, contour_levels=3)
 
-    plt.show()
+    #plt.show()
