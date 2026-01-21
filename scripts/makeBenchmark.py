@@ -323,7 +323,7 @@ for i in range(len(args.ds_imgs)):
     plot_rect_bg(ds_figs[i], axes=ds_axes_error[i], color="tab:orange", text="NN Errors")
     plot_rect_bg(ds_figs[i], axes=ds_axes_sim[i], color="tab:green", text="Simulation")
     plot_rect_bg(ds_figs[i], axes=ds_axes[i], color="tab:blue", text="Predictions by NN")
-    ds_figs[i].savefig(os.path.join(BENCHMARK_PATH,f"ds_{str(i)}."+args.format))
+    ds_figs[i].savefig(os.path.join(BENCHMARK_PATH,f"ds_{str(args.ds_imgs[i])}."+args.format))
     
 
     
@@ -377,26 +377,33 @@ if observation is not None:
     if ("coldens" in args.toplot or "all" in args.toplot) and not("-coldens" in args.toplot):
         fig, _ = observation.plot(norm=LogNorm(vmin=1e21), plot_cores=False, force_col=True)
         fig.savefig(os.path.join(BENCHMARK_PATH,"column_density."+args.format))
+        plt.close(fig)
 
     if ("fractal" in args.toplot or "all" in args.toplot) and not("-fractal" in args.toplot):
-        try:
-            fig, _ = observation.plot_fractal_dim(suffixes=["_"+s for s in args.obs_suffixes], thresholds=[l for l in np.logspace(np.log10(30), np.log10(1e5), 30)], colors=colors)
-            fig.savefig(os.path.join(BENCHMARK_PATH,"fractal_dim."+args.format))
-        except:
-            LOGGER.warn("Fractal dim can't be plotted, error.")
+        
+        fig, _ = observation.plot_fractal_dim(suffixes=["_"+args.obs_suffixes[0]], thresholds=[2e3], colors=["black"])
+        fig.savefig(os.path.join(BENCHMARK_PATH,"fractal_dim_fit."+args.format))
+        plt.close(fig)
+        fig, _ = observation.plot_fractal_dim(suffixes=["_"+s for s in args.obs_suffixes], thresholds=[l for l in np.logspace(np.log10(30), np.log10(1e5), 30)], colors=colors)
+        fig.savefig(os.path.join(BENCHMARK_PATH,"fractal_dim."+args.format))
+        plt.close(fig)
+
 
 if ("accuracy" in args.toplot or "all" in args.toplot) and not("-accuracy" in args.toplot):
     accuracy_fig.savefig(os.path.join(BENCHMARK_PATH,"accuracy."+args.format))
+    plt.close(accuracy_fig)
 
 if ("residual" in args.toplot or "all" in args.toplot) and not ("-residual" in args.toplot):
     fig, _ = Trainer.plot_models_residuals_extended(trainers=full_trainers, colors=colors)
     fig.savefig(os.path.join(BENCHMARK_PATH,"residuals."+args.format))
+    plt.close(fig)
 
 for name, ax in zip(global_axes.keys(), global_axes.values()):
     if ax is None:
         continue
     fig = ax.get_figure()
     fig.savefig(os.path.join(BENCHMARK_PATH,name+"."+args.format))
+    plt.close(fig)
 
 string = dictsToString(in_files)
 with open(os.path.join(BENCHMARK_PATH, "benchmark.txt"), "w") as file:

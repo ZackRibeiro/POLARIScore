@@ -1001,9 +1001,10 @@ class Observation():
         colors = FIGURE_CMAP(np.linspace(FIGURE_CMAP_MIN, FIGURE_CMAP_MAX, len(suffixes))) if colors is None else colors
 
         def _fit_function(x, a, b):
-            return a*x+b
+            return (a/2)*x+b
 
         D = [[] for i in range(len(suffixes))]
+        D_err = [[] for i in range(len(suffixes))]
         T = [[] for i in range(len(suffixes))]
         for i,s in enumerate(suffixes):
             label = s.replace("_","")
@@ -1024,20 +1025,20 @@ class Observation():
                 if len(thresholds) < 2:
                     func = lambda X: np.exp(_fit_function(np.log(X), fit_a, fit_b))
                     plot_function(func, ax=ax, scatter=False, logspace=True, lims= (np.min(A), np.max(A)), color=colors[i], linestyle="--")
-                    label = label + f", D={(fit_a*2):.3}"
+                    label = label + f", D={(fit_a):.3}"
                     ax.scatter(A, P, marker="+", color=colors[i], label=label)
                 else:
                     if(len(x) > 20):
-                        D[i].append(fit_a*2)
+                        D_err[i].append(np.sqrt(pcov[0,0]))
+                        D[i].append(fit_a)
                         T[i].append(float(np.nanpercentile(data, t*100) if t < 1 else t))
         print("")
-        if len(D) > 0:
+        if len(D) > 0 and len(thresholds) > 1:
             for i in range(len(D)):
-                ax.scatter(T[i], D[i], marker="+", color=colors[i], label=suffixes[i].replace("_",""))
-                ax.plot(T[i], D[i], color=colors[i])
+                ax.errorbar(T[i],D[i],yerr=D_err[i],color=colors[i],label=suffixes[i].replace("_", ""),linestyle="-")
 
         if len(thresholds) < 2:
-            ax.set_xlabel(r"Area [$\text{pc}^2$]")
+            ax.set_xlabel(r"Area [$pc^2$]")
             ax.set_ylabel("Perimeter [pc]")
             ax.set_xscale("log")
             ax.set_yscale("log")

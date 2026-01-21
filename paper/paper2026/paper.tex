@@ -215,6 +215,7 @@
       It features a symmetric encoder-decoder structure where the encoder captures high-level features of the column density map through convolution (Eq~\ref{eq:convolution}) and max pooling operations, while the decoder gradually reconstructs the mass-weighted density map using upsampling layers.
       \\A key feature of U-Net is its \textit{skip connections}, which allow direct information flow between corresponding encoder and decoder layers, preserving spatial details lost during downsampling.
       \textbf{small sentence on Attention blocks ?}
+
       \begin{figure}[!ht]
          \centering
          \includegraphics[width=\columnwidth]{figures/unet_architecture.jpg}
@@ -223,12 +224,19 @@
          \label{fig:unet}
       \end{figure}
 
+      \begin{figure}[!ht]
+         \centering
+         \includegraphics[width=0.6\columnwidth]{figures/draw_unet.jpg}
+         \caption{UNet Architecture diagram}
+         \label{fig:architecture_unet}
+      \end{figure}
+
    \subsubsection{Conditional Invertible Neural Network}
 
       However, state-of-art networks used today are not deterministic architectures such as UNet, but stochastic models that sample from probability distributions.
       
       The goal of these networks is to sample from the conditional data distribution $p_\mathrm{data}(X|c)$ where $X$ is the target random variable (here $\nmh$) and $c$ the conditioning information (from observable, here $\Nh$).
-      Ff the inverse problem is ill-posed, i.e if one cannot uniquely infer the mass-weighted average volume density map $\nmh(x,y)$ from the 2D column-density map $\Nh(x,y)$, the generative network instead learns to sample physically plausible solutions drawn from the full posterior distribution 
+      If the inverse problem is ill-posed, i.e if one cannot uniquely infer the mass-weighted average volume density map $\nmh(x,y)$ from the 2D column-density map $\Nh(x,y)$, the generative network instead learns to sample physically plausible solutions drawn from the full posterior distribution 
       \begin{equation}
          p(\nmh(x,y)|\Nh(x,y)).
       \end{equation}
@@ -299,6 +307,12 @@
       This makes CCBs computationally efficient while retaining exact invertibility and tractable likelihood.
       
       \textbf{Some words on architecture with figure (Encoder, Haar wavelet downsampling)}
+      \begin{figure}[!ht]
+         \centering
+         \includegraphics[width=0.7\columnwidth]{figures/draw_cinn.jpg}
+         \caption{ciNN Architecture diagram}
+         \label{fig:architecture_cinn}
+      \end{figure}
       
    \subsubsection{Denoising Diffusion Probabilistic Model}
       Denoising Diffusion Probabilistic Models (DDPMs, \cite{hoDenoisingDiffusionProbabilistic2020}) generate samples by gradually transforming white noise, i.e a sample from the latent Gaussian prior $p_z=N(0,I)$, into a data sample $x_0\sim p_\text{data}$.
@@ -350,6 +364,12 @@
       In the conditional setting, the observable $\Nh$ is incorporated by concatenating it with the noisy sample $x_t$ at the input of the UNet, ensuring that each denoising step is conditioned on the available physical information.
 
       \textbf{Some words on architecture with figure (Encoder, Noise scheduling)}
+      \begin{figure}[!ht]
+         \centering
+         \includegraphics[width=0.8\columnwidth]{figures/draw_ddpm.jpg}
+         \caption{DDPM Architecture diagram}
+         \label{fig:architecture_ddpm}
+      \end{figure}
 
 \subsection{Application}
    The trained neural networks are applied to Orion~B, a giant molecular cloud located at a distance of approximately $400\,\mathrm{pc}$ \citep{mentenDistanceOrionNebula2007}. 
@@ -542,7 +562,7 @@
       \centering
       \begin{subfigure}{.49\columnwidth}
          \centering
-         \includegraphics[width=\columnwidth]{figures/Benchmark_OrionB/fractal_dim.jpg}
+         \includegraphics[width=\columnwidth]{figures/Benchmark_OrionB/fractal_dim_fit.jpg}
          \caption{Fit example of $P(A)$ for a treshold of $\dots$}
          \label{fig:fractal_dim_fit}
       \end{subfigure}
