@@ -67,8 +67,10 @@ if __name__ == "__main__":
     from POLARIScore.config import DATA_NORMALIZATION_CDENS, DATA_NORMALIZATION_VDENS, DATA_NORMALIZATION_CDENS_TORCH, DATA_NORMALIZATION_VDENS_TORCH
     #ds1 = getDataset("batch_training")
     #ds2 = getDataset("batch_validation")
-    ds = getDataset("batch_highres_2")
-    ds1, ds2 = ds.split(0.7)
+    #ds = getDataset("batch_highres_2")
+    ds1 = getDataset("batch_highres_2_b1")
+    ds2 = getDataset("batch_highres_2_b2")
+    #ds1, ds2 = ds.split(0.7)
 
     def classic_log_mse(output, target):
         output_phys = DATA_NORMALIZATION_VDENS_TORCH[1](output)
@@ -79,8 +81,8 @@ if __name__ == "__main__":
         return mse
 
 
-    #trainer = INNTrainer(cINN, ds1, ds2, model_name="Fixed_cINN")
-    trainer = load_trainer("cINN", trainer_class=INNTrainer)
+    trainer = INNTrainer(cINN, ds1, ds2, model_name="cINN_Attention")
+    #trainer = load_trainer("cINN", trainer_class=INNTrainer)
     trainer.norms = {
         "cdens": DATA_NORMALIZATION_CDENS,
         "vdens": DATA_NORMALIZATION_VDENS,
@@ -96,17 +98,18 @@ if __name__ == "__main__":
     trainer.learning_rate = 1e-3
     trainer.training_set = ds1
     trainer.validation_set = ds2
-    #trainer.network_settings["img_dim"] = 128
-    #trainer.network_settings["base_filters"] = 48
-    #trainer.network_settings["num_layers"] = 4
-    #trainer.network_settings["coupling_block_per_layer"] = 3
+    trainer.network_settings["img_dim"] = 128
+    trainer.network_settings["base_filters"] = 32
+    trainer.network_settings["num_layers"] = 3
+    trainer.network_settings["coupling_block_per_layer"] = 3
+    #trainer.network_settings["attention_layers"] = [2,3,4]
     trainer.training_random_transform = True
     trainer.optimizer_name = "Adam"
     trainer.target_names = ["vdens"]
     trainer.input_names = ["cdens"]
     trainer.auto_save = 500
     trainer.scheduler = None#StepLR(trainer.optimizer, 250, 0.1)
-    #trainer.init()
+    trainer.init()
 
     #unet_encoder = load_trainer("UNet").model.encoders
     #trainer.model.encoder.encoders = unet_encoder

@@ -378,7 +378,7 @@
 
    The networks are applied to the column density map derived from dust emission. Prestellar cores are identified using multiwavelength source extraction and spectral energy distribution (SED) fitting of the dust emission, and are taken from the catalogue of \citet{konyvesPropertiesDenseCore2020}.
 
-   Because the neural networks are trained on regions with a physical size of $3.3\,\mathrm{pc}$, the column density map is downsampled by a factor of 4.4 to match the spatial resolution of the training dataset. The observation is then divided into overlapping patches of $128 \times 128$ pixels, each of which is provided independently as input to the neural network.
+   Because the neural networks are trained on regions with a physical size of $3.3\,\mathrm{pc}$, the column density map is downsampled by a factor of 4.3 to match the spatial resolution of the training dataset. The observation is then divided into overlapping patches of $128 \times 128$ pixels, each of which is provided independently as input to the neural network.
 
    The patches are allowed to overlap in order to provide multiple contextual environments for each position in the map and to reduce edge effects inherent to convolutional architectures. The final prediction at each pixel is obtained by averaging the outputs from all overlapping patches covering that pixel.
 

@@ -4,7 +4,8 @@ import torch.nn.functional as F
 from POLARIScore.config import LOGGER
 from torch.nn import init
 from POLARIScore.networks.architectures.nn_UNet import DoubleConvBlock, ResConvBlock
-from typing import Union, Literal
+from POLARIScore.networks.architectures.nn_DDPM import MHSAttentionBlock
+from typing import Union, Literal, List, Optional
 from POLARIScore.networks.architectures.nn_BaseModule import BaseModule
 from POLARIScore.networks.addons.HaarDS import HaarDownsampling
 import numpy as np
@@ -56,7 +57,7 @@ class RandomPermutation(nn.Module):
 # use residuals blocks?
 class Encoder(nn.Module):
     """Encoder which returns 'num_layers' features in a list"""
-    def __init__(self, num_layers:int=3, base_filters:int=48):
+    def __init__(self, num_layers:int=3, base_filters:int=48, attention_layers:Optional[list]=[3,4]):
         super(Encoder, self).__init__()
 
         self.num_layers = num_layers
@@ -66,11 +67,13 @@ class Encoder(nn.Module):
         
         self.pool = nn.MaxPool2d(2,2)
         self.encoders = nn.ModuleList()
+        self.enc_attn = nn.ModuleList()
         
         in_channels = 1
         for i in range(num_layers):
             out_channels = filter_sizes[i]
             self.encoders.append(DoubleConvBlock(in_channels, out_channels, init_method=init.kaiming_uniform_))
+            self.enc_attn.append(MHSAttentionBlock(out_channels) if (attention_layers and i in attention_layers) else nn.Identity())
             in_channels = out_channels
         
     def forward(self, x):
@@ -83,6 +86,7 @@ class Encoder(nn.Module):
         enc_features = []
         for i in range(self.num_layers):
             x = self.encoders[i](x)
+            x = self.enc_attn[i](x)
             enc_features.append(x)
             x = self.pool(x)
 
@@ -207,14 +211,15 @@ class ConditionalCouplingLayer(nn.Module):
 class cINN(BaseModule):
     """Conditional Invertible Neural Network (cINN)"""
 
-    def __init__(self, img_dim=128, num_layers=2, coupling_block_per_layer=3, base_filters=64):
+    def __init__(self, img_dim=128, num_layers=2, attention_layers:Optional[List[int]]=None, coupling_block_per_layer=3, base_filters=64):
         super().__init__()
         self.img_dim = img_dim
         self.num_layers = num_layers
         self.coupling_block_per_layer = coupling_block_per_layer
+        self.attention_layers = attention_layers
         self.base_filters = base_filters
         
-        self.encoder = Encoder(num_layers=self.num_layers+1, base_filters=self.base_filters)
+        self.encoder = Encoder(num_layers=self.num_layers+1, base_filters=self.base_filters, attention_layers=self.attention_layers)
         self.coupling_blocks = nn.ModuleList()  # list of ModuleList
 
         self.downsample = HaarDownsampling()

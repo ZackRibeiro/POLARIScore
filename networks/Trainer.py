@@ -403,9 +403,16 @@ class Trainer():
         d_prediction = np.array([np.log10(b[1]) for b in batch]).flatten()
         residuals = d_prediction-d_target
 
+        mask = np.isfinite(d_prediction) & np.isfinite(residuals) & np.isfinite(d_target)
+        d_target = d_target[mask]
+        d_prediction = d_prediction[mask]
+        residuals = residuals[mask]
+
         sorted_indexes = np.argsort(d_target)
         d_prediction = d_prediction[sorted_indexes]
         residuals = residuals[sorted_indexes]
+
+
 
         mresiduals = moving_average(residuals, n=n)
         mx = moving_average(d_prediction, n=n)
@@ -430,6 +437,7 @@ class Trainer():
 
         H,W = prediction.shape
         d_prediction = np.array(np.log10(prediction)).flatten()
+
 
         d_prediction = applyBaseline(self.baseline[0],self.baseline[1],d_prediction,d_prediction)
         d_prediction = d_prediction.reshape((H,W))

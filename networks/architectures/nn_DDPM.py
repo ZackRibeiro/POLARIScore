@@ -20,7 +20,7 @@ class ResConvBlock(nn.Module):
         self.norm1 = nn.GroupNorm(min(group_over, in_channels), in_channels)
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
 
-        self.dropout = nn.Dropout2d(p=0.0)
+        self.dropout = nn.Dropout2d(p=0.05)
 
         self.time_mlp = None
         if time_emb_dim is not None:
