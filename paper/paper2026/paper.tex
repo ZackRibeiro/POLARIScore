@@ -811,26 +811,53 @@ In this appendix, we summarize the training settings and important details for a
 All networks were trained on an NVIDIA GeForce RTX 2070 SUPER with 8~GB of VRAM.
 
    \subsection{UNet}
+      Architecure: \citep{oktayAttentionUNetLearning2018}
+      
       UNet is a straightforward model to train, consistently converging to the loss minima.
-      \begin{enumerate}
+      \begin{itemize}
          \item Number of layers: 5
          \item Number of base features (scaling with depth: $\text{base\_features} \times 2^i$): 64
          \item Convolutional block used: DoubleConvBlock (two convolution layers with ReLU per block)
          \item Attention: Gated Attention Block applied at each layer \citep{oktayAttentionUNetLearning2018}
          \item Learning rate: $1\times10^{-4}$ at initialization, using the ADAM optimizer
          \item Data normalization: logarithmic scale (base 10)
-      \end{enumerate}
-   \subsection{cINN}
+      \end{itemize}
+   \subsection{cINN} 
+      Architecture: \citep{ardizzoneConditionalInvertibleNeural2021}
+      
       When choosing the cINN parameters, a trade-off must be made between the number of layers in the encoder and the number of base features. 
       This is because the MLP subnetworks in the coupling blocks concatenate the conditions provided by the encoder with the input data $u$ or $v$ (see Section~\ref{sec:cinn}). 
       Consequently, the encoder should remain relatively shallow so as not to overload the data flow within the coupling blocks.
-      \begin{enumerate}
-         \item Encoder number of layers: 3
-         \item Encoder number of base features: /
-         \item Attention: No attention 
-      \end{enumerate}
-
+      \begin{itemize}
+         \item Encoder depth (number of layers): 3
+         \item Encoder base features: 32
+         \item Coupling blocks per layer: 3
+         \item Subnetwork architecture (for predicting $s$ and $t$): Conv $\rightarrow$ ReLU $\rightarrow$ Conv $\rightarrow$ ReLU $\rightarrow$ Norm $\rightarrow$ Conv $\rightarrow$ Clamp
+         \item Downsampling before coupling blocks: Haar wavelets
+         \item Attention: none. We did not obtain stable training when using multi-head attention. Although attention mechanisms can, in principle, improve performance by enabling the model to capture long-range contextual dependencies, they introduced significant training instabilities in our experiments.
+         \item Learning rate: $1\times10^{-3}$ at initialization, using the ADAM optimizer
+         \item Data normalization: scaled to the range $[-1,\,1]$, which is important for generative models that require sampling:
+            \begin{equation}
+               \label{eq:normalization}
+               \left\{
+               \begin{aligned}
+                  \overline{\Nh} &= \frac{\log_{10}(\Nh)-19}{6}\times2-1 \\
+                  \overline{\nmh} &= \frac{\log_{10}(\nmh)}{8}\times2-1
+               \end{aligned}
+               \right.
+            \end{equation}
+      \end{itemize}
    \subsection{DDPM}
+      \begin{itemize}
+         \item UNet depth (number of layers): 3
+         \item UNet base features: 32
+         \item Prediction target: $v$-parameterization (rather than $\epsilon$), following \citet{karrasElucidatingDesignSpace2022}
+         \item Noise schedule: cosine $\beta$-schedule, with $\beta$ ranging from $10^{-4}$ to $0.02$ over 500 diffusion timesteps
+         \item Inference: the full 500 diffusion steps are not used at inference; instead, sampling is performed with 20 steps using a reduced-noise schedule
+         \item Attention: multi-head self-attention (8 heads) applied at the bottleneck and final resolution levels \citep{vaswaniAttentionAllYou2023}
+         \item Learning rate: $1\times10^{-4}$ at initialization, using the ADAM optimizer
+         \item Data normalization: same as for the cINN (see Eq.~\ref{eq:normalization})   
+      \end{itemize}
 
 \onecolumn
 

@@ -1,4 +1,4 @@
-\begin{thebibliography}{26}
+\begin{thebibliography}{28}
 \expandafter\ifx\csname natexlab\endcsname\relax\def\natexlab#1{#1}\fi
 
 \bibitem[{Alina {et~al.}(2022)Alina, Shomanov, \& Baimukhametova}]{alinaMaLeFiSentaMachineLearning2022}
@@ -33,6 +33,9 @@ Ho, J., Jain, A., \& Abbeel, P. 2020
 
 \bibitem[{Kainulainen {et~al.}(2009)Kainulainen, Beuther, Henning, \& Plume}]{kainulainenProbingEvolutionMolecular2009}
 Kainulainen, J., Beuther, H., Henning, T., \& Plume, R. 2009, Astronomy \& Astrophysics, 508, L35
+
+\bibitem[{Karras {et~al.}(2022)Karras, Aittala, Aila, \& Laine}]{karrasElucidatingDesignSpace2022}
+Karras, T., Aittala, M., Aila, T., \& Laine, S. 2022 [\eprint[arXiv]{2206.00364}]
 
 \bibitem[{Kingma \& Ba(2017)}]{kingmaAdamMethodStochastic2017}
 Kingma, D.~P. \& Ba, J. 2017 [\eprint[arXiv]{1412.6980}]
@@ -72,6 +75,9 @@ Teyssier, R. 2002, Astronomy \& Astrophysics, 385, 337
 
 \bibitem[{Uhlenbeck \& Ornstein(1930)}]{uhlenbeckTheoryBrownianMotion1930}
 Uhlenbeck, G.~E. \& Ornstein, L.~S. 1930, Physical Review, 36, 823
+
+\bibitem[{Vaswani {et~al.}(2023)Vaswani, Shazeer, Parmar, Uszkoreit, Jones, Gomez, Kaiser, \& Polosukhin}]{vaswaniAttentionAllYou2023}
+Vaswani, A., Shazeer, N., Parmar, N., {et~al.} 2023 [\eprint[arXiv]{1706.03762}]
 
 \bibitem[{{Vazquez-Semadeni}(1994)}]{vazquez-semadeniHierarchicalStructureNearly1994}
 {Vazquez-Semadeni}, E. 1994, The Astrophysical Journal, 423, 681
