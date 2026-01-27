@@ -811,7 +811,7 @@ In this appendix, we summarize the training settings and important details for a
 All networks were trained on an NVIDIA GeForce RTX 2070 SUPER with 8~GB of VRAM.
 
    \subsection{UNet}
-      Architecure: \citep{oktayAttentionUNetLearning2018}
+      Architecure: \cite{oktayAttentionUNetLearning2018}
       
       UNet is a straightforward model to train, consistently converging to the loss minima.
       \begin{itemize}
@@ -823,7 +823,7 @@ All networks were trained on an NVIDIA GeForce RTX 2070 SUPER with 8~GB of VRAM.
          \item Data normalization: logarithmic scale (base 10)
       \end{itemize}
    \subsection{cINN} 
-      Architecture: \citep{ardizzoneConditionalInvertibleNeural2021}
+      Architecture: \cite{ardizzoneConditionalInvertibleNeural2021}
       
       When choosing the cINN parameters, a trade-off must be made between the number of layers in the encoder and the number of base features. 
       This is because the MLP subnetworks in the coupling blocks concatenate the conditions provided by the encoder with the input data $u$ or $v$ (see Section~\ref{sec:cinn}). 
