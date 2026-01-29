@@ -5,8 +5,6 @@ import torch
 """
 This file contains all utils variables, like for simulation, plots...
 """
-SIM_DATA_NAME = "datacube.fits"
-"""Name of the file where the simulation data is stored"""
 
 EXPORT_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)),"export/")
 """Where all the objects saves are stored (ex: models, training_batchs)"""

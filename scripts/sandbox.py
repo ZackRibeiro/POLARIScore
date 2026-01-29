@@ -1,58 +1,40 @@
-from POLARIScore.utils.physics_utils import *
-import argparse
+from POLARIScore.utils.vtk_io import readVTKCart
+from POLARIScore.utils import compute_pdf
+from POLARIScore.config import DATA_FOLDER
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
+import matplotlib
+from scipy.optimize import curve_fit
 
-L = 5 #pc
-Mass = 1e4 #solar mass
-T = 30 #K
-B = 10 #microgauss
-Ms = 5
+from POLARIScore.objects.Simulation_DC import Simulation_DC
+from POLARIScore.utils.sim_utils import init_idefix
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--L", required=False, default=L, help="Box length")
-parser.add_argument("--M", required=False, default=Mass, help="Mass contained in the box")
-parser.add_argument("--T", required=False, default=T, help="Temperature")
-parser.add_argument("--B", required=False, default=B, help="Magnetic field along z axi (in microgauss)")
-parser.add_argument("--Ms", required=False, default=Ms, help="Sonic mach number")
-args = parser.parse_args()
-L = float(args.L)
-T = float(args.T)
-B = float(args.B)
-Ms = float(args.Ms)
-print(f"Computed using: L={L}pc | T={T}K | B={B}µG | Ms={Ms}")
-print("---------------------")
+sim = Simulation_DC("idefix_grav", global_size=5)
+init_idefix(simulation=sim)
 
-kb = 1.380649e-23
-Cs = np.sqrt(kb*T/(2.33*1.6735575e-27)) 
-print("Cs="+str(Cs)+" m/s")
+from POLARIScore.utils.physics_utils import dcmf_func
+from POLARIScore.utils.utils import plot_function
+_dcmf_function = lambda M,amp,mu,sigma,alpha,cutoff: dcmf_func(M,amp,mu,sigma,alpha,cutoff)
+pdf = compute_pdf(sim.data['RHO']/np.mean(sim.data['RHO']))
+bin_centers = pdf[1][:100]
+values = pdf[0]
 
-#cgs
-L = L*PC_TO_CM
-B *= 1e-6
-Cs = Cs*1e2
-Mass = Mass * 1.988e33
+popt, _ = curve_fit(_dcmf_function, (10**bin_centers), values,
+                    p0=[np.max(values), np.mean(10**bin_centers), np.std(10**bin_centers), 200.3, 1])
+func = lambda X: _dcmf_function(X, popt[0], popt[1], popt[2], popt[3], popt[4])
 
-print("L="+str(L)+" cm")
-rho = Mass/(L**3)
+fig = plt.figure()
+ax = fig.subplots()
 
-t = L/Cs
-print("t="+str(t/(3600*24*365.25*1e6))+" Myrs")
-print("rho="+str(rho)+" g/cm^3")
+M = 5
+b = np.sqrt((np.exp(popt[2]**2)-1 )/M**2)
 
-G = 6.674e-8
-tff = np.sqrt(3*np.pi/(32*rho*G))
-print("tff="+str(tff/(3600*24*365.25*1e6))+" Myrs")
-tturb = t/2/Ms
+ax.plot(10**pdf[1][:100], pdf[0], marker="+", color="black", label="b="+str(b))
+plot_function(func, ax=ax, scatter=False, logspace=True, lims= (np.min(10**bin_centers), np.max(10**bin_centers)), color="red", linestyle="--")
 
-G_code = G * t**2*rho
-print("G_code="+str(G_code))
+ax.set_xscale("log")
+fig.legend()
 
-B_code = B/(np.sqrt(rho)*Cs)
-print("B_code="+str(B_code))
-
-virial = 5*(Ms*Cs)**2*L/2 / (G*Mass)
-print("vir="+str(virial))
-
-print("tff/t="+str(tff/t))
-print("tturb/t="+str(tturb/t))
-
-# this gives B = 8.49e-6G
+plt.show()

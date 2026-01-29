@@ -24,9 +24,9 @@ import matplotlib.cm as cm
 class Simulation_DC():
     """
     DataCube Simulation is a sim where all the cells have the same size. 
-    Easier to manipulate than AMR simulation, i.e the sim tree.
+    Easier to manipulate than AMR simulation.
     """
-    def __init__(self, name:str, global_size:float, init:bool=True):
+    def __init__(self, name:str, global_size:float):
         """
         DataCube Simulation is a sim where all the cells have the same size. 
         Easier to manipulate than AMR simulation, i.e the sim tree.
@@ -42,149 +42,65 @@ class Simulation_DC():
         """Real spatial size of the global simulation in parsec"""
         self.folder:str = os.path.join(os.path.dirname(os.path.abspath(__file__)),"../data/sims/"+name+"/")
         """Path to the folder where the simulation is stored"""
-        self.file:str = os.path.join(self.folder,SIM_DATA_NAME)
-        """Path to the simulation data"""
-        self.data:np.ndarray = None
-        """Raw simulation density data"""
-        self.data_temp:np.ndarray = None
-        """Raw simulation temperature data"""
-        self.data_vel:Tuple[np.ndarray,np.ndarray,np.ndarray] = [None,None,None]
-        """Raw simulation velocity data (tuple of 3 datacube for xvel, yvel, zvel)"""
+        self.data:Dict[str,np.ndarray] = {}
+        """Data, example: density is stored in RHO"""
 
-        self.header:Dict = None
+
+        self.header:Dict = {}
         """Dict of sim settings"""
         self.nres:int = None
         """Resolution of the simulation (pixels*pixels), i.e shape of the matrix"""
-        self.relative_size:float =None
+        self.relative_size:float =1.
         """Relative size of the simulation to the global simulation"""
-        self.center:Tuple[float,float,float] = None
+        self.center:Tuple[float,float,float] = [.5, .5, .5]
         """Center of the simulation to the global simulation"""
         self.cell_size:float = None
         """Simulation cell size in cm"""
-        self.size:float = None
+        self.size:float = self.global_size
         """Real spatial size of the simulation in parsec"""
-        self.axis:Tuple[Tuple[float,float],Tuple[float,float],Tuple[float,float]] = None
+        self.axis:Tuple[Tuple[float,float],Tuple[float,float],Tuple[float,float]] = ([0, self.size],[0, self.size],[0, self.size])
         """Simulation faces surface in parsec"""
 
-        """Cache for computed densities, ndarray are 2D tensors"""
-        self.column_density:Tuple[np.ndarray,np.ndarray,np.ndarray] = [None,None,None]
-        self.column_density_method:Tuple[np.ndarray,np.ndarray,np.ndarray] = [None,None,None]
-        self.volumic_density:Tuple[np.ndarray,np.ndarray,np.ndarray] = [None,None,None]
-        self.volumic_density_method:Tuple[np.ndarray,np.ndarray,np.ndarray] = [None,None,None]
-
-        if init:
-            self.init()
-
-    def loadTemperature(self)->bool:
-        """
-        Load Temperature data from files
-
-        Returns:
-            isLoaded:bool
-        """
-        path = os.path.join(self.folder,SIM_DATA_NAME.split(".fits")[0]+"_temp.fits")
-        if not(os.path.exists(path)):
-            LOGGER.warn(f"Temperature not loaded in {self.name}, file not found")
-            return False
-        simfile = fits.open(path)
-        self.data_temp = simfile[0].data
-        simfile.close()
-        if self.data_temp is None:
-            LOGGER.warn(f"Temperature not loaded in {self.name}, file empty")
-            return False
-        return True
-    
-    def loadVelocity(self)->bool:
-        """
-        Load velocity data from files
-
-        Returns:
-            isLoaded:bool
-        """
-        path_x = os.path.join(self.folder,SIM_DATA_NAME.split(".fits")[0]+"_velx.fits")
-        path_y = os.path.join(self.folder,SIM_DATA_NAME.split(".fits")[0]+"_vely.fits")
-        path_z = os.path.join(self.folder,SIM_DATA_NAME.split(".fits")[0]+"_velz.fits")
-
-        if not(os.path.exists(path_x)):
-            LOGGER.warn(f"Velocity not loaded in {self.name}, file for x component not found")
-            return False
-        if not(os.path.exists(path_y)):
-            LOGGER.warn(f"Velocity not loaded in {self.name}, file for y component not found")
-            return False
-        if not(os.path.exists(path_z)):
-            LOGGER.warn(f"Velocity not loaded in {self.name}, file for z component not found")
-            return False
-        
-        simfile = fits.open(path_x)
-        self.data_vel[0] = simfile[0].data
-        simfile.close()
-        simfile = fits.open(path_y)
-        self.data_vel[1] = simfile[0].data
-        simfile.close()
-        simfile = fits.open(path_z)
-        self.data_vel[2] = simfile[0].data
-        simfile.close()
-
-        return True
-
-    def init(self, loadTemp:bool=False, loadVel:bool=False):
-        """
-        Load files and data in self variables
-
-        Args:
-            loadTemp (bool): try to load temperature ?
-            loadVel (bool): try to load velocity ?
-        """
-
-        LOGGER.log(f"Loading simulation {self.name}")
-
-        simfile = fits.open(self.file)
-        self.data = simfile[0].data
-        simfile.close()
-
-        self.column_density = [None,None,None]
-        self.column_density_method = [None,None,None]
         self.volumic_density = [None,None,None]
         self.volumic_density_method = [None,None,None]
+        """Cache, e.g for computed densities, ndarray are 2D tensors"""
+        self.cache: Dict = {}
         
-        if loadTemp:
-            LOGGER.log(f"Loading temperature of simulation {self.name}")
-            self.loadTemperature()
-        if loadVel:
-            LOGGER.log(f"Loading velocity of simulation {self.name}")
-            self.loadVelocity()
 
-        if os.path.exists(os.path.join(self.folder,"processing_config.json")):
-            with open(os.path.join(self.folder,"processing_config.json"), "r") as file:
-                self.header = json.load(file)
-            self.nres = self.header["run_parameters"]["nres"] if "nres" in self.header["run_parameters"] else self.header["run_parameters"]["nxyz"]
-            self.relative_size = self.header["run_parameters"]["size"]
-            self.center = np.array([self.header["run_parameters"]["xcenter"],self.header["run_parameters"]["ycenter"],self.header["run_parameters"]["zcenter"]])
-            self.cell_size = (self.global_size*self.relative_size/self.nres) * u.parsec
-            self.cell_size = self.cell_size.to(u.cm).value
-            self.size = self.global_size*self.relative_size
-            self.axis = ([self.center[0]*self.global_size-self.size/2,self.center[0]*self.global_size+self.size/2],[self.center[1]*self.global_size-self.size/2,self.center[1]*self.global_size+self.size/2],[self.center[2]*self.global_size-self.size/2,self.center[2]*self.global_size+self.size/2])    
-        LOGGER.log(f"Loading finished for simulation {self.name}")
+    def load_fit(self, key:str, path:str)->bool:
+        """
+        Load data stored as fits
+        Args:
+            key: dict key in self.data
+            path: path to the fit file
+        Returns:
+            is_loaded:bool
+        """
+        path = os.path.join(self.folder, path)
+        if not(".fit" in path):
+            path += ".fits"
+        if not(os.path.exists(path)):
+            LOGGER.error(f"Data {key} not loaded in simulation {self.name} -> File not found")
+            return False
+        simfile = fits.open(path)
+        if key in self.data:
+            LOGGER.warn(f"Sim Data had already a key {key} -> has been replaced")
+        self.data[key] = simfile[0].data
+        simfile.close()
+        if self.data[key] is None:
+            LOGGER.warn(f"Data {key} not loaded in simulation {self.name} -> file empty")
+            return False
+        return True
 
     def from_index_to_scale(self,index:int)->float:
         """Return the size in cm"""
         return index*self.cell_size
-
-    def _compute_c_density(self, method:Callable=compute_column_density, axis:int=0, force:bool=False)->np.ndarray:
-        """
-        Compute column density of an axis if not already computed or force param is set to true.
-        Args:
-            method: Method used to compute the column density.
-            axis (int): Axis
-            force (bool): If true, then even if the column density was already computed on this face, this will be computed again.
-        Returns:
-            2D matrix (ndarray) 
-        """
-        if self.column_density_method[axis] is None or self.column_density_method[axis] != method.__name__ or self.column_density[axis] is None or force:
-            LOGGER.log(f"Computing {method.__name__} for face {axis}, for {self.name}")
-            self.column_density_method[axis] = method.__name__
-            self.column_density[axis] = method(self.data, self.cell_size, axis=axis)
-        return self.column_density[axis]
+    
+    def _set_cache(self, key:str, value, force:bool=False):
+        if key in self.cache and not(force):
+            return self.cache[key]
+        self.cache[key] = value
+        return value
     
     def _compute_v_density(self, method:Callable=compute_mass_weighted_density, axis:int=0, force:bool=False)->np.ndarray:
         """
@@ -202,43 +118,54 @@ class Simulation_DC():
             self.volumic_density[axis] = method(self.data, axis=axis)
         return self.volumic_density[axis]
 
-    def generate_batch(self,name:str=None,method:Callable=compute_mass_weighted_density,what_to_compute:Dict={"cospectra":False,"density":False,"context":10.}
+    def generate_dataset(self,name:str=None,
+                         what_to_compute:Dict={"cospectra":False,"density":False,"context":10.,"vdens":compute_mass_weighted_density}
                        ,number:int=8,size:Union[float,Tuple[float,float]]=0.,img_size:int=128,random_rotate:bool=True,limit_area:Tuple=(None,None,None),
-                       nearest_size_factor:float=0.75,axis:Union[int,List[int]]=[0,1,2],
+                       nearest_size_factor:float=0.75,axes:Union[int,List[int]]=[0,1,2],
                        beam:Optional[Tuple[float,float]]=None)->bool:
         """
-        Generate a batch, i.e pairs of images (2D matrix) like [(col_dens_1, vol_dens_1),(col_dens_2, vol_dens_2)]
-        using this simulation. This will take randoms positions images in simulation.
+        Util method to generate a dataset from simulation.
+
+        What can be computed:
+        - 'vdens': compute average volume density along axes
+        - 'co_spectra': compute the co spectra
+        - 'density': keep the density cube in the dataset
+        - 'context': generate a downsampled global region (default is all the sim face) with a channel for a crop mask: 1 if the random region contains the pos else 0.
+        
 
         Args:
-            method(function): Method to compute the volumic density, like do we take the volume weighted mean ? Or the mass weighted mean ? Or even the max density along the l.o.s ?
             number(int, default: 8): How many pairs of images do we want.
             size(float, default: 0): Size in parsec for the areas, if 0 it takes the lowest size possible else it is downsampled. Can be an interval.
             img_size(int, default: 128):  Size of the img/matrix, if 0 it will take the size rounded (for example 128).
             random_rotate(bool, default: True): Randomly rotate 0°,90°,180°,270° for each region.
             limit_area(list): In which region of the simulation we'll pick the areas: ([for face1],[for face2],[for face3]) -> ([x_min,x_max,y_min,y_max],...) for each face.
             nearest_size_factor(float, default:0.75): If the new area picked is too close to an old area of a factor nearest_size_factor*area_size then we'll choose another area.
-            axis(list of ints or int): What faces of the simulation datacube will be used for generate the batch (e.g you may want to use 2 faces for training data and 1 face for validation data).
-            what_to_compute(dict): keys descriptions (values are bools):<br /> 'co_spectra': compute the co spectra<br /> 'density': keep the density cube in the dataset<br /> 'context': generate a downsampled global region (default is all the sim face) with a channel for a crop mask: 1 if the random region contains the pos else 0.
+            axes(list of ints or int): What faces of the simulation datacube will be used for generate the batch (e.g you may want to use 2 faces for training data and 1 face for validation data).
+            what_to_compute(dict)
         Returns:
             flag: if dataset was correctly generated.
         """
 
-        LOGGER.border("BATCH-GENERATING")
+        assert 'RHO' in self.data, LOGGER.error(f"Can't generate dataset -> There is no density stored in data. Keys actually stored in data: {self.data.keys()}")
+
+        LOGGER.border("DATASET-GENERATING")
 
 
-        axis = axis if type(axis) is list else [axis]
-        LOGGER.log(f"Generating {number} images using simulation {self.name} on faces {axis}.")
+        axes = axes if type(axes) is list else [axes]
+        LOGGER.log(f"Trying to generate {number} images using simulation {self.name} on faces {axes}.")
 
+        column_density = [None, None, None]
+        volume_density = [None, None, None]
+        for ax in axes:
+            column_density[ax] = compute_column_density(self.data['RHO'], self.cell_size, axis=ax)
 
-
-        column_density = [self._compute_c_density(axis=0),self._compute_c_density(axis=1),self._compute_c_density(axis=2)]
-        volume_density = [self._compute_v_density(method, axis=0),self._compute_v_density(method, axis=1),self._compute_v_density(method, axis=2)]
+            if what_to_compute["vdens"] is not None:
+                volume_density = [self._compute_v_density(what_to_compute["vdens"], axis=0),self._compute_v_density(what_to_compute["vdens"], axis=1),self._compute_v_density(what_to_compute["vdens"], axis=2)]
 
         if beam != None:
             LOGGER.warn(f"Column and volume density maps convolved to beam size: {beam[0]} arcsec at distance: {beam[1]} pc.")
-            column_density = [convolve_map(c, self.cell_size*3.24078e-19, beam_size=beam[0], distance=beam[1]) for c in column_density]
-            volume_density = [convolve_map(v, self.cell_size*3.24078e-19, beam_size=beam[0], distance=beam[1]) for v in volume_density]
+            column_density = [convolve_map(c, self.cell_size*3.24078e-19, beam_size=beam[0], distance=beam[1]) if c is not None else None for c in column_density]
+            volume_density = [convolve_map(v, self.cell_size*3.24078e-19, beam_size=beam[0], distance=beam[1]) if v is not None else None for v in volume_density]
 
         flag_cospectra = what_to_compute["cospectra"] if "cospectra" in what_to_compute else False
         if flag_cospectra:
@@ -247,7 +174,9 @@ class Simulation_DC():
         flag_context = (what_to_compute["context"] is not None and what_to_compute["context"]) if "context" in what_to_compute else False
         flag_physize = True
 
-        order = ["cdens","vdens"]
+        order = ["cdens"]
+        if what_to_compute["vdens"] is not None:
+            order.append("vdens")
         if flag_cospectra:
             order.append("cospectra")
         if flag_number_density:
@@ -275,7 +204,7 @@ class Simulation_DC():
                 LOGGER.warn("Failed to generated all the requested random batches, nbr of imgs generated:"+str(img_generated))
                 break
 
-            face = axis[int(np.floor(np.random.random()*len(axis)))]
+            face = axes[int(np.floor(np.random.random()*len(axes)))]
             c_dens = column_density[face]
             v_dens = volume_density[face]
             if flag_cospectra:
@@ -320,7 +249,6 @@ class Simulation_DC():
                 if not(skip_crop):
                     p_img = p_img[start_x:end_x, start_y:end_y]
                 #downsample
-                #Verify this downsample method 
                 if p_img.shape[0] > img_size:
                     factors = []
                     for si, shape in enumerate(p_img.shape):
@@ -336,7 +264,9 @@ class Simulation_DC():
                 return p_img
 
             k = np.random.choice([0, 1, 2, 3])
-            b = [_process_img(c_dens,k),_process_img(v_dens,k)]
+            b = [_process_img(c_dens,k)]
+            if v_dens is not None:
+                b.append(_process_img(v_dens,k))
 
             score = compute_img_score(b[0],b[1])
             if(np.random.random() > RANDOM_BATCH_SCORE_fct(score[0])):
@@ -407,7 +337,6 @@ class Simulation_DC():
         
         settings = {
             "SIM_name":self.name,
-            "method": method.__name__,
             "order": order,
             "what_was_computed": what_to_compute,
             "img_number": img_generated,
@@ -420,16 +349,24 @@ class Simulation_DC():
             "iteration": iteration,
             "random_rotate": random_rotate,
         }
+        
+        #TODO, handle the error
         ds.settings = settings
-        ds.save_settings()
+        try:
+            ds.save_settings()
+        except:
+            del settings["what_was_computed"]
+            ds.save_settings()
 
         LOGGER.log(f"New dataset {ds.name} saved")
     
         return ds
     
-    def plotSlice(self, axis:int=0, slice:int=256, N_arrows:int=20, show_velocity:bool=True, enable_slider:bool=True):
+    def plot_slice(self, axis:int=0, slice:int=256, N_arrows:int=20, show_velocity:bool=True, enable_slider:bool=True):
 
-            assert slice < self.data.shape[axis], LOGGER.error(f"Slice index ({str(slice)}) can't be higher than data matrix size ({self.data.shape[axis]}).")
+            assert 'RHO' in self.data, LOGGER.error(f"There is no density stored in data. Keys actually stored in data: {self.data.keys()}")
+            data_rho = self.data['RHO']
+            assert slice < data_rho.shape[axis], LOGGER.error(f"Slice index ({str(slice)}) can't be higher than data matrix size ({data_rho.shape[axis]}).")
             
             if not(axis in [0,1,2]):
                 LOGGER.warn(f"Slice plot: Axis {axis} is not valid -> take the default axis: 0")
@@ -437,11 +374,13 @@ class Simulation_DC():
             fig, ax = plt.subplots()
             plt.subplots_adjust(bottom=0.2)
 
-            velocity = self.data_vel if show_velocity else [None,None,None]
+            velocity = [None, None, None]
+            if show_velocity and "VX1" in self.data:
+                velocity = [self.data["VX1"], self.data["VX2"], self.data["VX3"]]
 
             artists = {'im': None, 'qui': None}
 
-            Nx, Ny = self.data.shape[1], self.data.shape[2]
+            Nx, Ny = data_rho.shape[1], data_rho.shape[2]
             x = np.arange(Ny)
             y = np.arange(Nx)
             X, Y = np.meshgrid(x, y)
@@ -450,11 +389,11 @@ class Simulation_DC():
 
                 global im, qui
 
-                density = self.data[slice,:,:]
+                density = data_rho[slice,:,:]
                 if axis == 1:
-                    density = self.data[:,slice,:]
+                    density = data_rho[:,slice,:]
                 elif axis == 2:
-                    density = self.data[:,:,slice]
+                    density = data_rho[:,:,slice]
 
                 if not(any([val is None for val in velocity])):
                     Ux = velocity[0][slice,:,:]
@@ -493,15 +432,16 @@ class Simulation_DC():
 
             if enable_slider:
                 ax_slider = plt.axes([0.2, 0.05, 0.6, 0.03])
-                slider = Slider(ax_slider, 'Slice', 0, self.data.shape[0]-1, valinit=slice, valfmt='%0.0f')
+                slider = Slider(ax_slider, 'Slice', 0, data_rho.shape[0]-1, valinit=slice, valfmt='%0.0f')
 
                 def update_slice(val):
-                    slice_idx = int(slider.val)
+                    print("t")
+                    slice_idx = int(val)
                     _plotData(slice=slice_idx)
 
                 slider.on_changed(update_slice)
 
-    def plot(self,method:Callable=compute_column_density,axis:Union[List[int],int]=[0],plot_pdf:bool=False,color_bar:bool=True,derivate:int=0):
+    def plot(self,method:Callable=compute_column_density,axis:Union[List[int],int]=[0,1,2],plot_pdf:bool=False,color_bar:bool=True,derivate:int=0):
         """
         Plot simulations faces with probabiliy density function
 
@@ -515,13 +455,15 @@ class Simulation_DC():
             Tuple(fig, axes)
         """
 
+        assert 'RHO' in self.data, LOGGER.error(f"There is no density stored in data. Keys actually stored in data: {self.data.keys()}")
+
         axis = axis if type(axis) is list else [axis]
         axis = np.array(axis)
         axis = axis[np.argsort(axis)]
 
         densities = []
         for ax in axis:
-            d = method(self.data, self.cell_size, axis=ax)
+            d = method(self.data['RHO'], self.cell_size, axis=ax)
             d = compute_derivative(d, order=derivate)
             d = np.abs(d)
             densities.append(d)  
@@ -585,11 +527,11 @@ class Simulation_DC():
             fig = ax.figure
 
         if axis >= 0:
-            column_density = self._compute_c_density(axis=axis,force=force_compute).flatten()
+            column_density = compute_column_density(self.data['RHO'], self.cell_size, axis=axis).flatten()
             volume_density = self._compute_v_density(method=method, axis=axis,force=force_compute).flatten()
         else:
-            column_density = np.array([self._compute_c_density(axis=0,force=force_compute),self._compute_c_density(axis=1,force=force_compute),self._compute_c_density(axis=2,force=force_compute)]).flatten()
-            volume_density = np.array([self._compute_v_density(method=method, axis=0,force=force_compute),self._compute_v_density(method=method, axis=1,force=force_compute),self._compute_v_density(method=method, axis=2,force=force_compute)]).flatten()
+            column_density = np.array([compute_column_density(self.data['RHO'], self.cell_size, axis=i) for i in range(3)]).flatten()
+            volume_density = np.array([self._compute_v_density(method=method, axis=i,force=force_compute) for i in range(3)]).flatten()
 
         logx = np.log10(column_density)
         logy = np.log10(volume_density)
@@ -649,7 +591,7 @@ class Simulation_DC():
         else:
             fig = ax.figure
   
-        column_density = np.array([self._compute_c_density(axis=i,force=True) for i in range(3)]).flatten()
+        column_density = np.array([compute_column_density(self.data['RHO'], self.cell_size, axis=i) for i in range(3)]).flatten()
         volume_density = np.array([self._compute_v_density(method=method, axis=i,force=True) for i in range(3)]).flatten()
 
         sorted_indexes = np.argsort(column_density)
@@ -710,20 +652,12 @@ class Simulation_DC():
             fig = ax.figure
 
         if what in ("both", "cdens"):
-            cdens = np.array([
-                self._compute_c_density(axis=0),
-                self._compute_c_density(axis=1),
-                self._compute_c_density(axis=2)
-            ]).flatten()
+            cdens = [compute_column_density(self.data['RHO'], self.cell_size, axis=i) for i in range(3)].flatten()
         else:
             cdens = None
 
         if what in ("both", "vdens"):
-            vdens = np.array([
-                self._compute_v_density(method=vdens_method, axis=0, force=True),
-                self._compute_v_density(method=vdens_method, axis=1, force=True),
-                self._compute_v_density(method=vdens_method, axis=2, force=True)
-            ]).flatten()
+            vdens = np.array([self._compute_v_density(method=vdens_method, axis=i, force=True) for i in range(3)]).flatten()
         else:
             vdens = None
 
@@ -802,6 +736,7 @@ class Simulation_DC():
 def mergeSimu(sim_array:List[Simulation_DC])->Simulation_DC:
     """
     Merge simulations into one.
+    TODO: add temp and velocity
     """
     assert all(sim.nres == sim_array[0].nres for sim in sim_array),  LOGGER.error("Resolution mismatch among simulations.")
     LOGGER.log(f"merge {len(sim_array)} simulations")
@@ -815,7 +750,7 @@ def mergeSimu(sim_array:List[Simulation_DC])->Simulation_DC:
 
     for i,sim in enumerate(sim_array):
         printProgressBar(i, len(sim_array), prefix="Merging:")
-        sim_data = sim.data.transpose()
+        sim_data = sim.data['RHO'].transpose()
         x_center, y_center, z_center = (centers[i] - mins)/(maxs-mins)
         x_offset = int((x_center) * datacube_size*sim_len -datacube_size/2)
         y_offset = int((y_center) * datacube_size*sim_len -datacube_size/2)
@@ -831,7 +766,8 @@ def mergeSimu(sim_array:List[Simulation_DC])->Simulation_DC:
     LOGGER.log("Simulations merged")
 
     host = sim_array[0]
-    host.data = merged_simulation.transpose()
+    host.data = {}
+    host.data['RHO'] = merged_simulation.transpose()
     host.nres = datacube_size*sim_len
     host.relative_size = host.relative_size*sim_len
     host.center = np.array([0.5,0.5,0.5])
@@ -846,6 +782,7 @@ import glob
 def openSimulation(name_root:str, global_size:float, use_cache:bool=True,cache_name="sim_memory")->Simulation_DC:
     """
     Open a datacube simulation
+    TODO: add temp and velocity
     Args:
         name_root(str): name of the simulation folder
         global_size(float): physical size of the global simulation (not the datacube) like the datacube can be 5pc long but the simulation was runned with a grid 66pc long.
@@ -862,7 +799,7 @@ def openSimulation(name_root:str, global_size:float, use_cache:bool=True,cache_n
         LOGGER.log("Merged using cached data")
         sim = Simulation_DC(names[0], global_size, init=True)
         sim_len = int(len(names)**(1/3))
-        sim.data = np.memmap(CACHES_FOLDER+cache_name, dtype='float32', mode='r', shape=(sim.data.shape[0]*sim_len,sim.data.shape[1]*sim_len,sim.data.shape[2]*sim_len))
+        sim.data['RHO'] = np.memmap(CACHES_FOLDER+cache_name, dtype='float32', mode='r', shape=(sim.data.shape[0]*sim_len,sim.data.shape[1]*sim_len,sim.data.shape[2]*sim_len))
         sim.nres = sim.nres*sim_len
         sim.relative_size = sim.relative_size*sim_len
         sim.center = np.array([0.5,0.5,0.5])
@@ -880,62 +817,3 @@ def openSimulation(name_root:str, global_size:float, use_cache:bool=True,cache_n
     fp[:] = sim.data[:]
     sim.data = fp
     return sim
-
-if __name__ == "__main__":
-    #sim = Simulation_DC(name="orionMHD_lowB_0.39_512", global_size=66.0948, init=True)
-    
-    
-    #sim.plot_pdf_2D()
-    #sim.plot(plot_pdf=False, axis=[0,1,2], color_bar=True)
-    #sim.plot(method=compute_mass_weighted_density, axis=[0,1,2], plot_pdf=False)
-    #sim.init(loadTemp=True, loadVel=True)
-    #sim = openSimulation("orionMHD_lowB_multi", global_size=66.0948, cache_name="sim_memory")
-    #sim.plotSlice(axis=2, enable_slider=True)
-    #sim.generate_batch(name="midres",number=10000, img_size=128, size=4., what_to_compute={"cospectra":False, "density":False,"context":10},axis=[0,1,2],
-    #                  limit_area=([27,40,26,39],[26.4,40,22.5,44.3],[26.4,39,21,44.5]))
-    
-    from POLARIScore.objects.Dataset import getDataset
-    ds = getDataset("batch_midres")
-    #ds2 = getDataset("batch_midres_b2")
-    #ds1, ds2 = ds.split(0.7)
-    #ds1.save()
-    #ds2.save()
-
-    from POLARIScore.networks.Trainer import Trainer, load_trainer
-    from POLARIScore.networks.architectures.nn_UNet import UNet
-    #trainer = Trainer(UNet, ds1, ds2, "UNet_midres")
-    """
-    trainer.learning_rate = 1e-4
-    trainer.network_settings["base_filters"] = 64
-    trainer.network_settings["num_layers"] = 4
-    trainer.training_random_transform = True
-    trainer.optimizer_name = "Adam"
-    trainer.target_names = ["vdens"]
-    trainer.input_names = ["cdens"]
-    trainer.init()
-    trainer.train(1000,batch_number=4,compute_validation=10,early_stopping=False, training_mode="normal")
-    trainer.save()
-    trainer.get_validation_error()
-    """
-    trainer = load_trainer("UNet_midres")
-
-    from POLARIScore.objects.Observation import Observation
-    obs = Observation("OrionB", "column_density_map")
-    obs.load("unet_midres")
-    #print(obs.find_scale(0.025*128,128,obs.distance))
-    #obs.predict(trainer, overlap=0.5, downsample_factor=obs.find_scale(4.,128,obs.distance), nan_value=1e20)
-    #obs.save(suffix="unet_midres")
-    #obs.plot(obs.prediction, norm=LogNorm(vmin=1e2,vmax=3e5))
-
-    obs.plot_cores_error()
-    #obs.plot_power_spectrum(plot_coldens=False, normalize=False)
-
-    plt.show()
-
-    
-    
-    #sim.plot(derivate=2, axis=0)
-    #plt.figure()
-    #sim.plot_correlation(method=compute_mass_weighted_density, contour_levels=3)
-
-    #plt.show()
