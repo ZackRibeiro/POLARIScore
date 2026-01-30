@@ -19,7 +19,8 @@ from matplotlib.widgets import Slider
 from scipy.ndimage import zoom
 from scipy.optimize import curve_fit
 import matplotlib.cm as cm
-
+import glob
+from POLARIScore.utils.sim_utils import init_idefix, init_ramses
 
 class Simulation_DC():
     """
@@ -65,14 +66,22 @@ class Simulation_DC():
         self.volumic_density_method = [None,None,None]
         """Cache, e.g for computed densities, ndarray are 2D tensors"""
         self.cache: Dict = {}
+
+    def init(self, **kwargs):
+        """Try to auto init depending on the files in the simulation folder"""
+        if len(glob.glob(os.path.join(self.folder,"*.vtk"))) > 0:
+            init_idefix(self, **kwargs)
+        elif len(glob.glob(os.path.join(self.folder,"*.fits"))) > 0:
+            init_ramses(self, **kwargs)
         
 
-    def load_fit(self, key:str, path:str)->bool:
+    def load_fit(self, key:str, path:str, unit:float=1.)->bool:
         """
         Load data stored as fits
         Args:
             key: dict key in self.data
             path: path to the fit file
+            unit: multiply data by this factor
         Returns:
             is_loaded:bool
         """
@@ -85,7 +94,7 @@ class Simulation_DC():
         simfile = fits.open(path)
         if key in self.data:
             LOGGER.warn(f"Sim Data had already a key {key} -> has been replaced")
-        self.data[key] = simfile[0].data
+        self.data[key] = simfile[0].data*unit
         simfile.close()
         if self.data[key] is None:
             LOGGER.warn(f"Data {key} not loaded in simulation {self.name} -> file empty")
@@ -115,11 +124,11 @@ class Simulation_DC():
         if self.volumic_density_method[axis] is None or self.volumic_density_method[axis] != method.__name__ or self.volumic_density[axis] is None or force:
             LOGGER.log(f"Computing {method.__name__} for face {axis}, for {self.name}")
             self.volumic_density_method[axis] = method.__name__
-            self.volumic_density[axis] = method(self.data, axis=axis)
+            self.volumic_density[axis] = method(self.data['RHO'], axis=axis)
         return self.volumic_density[axis]
 
     def generate_dataset(self,name:str=None,
-                         what_to_compute:Dict={"cospectra":False,"density":False,"context":10.,"vdens":compute_mass_weighted_density}
+                         what_to_compute:Dict={"cospectra":False,"density":False,"context":None,"vdens":compute_mass_weighted_density}
                        ,number:int=8,size:Union[float,Tuple[float,float]]=0.,img_size:int=128,random_rotate:bool=True,limit_area:Tuple=(None,None,None),
                        nearest_size_factor:float=0.75,axes:Union[int,List[int]]=[0,1,2],
                        beam:Optional[Tuple[float,float]]=None)->bool:
@@ -148,8 +157,8 @@ class Simulation_DC():
 
         assert 'RHO' in self.data, LOGGER.error(f"Can't generate dataset -> There is no density stored in data. Keys actually stored in data: {self.data.keys()}")
 
-        LOGGER.border("DATASET-GENERATING")
-
+        LOGGER.border("DATASET-GENERATING", color="36m")
+        LOGGER.global_color = "36m"
 
         axes = axes if type(axes) is list else [axes]
         LOGGER.log(f"Trying to generate {number} images using simulation {self.name} on faces {axes}.")
@@ -359,6 +368,7 @@ class Simulation_DC():
             ds.save_settings()
 
         LOGGER.log(f"New dataset {ds.name} saved")
+        LOGGER.reset()
     
         return ds
     
@@ -376,7 +386,7 @@ class Simulation_DC():
 
             velocity = [None, None, None]
             if show_velocity and "VX1" in self.data:
-                velocity = [self.data["VX1"], self.data["VX2"], self.data["VX3"]]
+                velocity = [self.data["VX1"]/1e4, self.data["VX2"]/1e4, self.data["VX3"]/1e4]
 
             artists = {'im': None, 'qui': None}
 
@@ -431,15 +441,15 @@ class Simulation_DC():
             plt.colorbar(artists["im"], ax=ax, label="Density")
 
             if enable_slider:
-                ax_slider = plt.axes([0.2, 0.05, 0.6, 0.03])
-                slider = Slider(ax_slider, 'Slice', 0, data_rho.shape[0]-1, valinit=slice, valfmt='%0.0f')
+                ax_slider = fig.add_axes([0.2, 0.05, 0.6, 0.03])
+                slider = Slider(ax_slider, 'Slice', 0, data_rho.shape[axis]-1, valinit=slice, valfmt='%0.0f')
+                fig._slice_slider = slider
 
                 def update_slice(val):
-                    print("t")
                     slice_idx = int(val)
                     _plotData(slice=slice_idx)
 
-                slider.on_changed(update_slice)
+                fig._slice_slider.on_changed(update_slice)
 
     def plot(self,method:Callable=compute_column_density,axis:Union[List[int],int]=[0,1,2],plot_pdf:bool=False,color_bar:bool=True,derivate:int=0):
         """

@@ -18,6 +18,8 @@ from matplotlib.widgets import Slider
 import multiprocessing as mp
 from functools import partial
 
+#BEFORE THIS WAS COMPUTED USING VELOCITY km/s BUT NOW THE SIMS ARE IN cgs
+
 def _output_v_function(lsr,chan,res):
     return lsr+(np.array(range(chan))-chan/2)*res
 DEFAULT_OUTPUT_SETTINGS = {

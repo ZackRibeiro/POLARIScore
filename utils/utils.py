@@ -100,15 +100,32 @@ def compute_pdf(data_slice:np.ndarray, bins:int=100, func:Callable=lambda x: np.
         edges = edges - (edges[center_i+1]+edges[center_i])/2
     return [probabilities, edges]
 
-def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
-    """Print a progress bar"""
+def printProgressBar(iteration,total,prefix='',suffix='',decimals=1,length=50,fill='█',printEnd="\r"):
     if total == 0:
         total = 1
-    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+
+    percent = iteration / float(total)
+    percent_str = f"{100 * percent:.{decimals}f}"
+
     filledLength = int(length * iteration // total)
-    bar = fill * filledLength + '-' * (length - filledLength)
-    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end = printEnd)
-    if iteration == total: 
+
+    if percent < 0.5:
+        color = "\033[91m"
+    elif percent < 0.8:
+        color = "\033[93m"
+    else:
+        color = "\033[92m"
+
+    reset = "\033[0m"
+
+    bar = (
+        color + fill * filledLength + reset +
+        '-' * (length - filledLength)
+    )
+
+    print(f'\r{prefix} {bar} {color+percent_str}%{reset} {suffix}', end=printEnd)
+
+    if iteration >= total:
         print()
 
 def divide_matrix_to_sub(matrix:np.ndarray,final_dim:int=128)->List[np.ndarray]:

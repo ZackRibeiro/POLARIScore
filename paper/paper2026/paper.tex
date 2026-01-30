@@ -42,7 +42,7 @@
 % if you use custom commands in your title,
 % ensure to check your title when submitting!
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-   \title{Neural networks estimation of the density in molecular clouds : Benchmark on Orion B dense cores}
+   \title{Neural networks estimation of the average density in molecular clouds and dense cores}
 
    %\subtitle{Subtitle}
 
@@ -92,8 +92,6 @@
 
    \maketitle
 
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Introduction}
 %\lipsum[1]
 
@@ -117,7 +115,7 @@
 
    Except for making the simulations, all steps, from creating the datasets and
    training neural networks to applying them to observations, are performed using our code \texttt{POLARIScore}\footnote{\url{https://github.com/ZackRibeiro/POLARIScore}}
-   ,which includes our implementations of network architectures using \texttt{PyTorch} \citep{paszkePyTorchImperativeStyle2019}.
+   ,which includes our implementations of network architectures using \texttt{PyTorch} \citep{paszkePyTorchImperativeStyle2019}. More parameters for the trained neural networks can be found in Appendix~\ref{appendix:char_networks}.
 
 \subsection{MHD Simulations and Datasets}
 
@@ -214,7 +212,6 @@
       In this work, we are using an Attention-U-Net (\cite{ronnebergerUNetConvolutionalNetworks2015},\cite{oktayAttentionUNetLearning2018}) architecture, shown in Figure~\ref{fig:unet}.
       It features a symmetric encoder-decoder structure where the encoder captures high-level features of the column density map through convolution (Eq~\ref{eq:convolution}) and max pooling operations, while the decoder gradually reconstructs the mass-weighted density map using upsampling layers.
       \\A key feature of U-Net is its \textit{skip connections}, which allow direct information flow between corresponding encoder and decoder layers, preserving spatial details lost during downsampling.
-      \textbf{small sentence on Attention blocks ?}
 
       \begin{figure}[!ht]
          \centering
@@ -307,7 +304,6 @@
       where the sums run over features and spatial dimensions.
       This makes CCBs computationally efficient while retaining exact invertibility and tractable likelihood.
       
-      \textbf{Some words on architecture with figure (Encoder, Haar wavelet downsampling)}
       \begin{figure}[!ht]
          \centering
          \includegraphics[width=0.7\columnwidth]{figures/draw_cinn.jpg}
@@ -364,7 +360,6 @@
       
       In the conditional setting, the observable $\Nh$ is incorporated by concatenating it with the noisy sample $x_t$ at the input of the UNet, ensuring that each denoising step is conditioned on the available physical information.
 
-      \textbf{Some words on architecture with figure (Encoder, Noise scheduling)}
       \begin{figure}[!ht]
          \centering
          \includegraphics[width=0.8\columnwidth]{figures/draw_ddpm.jpg}
@@ -391,7 +386,7 @@
 
    \begin{figure}[!ht]
       \centering
-      \includegraphics[width=\columnwidth]{figures/fig_sim_correlation.eps}
+      \includegraphics[width=.75\columnwidth]{figures/fig_sim_correlation.eps}
       \caption{Gaussian-mixture fit of the simulation correlation between $\nmh$ and $\Nh$ (bottom left). 
       The top and right panels show the cumulative probability distributions of $\nmh$ and $\Nh$, respectively.
       The top-right panel displays the individual Gaussian components (green) and their sum (red).}
@@ -478,10 +473,10 @@
          \cline{2-4}
          & UNet & cINN & DDPM \\
          \hline
-         MSE (log10) & 0.19 & 0.50 & 0.25 \\
+         MSE (log10) & 0.20 & 0.50 & 0.25 \\
          Parameters ($\times 10^{7}$) & 13 & 3.8 & 8.2 \\
          Inference speed (reg/s) & 3.5 & 3.4 & 0.32 \\
-         Error at 80\% accuracy & 0.79 & 0.62 & 0.76 \\
+         Error at 80\% accuracy & 0.25 & 0.39 & 0.28 \\
          Training stability & High & Low & Mid \\
          Required training-set size & Low & \dots & \dots \\
          \end{tabular}
@@ -489,8 +484,7 @@
       \label{tab:nn_metrics}
    \end{table}
 
-   \FloatBarrier
-   \begin{figure*}
+   \begin{figure*}[!h]
       \begin{subfigure}{\textwidth}
          \centering
          \includegraphics[width=\textwidth]{figures/Benchmark_OrionB/region_0.jpg}
@@ -759,53 +753,10 @@
    \end{equation}
    where $A$ is the step length and $B$ the offset, and are chosen empirically.
 
-
-   \subsection{Network robustness to training-set variations}
-      Here, we test the effect of excluding WNM or large homogeneous regions from the training set for some of our architectures.
-      \\We compare the model performances on two different datasets:
-      \begin{itemize}
-         \item One dataset is the same as used in this paper, containing approximately $100$ regions of the ORION simulation, excluding WNM and favoring heterogeneous regions in the selection.
-         \item The other dataset contains $170$ regions, including all WNM regions from the simulation, with no selection bias toward heterogeneity.
-      \end{itemize}
-      \paragraph{U-Net}
-
-      test
-         
-         \begin{figure}[ht!]
-            \centering
-            \begin{subfigure}{0.48\columnwidth}
-               \centering
-               \includegraphics[width=\columnwidth]{figures/fig_score_residuals.eps}
-               \caption{Residuals}
-            \end{subfigure}
-            \hfill
-            \begin{subfigure}{0.48\columnwidth}
-               \centering
-               \includegraphics[width=\columnwidth]{figures/fig_score_accuracy.eps}
-               \caption{Accuracy}
-            \end{subfigure}
-            
-            \caption{}
-            \label{fig:score_metrics}
-         \end{figure}
-
-         \begin{figure}[ht!]
-            \centering
-            \includegraphics[width=\columnwidth]{figures/fig_score_unet_diffkonyves.eps}
-            \caption{
-               Differences in log space between the catalog core densities and the neural-network-predicted densities as a function of column density.
-               Cloud is Orion B, model is UNet, and the dense-core catalog is from \citet{konyvesPropertiesDenseCore2020}.
-               Thick black line: dataset without WNM; dotted black line: dataset with WNM.
-               The red horizontal line indicates zero difference.
-               }
-            \label{fig:score_unet_diffkonyves}
-         \end{figure}
-      
-      \paragraph{cINN}
-      \textbf{train a cINN with less data}
 \FloatBarrier
 
 \section{Characteristics of the Trained Networks}
+\label{appendix:char_networks}
 
 In this appendix, we summarize the training settings and important details for all networks, to facilitate reproducibility. 
 All networks were trained on an NVIDIA GeForce RTX 2070 SUPER with 8~GB of VRAM.

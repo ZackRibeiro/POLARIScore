@@ -10,7 +10,7 @@ from POLARIScore.utils.physics_utils import PC_TO_CM, density_gaussian, CONVERT_
 from POLARIScore.utils.utils import plot_function
 from POLARIScore.config import LOGGER
 from copy import deepcopy
-from typing import Literal, Dict, Tuple, List, Union
+from typing import Literal, Dict, Tuple, List, Union, Optional
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 import matplotlib.font_manager as fm
 
@@ -55,7 +55,7 @@ class DenseCore():
             density_error: (Only works for constant method) If an error is passed, then a mass is computed using a random sample from the gaussian distribution of density.
         """
 
-        assert self.obs.prediction is not None, LOGGER.error(f"No predicted density on the observation: f{self.obs.name}")
+        assert self.obs.prediction is not None, LOGGER.error(f"No predicted density on the observation: {self.obs.name}")
 
         m_H = 1.67e-24  # g
         mu = 1.4        # mean molecular weight for H (not H2)
@@ -190,23 +190,50 @@ class DenseCore():
         self.fit_settings = [popt_v, popt_h, perr_v, perr_h]
 
         return self.fit_settings
+    
+    def get_properties(self):
+        return {
+            'name': self.data['name'],
+            'ra': self.data['ra'],
+            'dec': self.data['dec'],
+            'r': self.data['radius_pc'],
+            'cdens': self.get_center_density(column_density=True),
+            'vdens': self.get_center_density() if self.obs.prediction is not None else 'None',
+            'mass': self.compute_mass() if self.obs.prediction is not None else 'None',
+        }
 
-    def plot(self, env_size:float=1., cmap:str="rainbow", cdens:bool=False, contour:bool=True, save_path:Union[None,str]=None, nearby_cores:bool=True, show_fit:bool=True):
+    def plot(self, env_size:Optional[float]=1., cmap:str="rainbow", cdens:bool=False, contour:bool=True,
+              ax=None, save_path:Union[None,str]=None, nearby_cores:bool=True, 
+              show_fit:bool=True, cbar:bool=True, toplabel:Optional[str]=None, cbar_settings:Dict={},
+              show_title:bool=True, show_legend:bool=True, show_ticks:bool=True, show_marker:bool=True, contour_levels:int=20):
         """Plot the dense core environment with horizontal and vertical density slices.
         Args:
-            env_size(float, default=1): size of the environment(of the image) in parsecs.
+            env_size(float, default=1): size of the environment(of the image) in parsecs. If None, the environment is adaptative to the core radius.
             cmap: color of the map
             cdens(bool, default=False): Instead of using predicted volume density, plot column density.
             contour(bool, default=True): Add contours on the environment map.
             save_path: If not None, save the figure in the given folder path.
             nearby_cores(bool, default=True): Plot the nearby cores in the environment map as small white triangles.
             show_fit(bool, default=True): Try to fit the vertical and horizontal slices of the dense core.
+            ax(matplotlib.axis, default=None): If not none, plot on the given axis. (Don't plot slices)
+            cbar(bool, default=True): Plot the colorbar
+            cbar_settings(dict, default={}): Custom settings for colorbar
+            toplabel(str, default=None): Plot a top label above the density map.
+            show_title(bool, default=True)
+            show_legend(bool, default=True)
+            show_ticks(bool, default=True)
+            show_marker(bool, default=True)
+            contour_levels(int, default=20)
+            
         """
         if not(cdens):
-            assert self.obs.prediction is not None, LOGGER.error(f"No predicted density on the observation: f{self.obs.name}")
+            assert self.obs.prediction is not None, LOGGER.error(f"No predicted density on the observation: {self.obs.name}")
             densities = self.obs.prediction
         else:
             densities = self.obs.data
+
+        if env_size is None:
+            env_size = 7.5*self.data["radius_pc"]
 
         x_center, y_center = skycoord_to_pixel(self.coord, self.wcs)
         region_half_px = self.obs.pc_to_pixels(env_size)
@@ -216,53 +243,81 @@ class DenseCore():
         y_max = min(densities.shape[0],int(y_center + region_half_px))
         region = densities[y_min:y_max, x_min:x_max]
 
-        fig, axes = plt.subplot_mosaic(
-            [['A','A','B'],['A','A','C']],
-            constrained_layout=True,
-            figsize=(10, 6),
-        )
-        ax_reg = fig.add_subplot(axes['A'], projection=self.wcs)
-        ax_cut_v = axes['B']
-        ax_cut_h = axes['C']
+        if ax is None:
+            fig, axes = plt.subplot_mosaic(
+                [['A','A','B'],['A','A','C']],
+                constrained_layout=True,
+                figsize=(10, 6),
+            )
+            pos = axes['A'].get_position()
+            axes['A'].remove()
 
-        x_ticks_pix = ax_reg.get_xticks()
-        y_ticks_pix = ax_reg.get_yticks()
-        x_ticks_full = x_ticks_pix + x_min
-        y_ticks_full = y_ticks_pix + y_min
-        sky_x = pixel_to_skycoord(x_ticks_full, np.full_like(x_ticks_full, y_center), self.wcs)
-        sky_y = pixel_to_skycoord(np.full_like(y_ticks_full, x_center), y_ticks_full, self.wcs)
-        # RA in hours (hh:mm:ss), Dec in degrees (dd:mm:ss)
-        ra_labels = [ra.ra.to_string(unit=u.hour, sep=':', precision=1, pad=True) for ra in sky_x]
-        dec_labels = [dec.dec.to_string(unit=u.deg, sep=':', precision=1, alwayssign=True, pad=True) for dec in sky_y]
-        ax_reg.set_xticklabels(ra_labels, rotation=45)
-        ax_reg.set_yticklabels(dec_labels)
-        ax_reg.set_xlabel("RA [h:m:s]")
-        ax_reg.set_ylabel("Dec [°:′:″]")
-        ax_reg.invert_xaxis()
+            ax_reg = fig.add_axes(pos, projection=self.wcs)
+            axes['A'] = ax_reg
+        else:
+            ax_reg = ax
+            fig = ax.figure
 
-        ax_reg.set_title(f"{self.data['name']} | ±{env_size} pc | r={self.data['radius_pc']} pc | $N_H=${self.get_center_density(column_density=True):.0e} | M={self.compute_mass():.2}")
+
+        if show_ticks:
+            ax_reg.coords[0].set_axislabel("RA [h:m:s]")
+            ax_reg.coords[1].set_axislabel("Dec [°:′:″]")
+
+            ax_reg.coords[0].set_major_formatter('hh:mm:ss')
+            ax_reg.coords[1].set_major_formatter('dd:mm:ss')
+
+            #ax_reg.coords[0].set_ticks(spacing=5 * u.arcmin)
+            #ax_reg.coords[1].set_ticks(spacing=5 * u.arcmin)
+
+            ax_reg.coords[0].ticklabels.set_rotation(45)
+            ax_reg.invert_xaxis()
+        else:
+            overlay = ax.get_coords_overlay('fk5')
+            for coord in overlay:
+                coord.set_ticks_visible(False)
+                coord.set_ticklabel_visible(False)
+                coord.set_axislabel('')
+            for coord in ax.coords:
+                coord.set_ticks_visible(False)
+                coord.set_ticklabel_visible(False)
+                coord.set_axislabel('')
+            ax_reg.get_xaxis().set_visible(False)
+            ax_reg.get_yaxis().set_visible(False)
+
+        if show_title:
+            if self.obs.prediction is not None:
+                ax_reg.set_title(f"{self.data['name']} | ±{env_size} pc | r={self.data['radius_pc']} pc | $N_H=${self.get_center_density(column_density=True):.0e} | M={self.compute_mass():.2}")
+            else:
+                ax_reg.set_title(f"{self.data['name']} | ±{env_size} pc | r={self.data['radius_pc']} pc | $N_H=${self.get_center_density(column_density=True):.0e}")
         vmin = np.nanpercentile(region, 0)
         vmax = np.nanpercentile(region, 100)
         if vmin <= 0:
             vmin = np.nanmin(region[region > 0])
-        levels = np.logspace(np.log10(vmin), np.log10(vmax), 20)
+        levels = np.logspace(np.log10(vmin), np.log10(vmax), contour_levels)
         img_plt = ax_reg.imshow(region, cmap=cmap, norm=LogNorm(vmin=vmin, vmax=vmax), origin="lower")
-        plt.colorbar(img_plt, ax=ax_reg, label=r"$N_H$ [cm$^{-2}$]" if cdens else r"$<n_H>_m$ [cm$^{-3}$]")
+        
+        if cbar:
+            if not('label' in cbar_settings):
+                plt.colorbar(img_plt, ax=ax_reg, label=(r"$N_H$ [cm$^{-2}$]" if cdens else r"$<n_H>_m$ [cm$^{-3}$]") , **cbar_settings)
+            else:
+                plt.colorbar(img_plt, ax=ax_reg, **cbar_settings)
         if contour:
             contour_plt = ax_reg.contour(region, levels=levels, colors="black", origin="lower")
             
         x_c_rel = (x_center - x_min)
         y_c_rel = (y_center - y_min)
-        ax_reg.scatter(x_c_rel, y_c_rel, color="black", lw=2., marker="+", zorder=10, label="Core")
+        if show_marker:
+            ax_reg.scatter(x_c_rel, y_c_rel, color="black", lw=2., marker="+", zorder=10, label="Core")
 
         r_pc = self.data["radius_pc"]
         r_px = self.obs.pc_to_pixels(r_pc)
         circle = plt.Circle((x_c_rel, y_c_rel), r_px, color='black', lw=1., fill=False, ls="-", zorder=10)
-        inner_circle = plt.Circle((x_c_rel, y_c_rel), r_px*0.9, lw=2., color='white', fill=False, zorder=10)
+        inner_circle = plt.Circle((x_c_rel, y_c_rel), r_px*0.9 if show_marker else r_px, lw=2. if show_marker else 1., color='white' if contour else 'black', fill=False, zorder=10)
         ax_reg.add_patch(inner_circle)
         inner_circle_2 = plt.Circle((x_c_rel, y_c_rel), r_px*0.8, lw=1., color='black', fill=False, zorder=10)
-        ax_reg.add_patch(inner_circle_2)
-        ax_reg.add_patch(circle)
+        if show_marker:
+            ax_reg.add_patch(inner_circle_2)
+            ax_reg.add_patch(circle)
 
         y_start = int(y_c_rel - r_px * 3)
         y_end   = int(y_c_rel + r_px * 3)
@@ -272,37 +327,44 @@ class DenseCore():
         horizontal_cut = region[int(y_c_rel), x_start:x_end]
         pix_to_pc = env_size / region_half_px
 
-        ax_cut_v.axvline(+self.data["radius_pc"], color="red", linestyle="--")
-        ax_cut_v.axvline(-self.data["radius_pc"], color="red", linestyle="--")
-        ax_cut_v.axvline(0, color="black", linestyle="--")
 
-        ax_cut_h.axvline(+self.data["radius_pc"], color="red", linestyle="--")
-        ax_cut_h.axvline(-self.data["radius_pc"], color="red", linestyle="--")
-        ax_cut_h.axvline(0, color="black", linestyle="--")
+        if ax is None:
+            ax_cut_v = axes['B']
+            ax_cut_h = axes['C']
+            ax_cut_v.axvline(+self.data["radius_pc"], color="red", linestyle="--")
+            ax_cut_v.axvline(-self.data["radius_pc"], color="red", linestyle="--")
+            ax_cut_v.axvline(0, color="black", linestyle="--")
 
-        y_axis_pc = (np.arange(y_start, y_end) - y_c_rel) * pix_to_pc
-        x_axis_pc = (np.arange(x_start, x_end) - x_c_rel) * pix_to_pc
+            ax_cut_h.axvline(+self.data["radius_pc"], color="red", linestyle="--")
+            ax_cut_h.axvline(-self.data["radius_pc"], color="red", linestyle="--")
+            ax_cut_h.axvline(0, color="black", linestyle="--")
 
-        ax_cut_v.plot(y_axis_pc, vertical_cut, color="black", label="density profile")
-        ax_cut_v.set_xlabel("y [pc]")
-        ax_cut_h.plot(x_axis_pc, horizontal_cut, color="black", label="density profile")
-        ax_cut_h.set_xlabel("x [pc]")
-        ax_cut_v.set_yscale("log")
-        ax_cut_h.set_yscale("log")
+            y_axis_pc = (np.arange(y_start, y_end) - y_c_rel) * pix_to_pc
+            x_axis_pc = (np.arange(x_start, x_end) - x_c_rel) * pix_to_pc
 
-        if(show_fit):
-            fit_set = self.fit()
-            popt_v = fit_set[0]
-            popt_h = fit_set[1]
-            if popt_v is not None:
-                perr_v = self.fit_error(popt_v, fit_set[2])
-                plot_function(lambda x: density_gaussian(x, *popt_v),ax=ax_cut_v,color="red",lims=[np.nanmin(y_axis_pc),np.nanmax(y_axis_pc),0,1], label=f"fit s={perr_v:.2e}")
-            if popt_h is not None:
-                perr_h = self.fit_error(popt_h, fit_set[3])
-                plot_function(lambda x: density_gaussian(x, *popt_h),ax=ax_cut_h,color="red",lims=[np.nanmin(x_axis_pc),np.nanmax(x_axis_pc),0,1], label=f"fit s={perr_h:.2e}")
+            ax_cut_v.plot(y_axis_pc, vertical_cut, color="black", label="density profile")
+            ax_cut_v.set_xlabel("y [pc]")
+            ax_cut_h.plot(x_axis_pc, horizontal_cut, color="black", label="density profile")
+            ax_cut_h.set_xlabel("x [pc]")
+            ax_cut_v.set_yscale("log")
+            ax_cut_h.set_yscale("log")
 
-        ax_cut_h.set_ylim([np.nanmin(horizontal_cut)*.9,np.nanmax(horizontal_cut)*1.1])
-        ax_cut_v.set_ylim([np.nanmin(vertical_cut)*.9,np.nanmax(vertical_cut)*1.1])
+            if(show_fit):
+                fit_set = self.fit()
+                popt_v = fit_set[0]
+                popt_h = fit_set[1]
+                if popt_v is not None:
+                    perr_v = self.fit_error(popt_v, fit_set[2])
+                    plot_function(lambda x: density_gaussian(x, *popt_v),ax=ax_cut_v,color="red",lims=[np.nanmin(y_axis_pc),np.nanmax(y_axis_pc),0,1], label=f"fit s={perr_v:.2e}")
+                if popt_h is not None:
+                    perr_h = self.fit_error(popt_h, fit_set[3])
+                    plot_function(lambda x: density_gaussian(x, *popt_h),ax=ax_cut_h,color="red",lims=[np.nanmin(x_axis_pc),np.nanmax(x_axis_pc),0,1], label=f"fit s={perr_h:.2e}")
+
+            ax_cut_h.set_ylim([np.nanmin(horizontal_cut)*.9,np.nanmax(horizontal_cut)*1.1])
+            ax_cut_v.set_ylim([np.nanmin(vertical_cut)*.9,np.nanmax(vertical_cut)*1.1])
+
+            ax_cut_v.legend(loc="best")
+            ax_cut_h.legend(loc="best")
 
         if(nearby_cores):
             cores = [c.data for c in self.obs.get_cores()]
@@ -324,7 +386,7 @@ class DenseCore():
         scalebar = AnchoredSizeBar(
             ax_reg.transData,
             scale_bar_px,
-            f"{env_size/5:.1f} pc",
+            f"{env_size/3:.2f} pc",
             loc="lower right",
             pad=0.4,
             color="black",
@@ -333,13 +395,19 @@ class DenseCore():
             fontproperties=fontprops,
         )
 
+        if toplabel is not None:
+            ax_reg.text(0.02, 0.98,toplabel,transform=ax_reg.transAxes,
+            ha="left",va="top",fontsize=10,color="black", bbox=dict(facecolor="white",edgecolor="black", boxstyle="round,pad=0.2",alpha=1.))
+
         ax_reg.add_artist(scalebar)
 
-        ax_reg.legend(loc="best")
-        ax_cut_v.legend(loc="best")
-        ax_cut_h.legend(loc="best")
+        if show_legend:
+            ax_reg.legend(loc="best")
 
         if save_path is not None:
-            fig.savefig(save_path+f"core_{self.data['name']}_{('cdens' if cdens else 'vdens')}.jpg", dpi=300)
+            fig.savefig(save_path+f"core_{self.data['name']}_{('cdens' if cdens else 'vdens')}.jpg", dpi=150)
 
-        return fig, axes
+        if ax is None:
+            return fig, axes
+        else:
+            return fig, [ax]

@@ -1,6 +1,6 @@
 import uuid
 import os
-import sys
+import shutil
 import re
 from POLARIScore.config import *
 from POLARIScore.utils.utils import plot_lines
@@ -368,6 +368,10 @@ class Dataset():
         for i,_ in enumerate(self.batch):
             result.append(function(np.array(self.get(i)[map_index]).flatten()))
         return result
+
+    def delete(self):
+        LOGGER.log(f"Deleting dataset {self.name}")
+        shutil.rmtree(os.path.join(TRAINING_BATCH_FOLDER,self.name))
 
     #-------SAVE-------
 

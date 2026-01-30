@@ -1,6 +1,9 @@
 import numpy as np
 from torch.nn import init
 from typing import List, Tuple, Union, Callable
+import torch
+import torch.nn.functional as F
+from POLARIScore.utils.utils import printProgressBar
 
 def init_network(model, init_method:Callable=init.kaiming_uniform_):
     """
@@ -95,3 +98,70 @@ def find_error_for_batch_accuracy(batch, accuracy=0.8, epsilon=0.01):
         else:
             sigma1 = sigma
     return sigma
+
+def predict_map(data, model_trainer:'Trainer', patch_size:Tuple[int,int]=(128, 128), nan_value:float=-1.0, overlap:float=0.5, downsample_factor:float=1., apply_baseline:bool=True):
+    """
+    Predict a quantity by applying a neural network to an observation.
+    Args:
+        model_trainer (Trainer): Model wrapped in a Trainer object.
+        patch_size (tuple[int, int]): Shape of the 2D patches on which the model will be applied. The observation will be divided into patches of this shape.
+        nan_value (float): Value used to replace NaNs in the observation.
+        overlap (float): Fraction of overlap between consecutive patches.
+        downsample_factor (float): Factor by which the observation is downsampled.
+        baseline (bool): Whether to apply baseline correction to the model.
+    Returns:
+        predicted_observation
+    """
+
+    input_matrix = data
+    nan_mask = np.isnan(input_matrix) | (input_matrix <= 0)
+    if nan_value < 0:
+        nan_value = float(np.nanmin(data[data>0]))
+    input_matrix[nan_mask] = nan_value
+    input_tensor = torch.tensor(input_matrix.astype(np.float32))
+    downsampled_tensor = F.interpolate(input_tensor.unsqueeze(0).unsqueeze(0), 
+                                    scale_factor=1.0/downsample_factor, 
+                                    mode='bilinear', align_corners=True).squeeze(0).squeeze(0)
+    
+    downsampled_nan_mask = F.interpolate(torch.tensor(nan_mask.astype(np.float32)).unsqueeze(0).unsqueeze(0),
+                                            scale_factor=1.0 / downsample_factor,mode='nearest'
+                                            ).squeeze(0).squeeze(0).numpy().astype(bool)
+
+    height, width = downsampled_tensor.shape
+    patch_height, patch_width = patch_size
+    stride_height = int(patch_height * (1 - overlap))
+    stride_width = int(patch_width * (1 - overlap))
+
+    output_tensor = torch.zeros_like(downsampled_tensor)
+    count_tensor = torch.zeros_like(downsampled_tensor)
+
+    i_range = range(0, height - patch_height + 1, stride_height)
+    j_range = range(0, width - patch_width + 1, stride_width)
+
+    for i0,i in enumerate(i_range):
+        for j0,j in enumerate(j_range):
+            printProgressBar(i0*len(j_range)+j0,len(i_range)*len(j_range),prefix="Obs Pred")
+            patch = downsampled_tensor[i:i+patch_height, j:j+patch_width].cpu().detach().numpy()
+            valid_patch_mask = downsampled_nan_mask[i:i + patch_height, j:j + patch_width]
+
+            if np.any(valid_patch_mask):
+                continue
+            
+            #Work only for 1 output: col density
+            output_patch = model_trainer.predict_tensor(patch, input_names="cdens", output_names="vdens")[0]
+            if apply_baseline:
+                output_patch = model_trainer.apply_baseline(output_patch, log=False)
+            
+            output_tensor[i:i+patch_height, j:j+patch_width] += torch.from_numpy(output_patch)
+            count_tensor[i:i+patch_height, j:j+patch_width] += 1
+
+    print("")
+    output_tensor = output_tensor / count_tensor
+
+    upsampled_output = F.interpolate(output_tensor.unsqueeze(0).unsqueeze(0), 
+                                    size=(input_matrix.shape[0], input_matrix.shape[1]), 
+                                    mode='bilinear', align_corners=False).squeeze(0).squeeze(0)
+    output_matrix = upsampled_output.numpy()
+    output_matrix[nan_mask] = np.nan
+
+    return output_matrix

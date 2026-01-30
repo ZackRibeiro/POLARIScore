@@ -1,10 +1,10 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2026.1.29)  29 JAN 2026 11:37
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2026.1.9)  30 JAN 2026 17:27
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
  %&-line parsing enabled.
-**/home/ribeiroz/forks/Polaris/POLARIScore/paper/paper2026/paper.tex
-(/home/ribeiroz/forks/Polaris/POLARIScore/paper/paper2026/paper.tex
+**/home/zack/POLARIScore/paper/paper2026/paper.tex
+(/home/zack/POLARIScore/paper/paper2026/paper.tex
 LaTeX2e <2023-11-01> patch level 1
 L3 programming layer <2024-01-22>
 (./aa.cls
@@ -740,330 +740,275 @@ LaTeX Font Info:    Font shape `T1/txss/m/it' in size <9> not available
 LaTeX Font Info:    Font shape `T1/txss/m/sl' will be
 (Font)              scaled to size 8.54997pt on input line 94.
 LaTeX Font Info:    Font shape `T1/txss/m/n' will be
-(Font)              scaled to size 10.40245pt on input line 97.
+(Font)              scaled to size 10.40245pt on input line 95.
 LaTeX Font Info:    Font shape `T1/txss/b/n' in size <10.95> not available
-(Font)              Font shape `T1/txss/bx/n' tried instead on input line 97.
+(Font)              Font shape `T1/txss/bx/n' tried instead on input line 95.
 LaTeX Font Info:    Font shape `T1/txss/bx/n' will be
-(Font)              scaled to size 10.40245pt on input line 97.
+(Font)              scaled to size 10.40245pt on input line 95.
 LaTeX Font Info:    Font shape `T1/txss/m/n' will be
-(Font)              scaled to size 6.64998pt on input line 97.
-LaTeX Font Info:    Trying to load font information for T1+txtt on input line 119.
+(Font)              scaled to size 6.64998pt on input line 95.
+LaTeX Font Info:    Trying to load font information for T1+txtt on input line 117.
  (/usr/share/texlive/texmf-dist/tex/latex/txfonts/t1txtt.fd
 File: t1txtt.fd 2000/12/15 v3.1
 )
 LaTeX Font Info:    Font shape `T1/txss/m/n' will be
-(Font)              scaled to size 9.49997pt on input line 122.
+(Font)              scaled to size 9.49997pt on input line 120.
 LaTeX Font Info:    Font shape `T1/txss/m/it' in size <10> not available
-(Font)              Font shape `T1/txss/m/sl' tried instead on input line 122.
+(Font)              Font shape `T1/txss/m/sl' tried instead on input line 120.
 LaTeX Font Info:    Font shape `T1/txss/m/sl' will be
-(Font)              scaled to size 9.49997pt on input line 122.
+(Font)              scaled to size 9.49997pt on input line 120.
 LaTeX Font Info:    Font shape `T1/txr/b/n' in size <10> not available
-(Font)              Font shape `T1/txr/bx/n' tried instead on input line 129.
+(Font)              Font shape `T1/txr/bx/n' tried instead on input line 127.
 
-Underfull \hbox (badness 10000) in paragraph at lines 132--132
+Underfull \hbox (badness 10000) in paragraph at lines 130--130
 [][][][]$\T1/txtt/m/n/9 http : / / www . galactica-[]simulations . eu / db / STAR _ FORM /
  []
 
 Package epstopdf Info: Source file: <figures/fig_sim_coldens.eps>
-(epstopdf)                    date: 2026-01-28 11:50:48
+(epstopdf)                    date: 2025-11-21 13:51:54
 (epstopdf)                    size: 1243209 bytes
 (epstopdf)             Output file: <figures/fig_sim_coldens-eps-converted-to.pdf>
+(epstopdf)                    date: 2026-01-14 16:14:56
+(epstopdf)                    size: 90387 bytes
 (epstopdf)             Command: <repstopdf --outfile=figures/fig_sim_coldens-eps-converted-to.pdf figures/fig_sim_coldens.eps>
-(epstopdf)             \includegraphics on input line 139.
-runsystem(repstopdf --outfile=figures/fig_sim_coldens-eps-converted-to.pdf figures/fig_sim_coldens.eps)...executed safely (allowed).
-
-Package epstopdf Info: Result file: <figures/fig_sim_coldens-eps-converted-to.pdf>
-(epstopdf)                    date: 2026-01-29 11:37:42
-(epstopdf)                    size: 90387 bytes.
-<figures/fig_sim_coldens-eps-converted-to.pdf, id=138, 841.1425pt x 276.03125pt>
+(epstopdf)             \includegraphics on input line 137.
+Package epstopdf Info: Output file is already uptodate.
+<figures/fig_sim_coldens-eps-converted-to.pdf, id=135, 841.1425pt x 276.03125pt>
 File: figures/fig_sim_coldens-eps-converted-to.pdf Graphic file (type pdf)
 <use figures/fig_sim_coldens-eps-converted-to.pdf>
-Package pdftex.def Info: figures/fig_sim_coldens-eps-converted-to.pdf  used on input line 139.
+Package pdftex.def Info: figures/fig_sim_coldens-eps-converted-to.pdf  used on input line 137.
 (pdftex.def)             Requested size: 256.0748pt x 84.03145pt.
 
-Underfull \hbox (badness 1024) in paragraph at lines 142--142
+Underfull \hbox (badness 1024) in paragraph at lines 140--140
 \T1/txr/m/n/10 lar cloud from the low mag-netic field ORION sim-u-la-tion.
  []
 
 Package epstopdf Info: Source file: <figures/fig_sim_voldens.eps>
-(epstopdf)                    date: 2026-01-28 11:50:48
+(epstopdf)                    date: 2025-11-21 13:54:22
 (epstopdf)                    size: 1322293 bytes
 (epstopdf)             Output file: <figures/fig_sim_voldens-eps-converted-to.pdf>
+(epstopdf)                    date: 2026-01-14 16:14:58
+(epstopdf)                    size: 112193 bytes
 (epstopdf)             Command: <repstopdf --outfile=figures/fig_sim_voldens-eps-converted-to.pdf figures/fig_sim_voldens.eps>
-(epstopdf)             \includegraphics on input line 148.
-runsystem(repstopdf --outfile=figures/fig_sim_voldens-eps-converted-to.pdf figures/fig_sim_voldens.eps)...executed safely (allowed).
-
-Package epstopdf Info: Result file: <figures/fig_sim_voldens-eps-converted-to.pdf>
-(epstopdf)                    date: 2026-01-29 11:37:43
-(epstopdf)                    size: 112193 bytes.
-<figures/fig_sim_voldens-eps-converted-to.pdf, id=143, 867.24pt x 252.945pt>
+(epstopdf)             \includegraphics on input line 146.
+Package epstopdf Info: Output file is already uptodate.
+<figures/fig_sim_voldens-eps-converted-to.pdf, id=140, 867.24pt x 252.945pt>
 File: figures/fig_sim_voldens-eps-converted-to.pdf Graphic file (type pdf)
 <use figures/fig_sim_voldens-eps-converted-to.pdf>
-Package pdftex.def Info: figures/fig_sim_voldens-eps-converted-to.pdf  used on input line 148.
+Package pdftex.def Info: figures/fig_sim_voldens-eps-converted-to.pdf  used on input line 146.
 (pdftex.def)             Requested size: 256.0748pt x 74.68759pt.
 [1{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}{/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc}
 
 
 ]
-Underfull \hbox (badness 4699) in paragraph at lines 201--206
+Underfull \hbox (badness 4699) in paragraph at lines 199--204
 \T1/txr/m/n/10 Convolutional Neu-ral Net-works (CNNs) were in-tro-duced
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 214--218
+Underfull \hbox (badness 10000) in paragraph at lines 212--215
 []\T1/txr/m/n/10 In this work, we are us-ing an Attention-U-Net
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 214--218
+Underfull \hbox (badness 10000) in paragraph at lines 212--215
 \T1/txr/m/n/10 ([][][] ([]2015[]),[][][] ([]2018[])) ar-chi-tec-
  []
 
-<figures/unet_architecture.jpg, id=207, 655.69969pt x 602.25pt>
+<figures/unet_architecture.jpg, id=204, 655.69969pt x 602.25pt>
 File: figures/unet_architecture.jpg Graphic file (type jpg)
 <use figures/unet_architecture.jpg>
-Package pdftex.def Info: figures/unet_architecture.jpg  used on input line 221.
+Package pdftex.def Info: figures/unet_architecture.jpg  used on input line 218.
 (pdftex.def)             Requested size: 256.0748pt x 235.19818pt.
-<figures/draw_unet.jpg, id=212, 320.69812pt x 109.91063pt>
+<figures/draw_unet.jpg, id=209, 320.69812pt x 109.91063pt>
 File: figures/draw_unet.jpg Graphic file (type jpg)
 <use figures/draw_unet.jpg>
-Package pdftex.def Info: figures/draw_unet.jpg  used on input line 229.
+Package pdftex.def Info: figures/draw_unet.jpg  used on input line 226.
 (pdftex.def)             Requested size: 153.64644pt x 52.65921pt.
 [2 <./figures/fig_sim_coldens-eps-converted-to.pdf> <./figures/fig_sim_voldens-eps-converted-to.pdf>]
-Underfull \hbox (badness 10000) in paragraph at lines 264--265
+Underfull \hbox (badness 10000) in paragraph at lines 261--262
 []\T1/txr/m/n/10 This is achieved through nor-mal-iz-ing flows
  []
 
 
-Underfull \hbox (badness 3525) in paragraph at lines 264--265
+Underfull \hbox (badness 3525) in paragraph at lines 261--262
 \T1/txr/m/n/10 ([][][] []2016[]), which trans-form a com-plex
  []
 
-<figures/draw_cinn.jpg, id=336, 332.74312pt x 218.31563pt>
+<figures/draw_cinn.jpg, id=333, 332.74312pt x 218.31563pt>
 File: figures/draw_cinn.jpg Graphic file (type jpg)
 <use figures/draw_cinn.jpg>
-Package pdftex.def Info: figures/draw_cinn.jpg  used on input line 313.
+Package pdftex.def Info: figures/draw_cinn.jpg  used on input line 309.
 (pdftex.def)             Requested size: 179.25157pt x 117.60884pt.
 [3 <./figures/unet_architecture.jpg> <./figures/draw_unet.jpg> <./figures/draw_cinn.jpg>]
-Underfull \hbox (badness 4429) in paragraph at lines 334--336
+Underfull \hbox (badness 4429) in paragraph at lines 330--332
 \T1/txr/m/n/10 This SDE is a vari-ant of the Ornstein-Uhlenbeck pro-
  []
 
 
-Underfull \hbox (badness 5217) in paragraph at lines 334--336
+Underfull \hbox (badness 5217) in paragraph at lines 330--332
 \T1/txr/m/n/10 cess, whose so-lu-tions con-verge to a Gaus-sian dis-tri-bu-
  []
 
-<figures/draw_ddpm.jpg, id=359, 402.75468pt x 218.31563pt>
+<figures/draw_ddpm.jpg, id=356, 402.75468pt x 218.31563pt>
 File: figures/draw_ddpm.jpg Graphic file (type jpg)
 <use figures/draw_ddpm.jpg>
-Package pdftex.def Info: figures/draw_ddpm.jpg  used on input line 370.
+Package pdftex.def Info: figures/draw_ddpm.jpg  used on input line 365.
 (pdftex.def)             Requested size: 204.86061pt x 111.04634pt.
 
-Underfull \hbox (badness 2707) in paragraph at lines 376--378
+Underfull \hbox (badness 2707) in paragraph at lines 371--373
 \T1/txr/m/n/10 ([][][] []2007[]). Her-schel ob-ser-va-tions ([][][]
  []
 
 Package epstopdf Info: Source file: <figures/fig_sim_correlation.eps>
-(epstopdf)                    date: 2026-01-28 11:50:48
+(epstopdf)                    date: 2025-11-26 19:05:52
 (epstopdf)                    size: 11591368 bytes
 (epstopdf)             Output file: <figures/fig_sim_correlation-eps-converted-to.pdf>
+(epstopdf)                    date: 2026-01-14 16:15:10
+(epstopdf)                    size: 82710 bytes
 (epstopdf)             Command: <repstopdf --outfile=figures/fig_sim_correlation-eps-converted-to.pdf figures/fig_sim_correlation.eps>
-(epstopdf)             \includegraphics on input line 394.
-runsystem(repstopdf --outfile=figures/fig_sim_correlation-eps-converted-to.pdf figures/fig_sim_correlation.eps)...executed safely (allowed).
-
-Package epstopdf Info: Result file: <figures/fig_sim_correlation-eps-converted-to.pdf>
-(epstopdf)                    date: 2026-01-29 11:37:46
-(epstopdf)                    size: 82710 bytes.
-<figures/fig_sim_correlation-eps-converted-to.pdf, id=369, 505.89pt x 505.89pt>
+(epstopdf)             \includegraphics on input line 389.
+Package epstopdf Info: Output file is already uptodate.
+<figures/fig_sim_correlation-eps-converted-to.pdf, id=366, 505.89pt x 505.89pt>
 File: figures/fig_sim_correlation-eps-converted-to.pdf Graphic file (type pdf)
 <use figures/fig_sim_correlation-eps-converted-to.pdf>
-Package pdftex.def Info: figures/fig_sim_correlation-eps-converted-to.pdf  used on input line 394.
-(pdftex.def)             Requested size: 256.0748pt x 256.07838pt.
-<figures/Benchmark_OrionB/ds_3.jpg, id=373, 722.7pt x 433.62pt>
+Package pdftex.def Info: figures/fig_sim_correlation-eps-converted-to.pdf  used on input line 389.
+(pdftex.def)             Requested size: 192.05609pt x 192.05493pt.
+[4 <./figures/draw_ddpm.jpg> <./figures/fig_sim_correlation-eps-converted-to.pdf>]
+<figures/Benchmark_OrionB/ds_3.jpg, id=415, 722.7pt x 433.62pt>
 File: figures/Benchmark_OrionB/ds_3.jpg Graphic file (type jpg)
 <use figures/Benchmark_OrionB/ds_3.jpg>
-Package pdftex.def Info: figures/Benchmark_OrionB/ds_3.jpg  used on input line 409.
+Package pdftex.def Info: figures/Benchmark_OrionB/ds_3.jpg  used on input line 404.
 (pdftex.def)             Requested size: 256.0748pt x 153.64174pt.
-<figures/Benchmark_OrionB/ds_5.jpg, id=374, 722.7pt x 433.62pt>
+<figures/Benchmark_OrionB/ds_5.jpg, id=416, 722.7pt x 433.62pt>
 File: figures/Benchmark_OrionB/ds_5.jpg Graphic file (type jpg)
 <use figures/Benchmark_OrionB/ds_5.jpg>
-Package pdftex.def Info: figures/Benchmark_OrionB/ds_5.jpg  used on input line 415.
+Package pdftex.def Info: figures/Benchmark_OrionB/ds_5.jpg  used on input line 410.
 (pdftex.def)             Requested size: 256.0748pt x 153.64174pt.
-[4 <./figures/draw_ddpm.jpg>]
-<figures/Benchmark_OrionB/accuracy.jpg, id=396, 462.528pt x 346.896pt>
+<figures/Benchmark_OrionB/accuracy.jpg, id=418, 462.528pt x 346.896pt>
 File: figures/Benchmark_OrionB/accuracy.jpg Graphic file (type jpg)
 <use figures/Benchmark_OrionB/accuracy.jpg>
-Package pdftex.def Info: figures/Benchmark_OrionB/accuracy.jpg  used on input line 436.
+Package pdftex.def Info: figures/Benchmark_OrionB/accuracy.jpg  used on input line 431.
 (pdftex.def)             Requested size: 256.0748pt x 192.06375pt.
-<figures/Benchmark_OrionB/residuals.jpg, id=398, 462.528pt x 346.896pt>
+<figures/Benchmark_OrionB/residuals.jpg, id=420, 462.528pt x 346.896pt>
 File: figures/Benchmark_OrionB/residuals.jpg Graphic file (type jpg)
 <use figures/Benchmark_OrionB/residuals.jpg>
-Package pdftex.def Info: figures/Benchmark_OrionB/residuals.jpg  used on input line 454.
+Package pdftex.def Info: figures/Benchmark_OrionB/residuals.jpg  used on input line 449.
 (pdftex.def)             Requested size: 256.0748pt x 192.06375pt.
- [5 <./figures/fig_sim_correlation-eps-converted-to.pdf> <./figures/Benchmark_OrionB/ds_3.jpg> <./figures/Benchmark_OrionB/ds_5.jpg> <./figures/Benchmark_OrionB/accuracy.jpg>]
-<figures/Benchmark_OrionB/region_0.jpg, id=438, 903.375pt x 433.62pt>
+ [5 <./figures/Benchmark_OrionB/ds_3.jpg> <./figures/Benchmark_OrionB/ds_5.jpg> <./figures/Benchmark_OrionB/accuracy.jpg>]
+<figures/Benchmark_OrionB/region_0.jpg, id=435, 843.15pt x 355.8093pt>
 File: figures/Benchmark_OrionB/region_0.jpg Graphic file (type jpg)
 <use figures/Benchmark_OrionB/region_0.jpg>
-Package pdftex.def Info: figures/Benchmark_OrionB/region_0.jpg  used on input line 496.
-(pdftex.def)             Requested size: 523.5307pt x 251.30789pt.
-<figures/Benchmark_OrionB/region_1.jpg, id=439, 903.375pt x 433.62pt>
+Package pdftex.def Info: figures/Benchmark_OrionB/region_0.jpg  used on input line 490.
+(pdftex.def)             Requested size: 523.5307pt x 220.93065pt.
+<figures/Benchmark_OrionB/region_1.jpg, id=436, 843.15pt x 355.8093pt>
 File: figures/Benchmark_OrionB/region_1.jpg Graphic file (type jpg)
 <use figures/Benchmark_OrionB/region_1.jpg>
-Package pdftex.def Info: figures/Benchmark_OrionB/region_1.jpg  used on input line 502.
-(pdftex.def)             Requested size: 523.5307pt x 251.30789pt.
- [6 <./figures/Benchmark_OrionB/residuals.jpg>]
+Package pdftex.def Info: figures/Benchmark_OrionB/region_1.jpg  used on input line 496.
+(pdftex.def)             Requested size: 523.5307pt x 220.93065pt.
+
+
+LaTeX Warning: `!h' float specifier changed to `!ht'.
+
+[6 <./figures/Benchmark_OrionB/residuals.jpg>]
 Underfull \vbox (badness 10000) has occurred while \output is active []
 
 
 Underfull \vbox (badness 10000) has occurred while \output is active []
 
  [7 <./figures/Benchmark_OrionB/region_0.jpg> <./figures/Benchmark_OrionB/region_1.jpg>]
-<figures/Benchmark_OrionB/density_dists/density_dists_UNet.jpg, id=463, 462.528pt x 346.896pt>
+<figures/Benchmark_OrionB/density_dists/density_dists_UNet.jpg, id=465, 462.528pt x 346.896pt>
 File: figures/Benchmark_OrionB/density_dists/density_dists_UNet.jpg Graphic file (type jpg)
 <use figures/Benchmark_OrionB/density_dists/density_dists_UNet.jpg>
-Package pdftex.def Info: figures/Benchmark_OrionB/density_dists/density_dists_UNet.jpg  used on input line 533.
+Package pdftex.def Info: figures/Benchmark_OrionB/density_dists/density_dists_UNet.jpg  used on input line 527.
 (pdftex.def)             Requested size: 125.47806pt x 94.10779pt.
-<figures/Benchmark_OrionB/density_dists/density_dists_cINN.jpg, id=464, 462.528pt x 346.896pt>
+<figures/Benchmark_OrionB/density_dists/density_dists_cINN.jpg, id=466, 462.528pt x 346.896pt>
 File: figures/Benchmark_OrionB/density_dists/density_dists_cINN.jpg Graphic file (type jpg)
 <use figures/Benchmark_OrionB/density_dists/density_dists_cINN.jpg>
-Package pdftex.def Info: figures/Benchmark_OrionB/density_dists/density_dists_cINN.jpg  used on input line 538.
+Package pdftex.def Info: figures/Benchmark_OrionB/density_dists/density_dists_cINN.jpg  used on input line 532.
 (pdftex.def)             Requested size: 125.47806pt x 94.10779pt.
-<figures/Benchmark_OrionB/density_dists/density_dists_DDPM.jpg, id=465, 462.528pt x 346.896pt>
+<figures/Benchmark_OrionB/density_dists/density_dists_DDPM.jpg, id=467, 462.528pt x 346.896pt>
 File: figures/Benchmark_OrionB/density_dists/density_dists_DDPM.jpg Graphic file (type jpg)
 <use figures/Benchmark_OrionB/density_dists/density_dists_DDPM.jpg>
-Package pdftex.def Info: figures/Benchmark_OrionB/density_dists/density_dists_DDPM.jpg  used on input line 543.
+Package pdftex.def Info: figures/Benchmark_OrionB/density_dists/density_dists_DDPM.jpg  used on input line 537.
 (pdftex.def)             Requested size: 125.47806pt x 94.10779pt.
-<figures/Benchmark_OrionB/density_dists.jpg, id=466, 462.528pt x 346.896pt>
+<figures/Benchmark_OrionB/density_dists.jpg, id=468, 462.528pt x 346.896pt>
 File: figures/Benchmark_OrionB/density_dists.jpg Graphic file (type jpg)
 <use figures/Benchmark_OrionB/density_dists.jpg>
-Package pdftex.def Info: figures/Benchmark_OrionB/density_dists.jpg  used on input line 548.
+Package pdftex.def Info: figures/Benchmark_OrionB/density_dists.jpg  used on input line 542.
 (pdftex.def)             Requested size: 125.47806pt x 94.10779pt.
-<figures/Benchmark_OrionB/fractal_dim_fit.jpg, id=469, 462.528pt x 346.896pt>
+<figures/Benchmark_OrionB/fractal_dim_fit.jpg, id=471, 462.528pt x 346.896pt>
 File: figures/Benchmark_OrionB/fractal_dim_fit.jpg Graphic file (type jpg)
 <use figures/Benchmark_OrionB/fractal_dim_fit.jpg>
-Package pdftex.def Info: figures/Benchmark_OrionB/fractal_dim_fit.jpg  used on input line 566.
+Package pdftex.def Info: figures/Benchmark_OrionB/fractal_dim_fit.jpg  used on input line 560.
 (pdftex.def)             Requested size: 125.47806pt x 94.10779pt.
-<figures/Benchmark_OrionB/fractal_dim.jpg, id=470, 462.528pt x 346.896pt>
+<figures/Benchmark_OrionB/fractal_dim.jpg, id=472, 462.528pt x 346.896pt>
 File: figures/Benchmark_OrionB/fractal_dim.jpg Graphic file (type jpg)
 <use figures/Benchmark_OrionB/fractal_dim.jpg>
-Package pdftex.def Info: figures/Benchmark_OrionB/fractal_dim.jpg  used on input line 572.
+Package pdftex.def Info: figures/Benchmark_OrionB/fractal_dim.jpg  used on input line 566.
 (pdftex.def)             Requested size: 125.47806pt x 94.10779pt.
 
-Underfull \hbox (badness 8094) in paragraph at lines 573--573
+Underfull \hbox (badness 8094) in paragraph at lines 567--567
 []\T1/txr/m/n/9 (b) |$\OML/txmi/m/it/9 D$ \T1/txr/m/n/9 for dif-fer-ent min-i-mum
  []
 
 LaTeX Font Info:    Font shape `T1/txr/b/n' in size <7> not available
-(Font)              Font shape `T1/txr/bx/n' tried instead on input line 589.
+(Font)              Font shape `T1/txr/bx/n' tried instead on input line 583.
 LaTeX Font Info:    Font shape `T1/txr/b/n' in size <5> not available
-(Font)              Font shape `T1/txr/bx/n' tried instead on input line 589.
+(Font)              Font shape `T1/txr/bx/n' tried instead on input line 583.
 
-Underfull \hbox (badness 1371) in paragraph at lines 589--590
+Underfull \hbox (badness 1371) in paragraph at lines 583--584
 []$\OML/txmi/m/it/10 N[]\OT1/txr/m/n/10 (\OML/txmi/m/it/10 n[]\OT1/txr/m/n/10 )$ \T1/txr/bx/n/10 re-la-tion (dense cores only): \T1/txr/m/n/10 Fit the pre-dicted
  []
 
 (./paper.bbl) [8 <./figures/Benchmark_OrionB/density_dists/density_dists_UNet.jpg> <./figures/Benchmark_OrionB/density_dists/density_dists_cINN.jpg> <./figures/Benchmark_OrionB/density_dists/density_dists_DDPM.jpg> <./figures/Benchmark_OrionB/density_dists.jpg> <./figures/Benchmark_OrionB/fractal_dim_fit.jpg> <./figures/Benchmark_OrionB/fractal_dim.jpg>]
 Package epstopdf Info: Source file: <figures/fig_mw_correction_ld.eps>
-(epstopdf)                    date: 2026-01-28 11:50:48
+(epstopdf)                    date: 2025-12-02 10:43:42
 (epstopdf)                    size: 28066 bytes
 (epstopdf)             Output file: <figures/fig_mw_correction_ld-eps-converted-to.pdf>
+(epstopdf)                    date: 2026-01-14 16:15:11
+(epstopdf)                    size: 14079 bytes
 (epstopdf)             Command: <repstopdf --outfile=figures/fig_mw_correction_ld-eps-converted-to.pdf figures/fig_mw_correction_ld.eps>
-(epstopdf)             \includegraphics on input line 664.
-runsystem(repstopdf --outfile=figures/fig_mw_correction_ld-eps-converted-to.pdf figures/fig_mw_correction_ld.eps)...executed safely (allowed).
-
-Package epstopdf Info: Result file: <figures/fig_mw_correction_ld-eps-converted-to.pdf>
-(epstopdf)                    date: 2026-01-29 11:37:47
-(epstopdf)                    size: 14079 bytes.
-<figures/fig_mw_correction_ld-eps-converted-to.pdf, id=494, 361.35pt x 361.35pt>
+(epstopdf)             \includegraphics on input line 658.
+Package epstopdf Info: Output file is already uptodate.
+<figures/fig_mw_correction_ld-eps-converted-to.pdf, id=491, 361.35pt x 361.35pt>
 File: figures/fig_mw_correction_ld-eps-converted-to.pdf Graphic file (type pdf)
 <use figures/fig_mw_correction_ld-eps-converted-to.pdf>
-Package pdftex.def Info: figures/fig_mw_correction_ld-eps-converted-to.pdf  used on input line 664.
+Package pdftex.def Info: figures/fig_mw_correction_ld-eps-converted-to.pdf  used on input line 658.
 (pdftex.def)             Requested size: 122.9148pt x 122.9125pt.
 Package epstopdf Info: Source file: <figures/fig_mw_correction_nd.eps>
-(epstopdf)                    date: 2026-01-28 11:50:48
+(epstopdf)                    date: 2025-12-02 10:43:34
 (epstopdf)                    size: 32848 bytes
 (epstopdf)             Output file: <figures/fig_mw_correction_nd-eps-converted-to.pdf>
+(epstopdf)                    date: 2026-01-14 16:15:11
+(epstopdf)                    size: 16272 bytes
 (epstopdf)             Command: <repstopdf --outfile=figures/fig_mw_correction_nd-eps-converted-to.pdf figures/fig_mw_correction_nd.eps>
-(epstopdf)             \includegraphics on input line 671.
-runsystem(repstopdf --outfile=figures/fig_mw_correction_nd-eps-converted-to.pdf figures/fig_mw_correction_nd.eps)...executed safely (allowed).
-
-Package epstopdf Info: Result file: <figures/fig_mw_correction_nd-eps-converted-to.pdf>
-(epstopdf)                    date: 2026-01-29 11:37:47
-(epstopdf)                    size: 16272 bytes.
-<figures/fig_mw_correction_nd-eps-converted-to.pdf, id=497, 361.35pt x 361.35pt>
+(epstopdf)             \includegraphics on input line 665.
+Package epstopdf Info: Output file is already uptodate.
+<figures/fig_mw_correction_nd-eps-converted-to.pdf, id=494, 361.35pt x 361.35pt>
 File: figures/fig_mw_correction_nd-eps-converted-to.pdf Graphic file (type pdf)
 <use figures/fig_mw_correction_nd-eps-converted-to.pdf>
-Package pdftex.def Info: figures/fig_mw_correction_nd-eps-converted-to.pdf  used on input line 671.
+Package pdftex.def Info: figures/fig_mw_correction_nd-eps-converted-to.pdf  used on input line 665.
 (pdftex.def)             Requested size: 122.9148pt x 122.9125pt.
 Package epstopdf Info: Source file: <figures/fig_mw_correction_diffkonyves.eps>
-(epstopdf)                    date: 2026-01-28 11:50:48
+(epstopdf)                    date: 2025-11-20 14:54:24
 (epstopdf)                    size: 27119 bytes
 (epstopdf)             Output file: <figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf>
+(epstopdf)                    date: 2026-01-14 16:15:11
+(epstopdf)                    size: 15442 bytes
 (epstopdf)             Command: <repstopdf --outfile=figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf figures/fig_mw_correction_diffkonyves.eps>
-(epstopdf)             \includegraphics on input line 695.
-runsystem(repstopdf --outfile=figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf figures/fig_mw_correction_diffkonyves.eps)...executed safely (allowed).
-
-Package epstopdf Info: Result file: <figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf>
-(epstopdf)                    date: 2026-01-29 11:37:47
-(epstopdf)                    size: 15442 bytes.
-<figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf, id=501, 722.7pt x 361.35pt>
+(epstopdf)             \includegraphics on input line 689.
+Package epstopdf Info: Output file is already uptodate.
+<figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf, id=498, 722.7pt x 361.35pt>
 File: figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf Graphic file (type pdf)
 <use figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf>
-Package pdftex.def Info: figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf  used on input line 695.
+Package pdftex.def Info: figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf  used on input line 689.
 (pdftex.def)             Requested size: 256.0748pt x 128.03477pt.
  [9
 
- <./figures/fig_mw_correction_ld-eps-converted-to.pdf> <./figures/fig_mw_correction_nd-eps-converted-to.pdf> <./figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf>]
-Package epstopdf Info: Source file: <figures/fig_score_residuals.eps>
-(epstopdf)                    date: 2026-01-28 11:50:48
-(epstopdf)                    size: 28712 bytes
-(epstopdf)             Output file: <figures/fig_score_residuals-eps-converted-to.pdf>
-(epstopdf)             Command: <repstopdf --outfile=figures/fig_score_residuals-eps-converted-to.pdf figures/fig_score_residuals.eps>
-(epstopdf)             \includegraphics on input line 778.
-runsystem(repstopdf --outfile=figures/fig_score_residuals-eps-converted-to.pdf figures/fig_score_residuals.eps)...executed safely (allowed).
+ <./figures/fig_mw_correction_ld-eps-converted-to.pdf> <./figures/fig_mw_correction_nd-eps-converted-to.pdf> <./figures/fig_mw_correction_diffkonyves-eps-converted-to.pdf>] [10] [11
 
-Package epstopdf Info: Result file: <figures/fig_score_residuals-eps-converted-to.pdf>
-(epstopdf)                    date: 2026-01-29 11:37:48
-(epstopdf)                    size: 16123 bytes.
-<figures/fig_score_residuals-eps-converted-to.pdf, id=626, 361.35pt x 361.35pt>
-File: figures/fig_score_residuals-eps-converted-to.pdf Graphic file (type pdf)
-<use figures/fig_score_residuals-eps-converted-to.pdf>
-Package pdftex.def Info: figures/fig_score_residuals-eps-converted-to.pdf  used on input line 778.
-(pdftex.def)             Requested size: 122.9148pt x 122.9125pt.
-Package epstopdf Info: Source file: <figures/fig_score_accuracy.eps>
-(epstopdf)                    date: 2026-01-28 11:50:48
-(epstopdf)                    size: 22063 bytes
-(epstopdf)             Output file: <figures/fig_score_accuracy-eps-converted-to.pdf>
-(epstopdf)             Command: <repstopdf --outfile=figures/fig_score_accuracy-eps-converted-to.pdf figures/fig_score_accuracy.eps>
-(epstopdf)             \includegraphics on input line 784.
-runsystem(repstopdf --outfile=figures/fig_score_accuracy-eps-converted-to.pdf figures/fig_score_accuracy.eps)...executed safely (allowed).
-
-Package epstopdf Info: Result file: <figures/fig_score_accuracy-eps-converted-to.pdf>
-(epstopdf)                    date: 2026-01-29 11:37:48
-(epstopdf)                    size: 18626 bytes.
-<figures/fig_score_accuracy-eps-converted-to.pdf, id=627, 361.35pt x 361.35pt>
-File: figures/fig_score_accuracy-eps-converted-to.pdf Graphic file (type pdf)
-<use figures/fig_score_accuracy-eps-converted-to.pdf>
-Package pdftex.def Info: figures/fig_score_accuracy-eps-converted-to.pdf  used on input line 784.
-(pdftex.def)             Requested size: 122.9148pt x 122.9125pt.
-Package epstopdf Info: Source file: <figures/fig_score_unet_diffkonyves.eps>
-(epstopdf)                    date: 2026-01-28 11:50:48
-(epstopdf)                    size: 29556 bytes
-(epstopdf)             Output file: <figures/fig_score_unet_diffkonyves-eps-converted-to.pdf>
-(epstopdf)             Command: <repstopdf --outfile=figures/fig_score_unet_diffkonyves-eps-converted-to.pdf figures/fig_score_unet_diffkonyves.eps>
-(epstopdf)             \includegraphics on input line 794.
-runsystem(repstopdf --outfile=figures/fig_score_unet_diffkonyves-eps-converted-to.pdf figures/fig_score_unet_diffkonyves.eps)...executed safely (allowed).
-
-Package epstopdf Info: Result file: <figures/fig_score_unet_diffkonyves-eps-converted-to.pdf>
-(epstopdf)                    date: 2026-01-29 11:37:49
-(epstopdf)                    size: 16771 bytes.
-<figures/fig_score_unet_diffkonyves-eps-converted-to.pdf, id=628, 722.7pt x 361.35pt>
-File: figures/fig_score_unet_diffkonyves-eps-converted-to.pdf Graphic file (type pdf)
-<use figures/fig_score_unet_diffkonyves-eps-converted-to.pdf>
-Package pdftex.def Info: figures/fig_score_unet_diffkonyves-eps-converted-to.pdf  used on input line 794.
-(pdftex.def)             Requested size: 256.0748pt x 128.03477pt.
- [10 <./figures/fig_score_residuals-eps-converted-to.pdf> <./figures/fig_score_accuracy-eps-converted-to.pdf>] [11 <./figures/fig_score_unet_diffkonyves-eps-converted-to.pdf>] [12
+] [12
 
 ] (./paper.aux)
  ***********
@@ -1071,21 +1016,21 @@ LaTeX2e <2023-11-01> patch level 1
 L3 programming layer <2024-01-22>
  ***********
 Package rerunfilecheck Info: File `paper.out' has not changed.
-(rerunfilecheck)             Checksum: 85A0A8D270CD749EA3F34175A737AFCB;5071.
+(rerunfilecheck)             Checksum: 29DDF3FE31F7BE44EBF49CE9FE261D94;4775.
  ) 
 Here is how much of TeX's memory you used:
- 16797 strings out of 476182
- 272573 string characters out of 5795595
- 1962975 words of memory out of 5000000
- 38357 multiletter control sequences out of 15000+600000
+ 16768 strings out of 476182
+ 271289 string characters out of 5795596
+ 1959975 words of memory out of 5000000
+ 38333 multiletter control sequences out of 15000+600000
  657206 words of font info for 185 fonts, out of 8000000 for 9000
  14 hyphenation exceptions out of 8191
- 87i,14n,93p,790b,717s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 87i,14n,93p,772b,727s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/rtcxr.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/rtxmi.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/rtxr.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/rtxr.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/t1xtt.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/txex.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/txsy.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/txsya.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/txfonts/txsyb.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/helvetic/uhvb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/helvetic/uhvr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/helvetic/uhvr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on paper.pdf (12 pages, 2945108 bytes).
+Output written on paper.pdf (12 pages, 7360791 bytes).
 PDF statistics:
- 876 PDF objects out of 1000 (max. 8388607)
- 503 compressed objects within 6 object streams
- 131 named destinations out of 1000 (max. 500000)
- 366 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 751 PDF objects out of 1000 (max. 8388607)
+ 477 compressed objects within 5 object streams
+ 126 named destinations out of 1000 (max. 500000)
+ 343 words of extra memory for PDF output out of 10000 (max. 10000000)
 
