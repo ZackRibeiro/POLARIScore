@@ -100,7 +100,21 @@ def compute_pdf(data_slice:np.ndarray, bins:int=100, func:Callable=lambda x: np.
         edges = edges - (edges[center_i+1]+edges[center_i])/2
     return [probabilities, edges]
 
-def printProgressBar(iteration,total,prefix='',suffix='',decimals=1,length=50,fill='█',printEnd="\r"):
+def format_time(seconds:float)->str:
+    hours, rem = divmod(seconds, 3600)
+    minutes, seconds = divmod(rem, 60)
+    return f"{int(hours):02}h:{int(minutes):02}m:{int(seconds):02}s"
+
+import time
+_time_0 = 0
+def printProgressBar(iteration,total,prefix='',suffix='',decimals=1,length=50,fill='█',printEnd="\r",show_tr=True):
+    global _time_0
+    delta_time = 0.
+    if iteration==0:
+        _time_0 = time.process_time()
+    else:  
+        delta_time = (time.process_time()-_time_0)/iteration * (total-iteration)
+
     if total == 0:
         total = 1
 
@@ -120,11 +134,13 @@ def printProgressBar(iteration,total,prefix='',suffix='',decimals=1,length=50,fi
 
     bar = (
         color + fill * filledLength + reset +
-        '-' * (length - filledLength)
+        '█' * (length - filledLength)
     )
 
-    print(f'\r{prefix} {bar} {color+percent_str}%{reset} {suffix}', end=printEnd)
-
+    if show_tr:
+        print(f'\r{prefix} {bar} {color+percent_str}%{reset} {suffix} tr~{format_time(delta_time)}', end=printEnd)
+    else:
+        print(f'\r{prefix} {bar} {color+percent_str}%{reset} {suffix}', end=printEnd)
     if iteration >= total:
         print()
 

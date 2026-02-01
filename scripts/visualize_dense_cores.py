@@ -53,7 +53,7 @@ else:
 
 core_properties = []
 for i,c in enumerate(observation.get_cores()):
-    printProgressBar(i, len(observation.get_cores()), prefix="Plotting...", length=30)
+    printProgressBar(i, len(observation.get_cores()), prefix="Plotting cores...", length=30)
     
     fig = plt.figure(figsize=(2*(len(args.obs_suffixes)+1),4),dpi=200.)
     cdens_ax = plt.subplot2grid((1, 1+len(args.obs_suffixes)),(0, 0), fig=fig, projection=observation.wcs)
@@ -81,11 +81,17 @@ for i,c in enumerate(observation.get_cores()):
         axes[j] = vdens_ax
 
         if args.plot_details:
-            fig_details, _ = c.plot(save_path=folder_path + "/"+s+"/")
-            plt.close(fig_details)
+            try:
+                fig_details, _ = c.plot(save_path=folder_path + "/"+s+"/")
+                plt.close(fig_details)
+            except:
+                pass
         
-        c_props['mass_'+s] = c.compute_mass()
-        c_props['vdens_'+s] = c.get_center_density()
+        try:
+            c_props['mass_'+s] = c.compute_mass()
+            c_props['vdens_'+s] = c.get_center_density()
+        except:
+            pass
     
     if continue_flag:
         plt.close(fig)
