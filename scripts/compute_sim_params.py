@@ -24,7 +24,8 @@ L = float(args.L)
 T = float(args.T)
 B = float(args.B)
 Ms = float(args.Ms)
-print(f"Computed using: L={L}pc | T={T}K | B={B}µG | Ms={Ms}")
+Mass = float(args.M)
+print(f"Computed using: L={L}pc | T={T}K | B={B}µG | Ms={Ms} | M={Mass}")
 print("---------------------")
 
 kb = 1.380649e-23

@@ -205,7 +205,8 @@ class DenseCore():
     def plot(self, env_size:Optional[float]=1., cmap:str="rainbow", cdens:bool=False, contour:bool=True,
               ax=None, save_path:Union[None,str]=None, nearby_cores:bool=True, 
               show_fit:bool=True, cbar:bool=True, toplabel:Optional[str]=None, cbar_settings:Dict={},
-              show_title:bool=True, show_legend:bool=True, show_ticks:bool=True, show_marker:bool=True, contour_levels:int=20):
+              show_title:bool=True, show_legend:bool=True, show_ticks:bool=True, show_marker:bool=True, contour_levels:int=20,
+              c_vmin:Optional[float]=None, c_vmax:Optional[float]=None):
         """Plot the dense core environment with horizontal and vertical density slices.
         Args:
             env_size(float, default=1): size of the environment(of the image) in parsecs. If None, the environment is adaptative to the core radius.
@@ -294,7 +295,7 @@ class DenseCore():
         if vmin <= 0:
             vmin = np.nanmin(region[region > 0])
         levels = np.logspace(np.log10(vmin), np.log10(vmax), contour_levels)
-        img_plt = ax_reg.imshow(region, cmap=cmap, norm=LogNorm(vmin=vmin, vmax=vmax), origin="lower")
+        img_plt = ax_reg.imshow(region, cmap=cmap, norm=LogNorm(vmin=vmin if c_vmin is None else c_vmin, vmax=vmax if c_vmax is None else c_vmax), origin="lower")
         
         if cbar:
             if not('label' in cbar_settings):

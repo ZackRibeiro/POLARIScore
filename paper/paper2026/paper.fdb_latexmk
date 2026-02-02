@@ -1,15 +1,15 @@
 # Fdb version 4
-["bibtex paper"] 1769788968.7491 "paper.aux" "paper.bbl" "paper" 1769790446.56761 0
+["bibtex paper"] 1770072279.65824 "paper.aux" "paper.bbl" "paper" 1770072280.86156 0
   "./aa.bst" 1764341164.45061 32103 296074362bd3e822c5209e1570c1d28f ""
   "./biblio.bib" 1769166915.37427 206514 02886c0c48555dce16384a7e49a58cde ""
-  "paper.aux" 1769790446.35302 31614 17ce117fd23d2f2d507a1f3c19276452 "pdflatex"
+  "paper.aux" 1770072280.63659 33901 cf846ee279a1905af68d45e6ad0db9a7 "pdflatex"
   (generated)
   "paper.bbl"
   "paper.blg"
   (rewritten before read)
-["pdflatex"] 1769790445.46351 "/home/zack/POLARIScore/paper/paper2026/paper.tex" "paper.pdf" "paper" 1769790446.56783 0
+["pdflatex"] 1770072279.7334 "/home/zack/POLARIScore/paper/paper2026/paper.tex" "paper.pdf" "paper" 1770072280.86182 0
   "/etc/texmf/web2c/texmf.cnf" 1767998866.90418 475 c0e671620eb5563b2130f56340a5fde8 ""
-  "/home/zack/POLARIScore/paper/paper2026/paper.tex" 1769790445.10902 51102 06d8d6a3a1e0455df61f7cd07c5a14d3 ""
+  "/home/zack/POLARIScore/paper/paper2026/paper.tex" 1770072280.53533 59526 6411aab9993463e661e3dca62cc2fe27 ""
   "/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc" 1165713224 4850 80dc9bab7f31fb78a000ccfed0e27cab ""
   "/usr/share/texlive/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/jknappen/ec/ecrm1000.tfm" 1136768653 3584 adb004a0c8e7c46ee66cad73671f37b4 ""
@@ -169,6 +169,10 @@
   "/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map" 1767999271.54305 5312232 f3296911be9cc021788f3f879cf0a47d ""
   "/var/lib/texmf/web2c/pdftex/pdflatex.fmt" 1767999302 6800795 73eaae25197ad79528492f8a48eda7ed ""
   "aa.cls" 1764341164.45061 65757 6b6580dfce58ecb7185e444b8c7f79b2 ""
+  "figures/Benchmark_Idefix/ds_0.jpg" 1770041479.65128 429425 2e13ca7f40cb5bb94c49ce1647ee5d7f ""
+  "figures/Benchmark_Idefix/ds_1.jpg" 1770041480.05608 427302 444d9c21ecf4d24c21c8e1c216751475 ""
+  "figures/Benchmark_Idefix/ds_2.jpg" 1770041480.62808 443785 bfd600b9757e26472748e6bfd4020662 ""
+  "figures/Benchmark_Idefix/residuals.jpg" 1770041481.68408 40222 3ef59704ca9d24e13258895981942283 ""
   "figures/Benchmark_OrionB/accuracy.jpg" 1768822388.35786 40429 1f5b9289efa585495b5a2e835a17cc23 ""
   "figures/Benchmark_OrionB/density_dists.jpg" 1768826203.20823 36466 28de4c73314cb84c686b4908e8ea6b71 ""
   "figures/Benchmark_OrionB/density_dists/density_dists_DDPM.jpg" 1768826191.71537 29039 e13e86a6d95b30de0959dc4b11317aed ""
@@ -181,6 +185,10 @@
   "figures/Benchmark_OrionB/region_0.jpg" 1769786718.10021 2627996 1d6da70d4a00e2d1dfbf756e7bda3201 ""
   "figures/Benchmark_OrionB/region_1.jpg" 1769786716.48876 2818734 8c595dab2f6a4a51f6e98f66d5e3d961 ""
   "figures/Benchmark_OrionB/residuals.jpg" 1768822394.09766 43138 3324acee97f6466e3f34b76b9c4ab284 ""
+  "figures/Dense_Cores/comparison/core_054106.1-021917.jpg" 1770071766.04873 842142 88790d4ed50df90c99ab52a5bf2e87a9 ""
+  "figures/Dense_Cores/comparison/core_054109.2-014535.jpg" 1770071764.61009 882310 f819d89b7bf85ca96d2eae5737c99239 ""
+  "figures/Dense_Cores/comparison/core_054134.4-021434.jpg" 1770071762.996 874096 b23b578e7607634f00ea994263d3a865 ""
+  "figures/Dense_Cores/comparison/core_055116.9+024833.jpg" 1770071761.60561 816385 8a24e0f7a2069a102ab1cb89f00e8339 ""
   "figures/draw_cinn.jpg" 1768925205.56607 37285 90e281d415b7c42d2c77cf3edbe2acbe ""
   "figures/draw_ddpm.jpg" 1768925564.32315 51519 c891d3fd179c28301cf521521801939c ""
   "figures/draw_unet.jpg" 1768925219.97365 23352 c756ab244ad402f0c5d63e1be37dd2fb ""
@@ -193,10 +201,10 @@
   "figures/unet_architecture.jpg" 1764857584 247154 d0e632fc890598a7cb4b1f068631efec ""
   "lineno.sty" 1764341164.45461 151723 f406be88dbdad6c97fb774bd975d0393 ""
   "linenoaa.sty" 1764341164.45461 4221 64fc978f7ff26cff65f5a8f1adc2a33b ""
-  "paper.aux" 1769790446.35302 31614 17ce117fd23d2f2d507a1f3c19276452 "pdflatex"
-  "paper.bbl" 1769788968.80964 5899 a7fbfb661db80de5703b61288449734b "bibtex paper"
-  "paper.out" 1769790446.35702 4775 29ddf3fe31f7be44ebf49ce9fe261d94 "pdflatex"
-  "paper.tex" 1769790445.10902 51102 06d8d6a3a1e0455df61f7cd07c5a14d3 ""
+  "paper.aux" 1770072280.63659 33901 cf846ee279a1905af68d45e6ad0db9a7 "pdflatex"
+  "paper.bbl" 1770072279.72209 5899 a7fbfb661db80de5703b61288449734b "bibtex paper"
+  "paper.out" 1770072280.63659 4469 724ddcd4633db27d13cc5289b955cda6 "pdflatex"
+  "paper.tex" 1770072280.53533 59526 6411aab9993463e661e3dca62cc2fe27 ""
   (generated)
   "paper.aux"
   "paper.log"

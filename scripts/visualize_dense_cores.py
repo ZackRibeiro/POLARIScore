@@ -17,6 +17,8 @@ parser.add_argument("--obs_name", required=True, help="Molecular cloud name / Fo
 parser.add_argument("--obs_dist", required=False, default=400., help="Distance to the molecular cloud")
 parser.add_argument("--obs_suffixes", required=False, nargs="+", default=None, help="Suffixes of the .npy predictions")
 
+parser.add_argument("--names", required=False, default=[''], nargs="+", help="Dense cores names, will take all cores that have the sequence in their name.")
+
 parser.add_argument("--plot_details",required=False,default='no',help="If yes, plot cores details with slices.")
 
 parser.add_argument("--folder_name", required=False, default="dense_cores")
@@ -52,8 +54,17 @@ else:
     LOGGER.error("No observation name given.")
 
 core_properties = []
+flag_name = args.names[0] == '' or args.names[0] == 'all'
 for i,c in enumerate(observation.get_cores()):
     printProgressBar(i, len(observation.get_cores()), prefix="Plotting cores...", length=30)
+    flag = flag_name
+    if not(flag):
+        for n in args.names:
+            if n in c.data['name']:
+                flag = True
+                break
+    if not(flag):
+        continue
     
     fig = plt.figure(figsize=(2*(len(args.obs_suffixes)+1),4),dpi=200.)
     cdens_ax = plt.subplot2grid((1, 1+len(args.obs_suffixes)),(0, 0), fig=fig, projection=observation.wcs)
@@ -74,7 +85,7 @@ for i,c in enumerate(observation.get_cores()):
             if j != int(len(args.obs_suffixes)/2):
                 cbar_settings['label'] = ""
             c.plot(ax=vdens_ax, env_size=None, cdens=False, cbar=True, contour=True, nearby_cores=False, show_marker=False, toplabel=s, show_title=False, show_legend=False, show_ticks=False, contour_levels=10
-                   ,cbar_settings=cbar_settings)
+                   ,cbar_settings=cbar_settings, c_vmin=1e2, c_vmax=1e5)
         except:
             continue_flag = True
             continue

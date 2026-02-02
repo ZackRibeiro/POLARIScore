@@ -42,7 +42,7 @@
 % if you use custom commands in your title,
 % ensure to check your title when submitting!
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-   \title{Neural networks estimation of the average density in molecular clouds and dense cores}
+   \title{Neural networks estimation of the average density in molecular clouds and prestellar cores}
 
    %\subtitle{Subtitle}
 
@@ -69,7 +69,7 @@
   \abstract
   % context heading (optional)
   % {} leave it empty if necessary  
-   {/}
+   {Deriving molecular cloud and core properties from dust emission only is highly degenerate. Machine learning trained on realistic simulations offers a promising path forward.}
   % aims heading (mandatory)
    {This work explores the use of different neural network architectures to estimate the mass-weighted average volume density along the line of sight in molecular clouds, as well as the average density of dense cores.
     We aim to provide a full benchmark of these architectures, highlighting their advantages and limitations in this physical context.} 
@@ -79,7 +79,11 @@
    We apply differents numericals and physicals metrics to test the robustness, confidence and limitations of each method.
    }
   % results heading (mandatory)
-   {/}
+   {
+   We find that cINN accurately reproduces both the peak and the high-mass power-law slope of the core mass function inferred from existing core catalog, but it is difficult to train and performs poorly in diffuse regions.
+   In contrast, UNet and diffusion-based models recover only the high-mass power-law behavior but systematically underestimate the population of dense cores, while achieving better performance in low-density environments.
+   Diffusion models show clear potential, although their performance is currently limited by the size of the available training dataset.
+   }
   % conclusions heading (optional), leave it empty if necessary
    {/}
 
@@ -93,7 +97,40 @@
    \maketitle
 
 \section{Introduction}
-%\lipsum[1]
+
+   Giant molecular clouds (GMC) are among the dominant reservoirs of cold material in galaxies(\textbf{cite}) and represent a crucial phase of the galactic interstellar environment.
+   The interstellar medium consists of diffuse and dense gas, interstellar dust(\textbf{cite}), and is threaded by magnetic fields(\textbf{cite}) while being continuously influenced by energetic particles(\textbf{cite}).
+   Together, these components regulate how galaxies evolve by controlling when and where stars can form(\textbf{cite}).
+
+   Within giant molecular clouds, physical conditions are far from uniform. Instead, these objects exhibit strong spatial and temporal variations in gas density(\textbf{cite}), temperature(\textbf{cite}), velocity structure(\textbf{cite}), and magnetic field properties(\textbf{cite}).
+   Turbulence(\textbf{cite}), gravity(\textbf{cite}), magnetic forces(\textbf{cite}), and radiative processes interact nonlinearly(\textbf{cite}), producing a complex internal structure ranging from diffuse envelopes to compact, gravitationally bound cores(\textbf{cite}).
+   These environments enable a wide variety of processes, including the collapse of dense regions into young stellar objects(\textbf{cite}), which subsequently influence the evolution of the GMC through feedback mechanisms such as outflows(\textbf{cite}), as well as the formation of chemically complex species.(\textbf{cite})
+   Understanding the internal makeup of molecular clouds is therefore essential for linking small-scale star formation physics to large-scale galactic evolution. 
+
+
+   Accurate measurements of gas density in molecular clouds form the foundation for many key quantities in star formation studies.
+   Density estimates are used to infer the mass of the cloud substructures, which in turn define the dense core mass function (DCMF).
+   The DCMF is of particular interest because of its close connection to the stellar initial mass function (IMF), providing an important observational link between cloud-scale physics and the final masses of stars.
+   Uncertainties in density measurements therefore propagate through this entire chain, affecting our understanding of how molecular clouds translate their mass into stars.
+
+   Despite its importance, determining the density and mass distribution of molecular clouds remains a challenging task.(\textbf{cite})
+   Observationally, these quantities are often inferred from dust continuum emission, which requires assumptions about dust temperature(\textbf{cite}), opacity(\textbf{cite}), and gas-to-dust ratio (\textbf{cite}).
+   The problem is intrinsically complex and ill-posed, as different combinations of physical parameters can produce similar observational signatures (e.g two dense cores can be in the same line of sight).
+   As a result, inverting dust emission data to recover quantities that need an understanding of the three-dimensional structure is highly non-trivial and subject to significant degeneracies.
+
+
+   In recent years, machine learning has emerged as a powerful tool for addressing such complex inference problems in astrophysics.
+   A wide range of applications now exist across the field, from source classification\textbf{cite} to parameter estimation\textbf{cite} and forward modeling\textbf{cite}.
+   At the same time, modern numerical simulations are able to capture many of the relevant physical processes governing molecular clouds, including turbulence, gravity, magnetic fields, and radiative effects.
+   These simulations provide realistic, physically motivated datasets that are well suited for training and testing machine learning models on problems that are otherwise difficult to tackle observationally.
+
+
+   However, the rapidly growing diversity of machine learning architectures makes it non-trivial to identify which approaches are best suited for specific physical questions.
+   Different network designs may capture different aspects of the underlying physics, yet their capabilities and limitations in the context of molecular cloud studies are not always well understood.
+   Developing physically meaningful metrics to evaluate and compare these models can provide valuable insight into what each architecture is actually learning.
+   Such an understanding can help move beyond methods that rely solely on dust emission and open the door to more sophisticated applications that combine multiple observables and probe increasingly complex physical regimes.
+
+
 
 \section{Methods}
 
@@ -484,7 +521,7 @@
       \label{tab:nn_metrics}
    \end{table}
 
-   \begin{figure*}[!h]
+   \begin{figure*}[!ht]
       \begin{subfigure}{\textwidth}
          \centering
          \includegraphics[width=\textwidth]{figures/Benchmark_OrionB/region_0.jpg}
@@ -506,7 +543,7 @@
    \end{figure*}
    \FloatBarrier
 
-   \subsection{Tests on Orion~B}
+   \subsection{Application on Orion B}
 
    The purpose of this section is not to derive new physical results for the Orion~B molecular cloud, but rather to assess the consistency of the model predictions with existing observational studies. %and theoretical ?
    Predictions for Orion~B are shown in Fig.~\ref{fig:orionb}, where we focus on two major star-forming subregions. 
@@ -702,9 +739,6 @@
 \section{Validation error and bias}
    \label{appendix:valerror}
    Residuals distributions; Correction of the bias; Residuals error propagation to metrics (MC);
-\section{U-Net architecture variations}
-   \subsection{U-Net with Kolmogorov Arnold Networks}
-   \subsection{Size and Context embedding in U-Net}
 \section{Score-based training set}
    \label{appendix:score}
    Creating a training dataset is a crucial step in building an effective model. In the particular case of molecular clouds structures,
@@ -810,13 +844,83 @@ All networks were trained on an NVIDIA GeForce RTX 2070 SUPER with 8~GB of VRAM.
          \item Data normalization: same as for the cINN (see Eq.~\ref{eq:normalization})   
       \end{itemize}
 
+\section{Benchmarks on Periodic Self-Gravitating Turbulent Simulations}
+\label{appendix:turb_sims}
+   We quickly carry out isothermal low resolution MHD simulations with turbulent forcing and self-gravity enabled using the code \textit{IDEFIX} (\textbf{cite}).
+   
+   The simulations are periodic with resolution of $192^3$ for a length of $5\mathrm{pc}$, meaning a physical resolution of $0.26\mathrm{pc}$ comparable to the working resolution of our trained neural networks.
+   They began with only the forcing of the turbulence enabled (Ornstein-Uhlenbeck) and a constant number density.
+   Because the forcing is supersonic, the self-gravity is enabled after a sound crossing time so few turbulence time $t_{\mathrm{sound}}=t_{\mathrm{turb}}\times M_s$ with $M_s=\frac{\sigma_t}{c_s}$ the sonic mach number of the turbulence.
+
+   The simulation parameters are given in Table~\ref{tab:sims}.
+
+   \begin{table}[!ht]
+      \centering
+      \begin{tabular}{l|ccc}
+         Sim & $M$ [$M_\odot$] & $M_s$ & $\alpha_{\mathrm{vir}}$ \\
+         \cline{2-4}
+         A & $1\times10^4$ & $5$ & $0.77$ \\
+         B & $1\times10^4$ & $3$ & $0.27$ \\
+         C & $7\times10^3$ & $5$ & $1.1$ \\
+         D & $1\times10^4$ & $4$ & $0.49$ \\
+         E & $5\times10^3$ & $4$ & $0.98$ \\
+         \end{tabular}
+      \caption{Periodic box simulations; $B=10\mu G$; $c_s=320\mathrm{m.s}^{-1}$}
+      \label{tab:sims}
+   \end{table}
+
+   \begin{figure}[!ht]
+      \centering
+      \includegraphics[width=0.8\columnwidth]{figures/Benchmark_Idefix/residuals.jpg}
+      \caption{Logspace residuals of the neural networks: UNet (blue), cINN (orange), and DDPM (green). Same colors as Fig~\ref{fig:residuals_metric}}
+   \end{figure}
+
+
+   \begin{figure}[!ht]
+      \centering
+      \begin{subfigure}{\columnwidth}
+         \centering
+         \includegraphics[width=\columnwidth]{figures/Benchmark_Idefix/ds_0.jpg}
+      \end{subfigure}
+      \hfill
+      \begin{subfigure}{\columnwidth}
+         \centering
+         \includegraphics[width=\columnwidth]{figures/Benchmark_Idefix/ds_1.jpg}
+      \end{subfigure}
+      \begin{subfigure}{\columnwidth}
+         \centering
+         \includegraphics[width=\columnwidth]{figures/Benchmark_Idefix/ds_2.jpg}
+      \end{subfigure}
+      \caption{Neural network predictions on simulations ($3.33$pc of width)}.
+      \label{fig:nn_sim_predictions}
+   \end{figure}
+
+
 \onecolumn
 
 \section{Examples of dense core predictions}
-      Figure: horizontal: Powerlaw, Unet, cINN, DDPM
-      vertical: top: column density, bot: average volume density.
-
-      One or few for differents environments: low column density, high column density, in filaments, outside filaments...
+      \begin{figure*}[!ht]
+         \centering
+         \begin{subfigure}{\columnwidth}
+            \centering
+            \includegraphics[width=\columnwidth]{figures/Dense_Cores/comparison/core_054106.1-021917.jpg}
+         \end{subfigure}
+         \begin{subfigure}{\columnwidth}
+            \centering
+            \includegraphics[width=\columnwidth]{figures/Dense_Cores/comparison/core_054109.2-014535.jpg}
+         \end{subfigure}
+         \begin{subfigure}{\columnwidth}
+            \centering
+            \includegraphics[width=\columnwidth]{figures/Dense_Cores/comparison/core_054134.4-021434.jpg}
+         \end{subfigure}
+         \begin{subfigure}{\columnwidth}
+            \centering
+            \includegraphics[width=\columnwidth]{figures/Dense_Cores/comparison/core_055116.9+024833.jpg}
+         \end{subfigure}
+        \caption{\centering Dense core predictions produced by the networks.
+         White circles indicate the dense core radii from the catalog of \cite{konyvesPropertiesDenseCore2020}.
+         From top to bottom, the cores correspond to 054106$-$021917, 054109$-$014535, 05413$-$021434, and 055116$-$024833, which also denote their RA–Dec coordinates.}
+      \end{figure*}
 
 \end{appendix}
 \end{document}
