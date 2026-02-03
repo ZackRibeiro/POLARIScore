@@ -173,7 +173,7 @@ class Simulation_DC():
             column_density[ax] = compute_column_density(self.data['RHO'], self.cell_size, axis=ax)
 
             if what_to_compute["vdens"] is not None:
-                volume_density = [self._compute_v_density(what_to_compute["vdens"], axis=ax)]
+                volume_density[ax] = self._compute_v_density(what_to_compute["vdens"], axis=ax)
 
         if beam != None:
             LOGGER.warn(f"Column and volume density maps convolved to beam size: {beam[0]} arcsec at distance: {beam[1]} pc.")

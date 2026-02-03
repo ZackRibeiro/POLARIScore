@@ -62,4 +62,8 @@ print("vir="+str(virial))
 print("tff/t="+str(tff/t))
 print("tturb/t="+str(tturb/t))
 
+Ekin_over_Emag = 8*np.pi * .5 * rho * (Ms*Cs)**2 / B**2
+print("Ekin/Emag =", Ekin_over_Emag)
+print("Ma =", Ekin_over_Emag**.5)
+
 # this gives B = 8.49e-6G
