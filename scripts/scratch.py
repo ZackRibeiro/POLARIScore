@@ -9,20 +9,22 @@ import matplotlib
 from scipy.optimize import curve_fit
 
 from POLARIScore.objects.Simulation_DC import Simulation_DC
-from POLARIScore.utils.sim_utils import init_idefix
+from POLARIScore.utils.sim_utils import init_idefix,init_ramses
 
-sim = Simulation_DC("idefix_grav", global_size=5)
-init_idefix(simulation=sim)
+#sim = Simulation_DC("orionHD_all_512")
+sim = Simulation_DC("idefix_turb")
 
 from POLARIScore.utils.physics_utils import dcmf_func
 from POLARIScore.utils.utils import plot_function
-_dcmf_function = lambda M,amp,mu,sigma,alpha,cutoff: dcmf_func(M,amp,mu,sigma,alpha,cutoff)
+_dcmf_function = lambda M,amp,mu,sigma,alpha,cutoff: dcmf_func(M,amp,mu,sigma,alpha,cutoff, enable_cutoff=False)
 pdf = compute_pdf(sim.data['RHO']/np.mean(sim.data['RHO']))
 bin_centers = pdf[1][:100]
 values = pdf[0]
 
+
+
 popt, _ = curve_fit(_dcmf_function, (10**bin_centers), values,
-                    p0=[np.max(values), np.mean(10**bin_centers), np.std(10**bin_centers), 200.3, 1])
+                    p0=[np.max(values), np.mean(bin_centers), np.std(bin_centers), 1., 1])
 func = lambda X: _dcmf_function(X, popt[0], popt[1], popt[2], popt[3], popt[4])
 
 fig = plt.figure()
@@ -37,6 +39,8 @@ plot_function(func, ax=ax, scatter=False, logspace=True, lims= (np.min(10**bin_c
 ax.set_xscale("log")
 fig.legend()
 
-sim.plot_slice(slice=100)
+sim.plot_slice(slice=100,)
+from POLARIScore.utils.utils import compute_mass_weighted_density
+sim.plot_power_spectrum(vdens_method=compute_mass_weighted_density)
 
 plt.show()

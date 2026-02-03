@@ -2,7 +2,7 @@ import os
 import sys
 from POLARIScore.utils.utils import *
 from POLARIScore.config import *
-from POLARIScore.utils.physics_utils import PC_TO_CM
+from POLARIScore.utils.physics_utils import PC_TO_CM, power_spectrum_2d
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 import json
@@ -19,6 +19,7 @@ from matplotlib.widgets import Slider
 from scipy.ndimage import zoom
 from scipy.optimize import curve_fit
 import matplotlib.cm as cm
+import matplotlib.axes
 import glob
 from POLARIScore.utils.sim_utils import init_idefix, init_ramses
 
@@ -27,7 +28,7 @@ class Simulation_DC():
     DataCube Simulation is a sim where all the cells have the same size. 
     Easier to manipulate than AMR simulation.
     """
-    def __init__(self, name:str, global_size:float):
+    def __init__(self, name:str, global_size:float=1, init:bool=True):
         """
         DataCube Simulation is a sim where all the cells have the same size. 
         Easier to manipulate than AMR simulation, i.e the sim tree.
@@ -66,6 +67,9 @@ class Simulation_DC():
         self.volumic_density_method = [None,None,None]
         """Cache, e.g for computed densities, ndarray are 2D tensors"""
         self.cache: Dict = {}
+
+        if init:
+            self.init()
 
     def init(self, **kwargs):
         """Try to auto init depending on the files in the simulation folder"""
@@ -169,7 +173,7 @@ class Simulation_DC():
             column_density[ax] = compute_column_density(self.data['RHO'], self.cell_size, axis=ax)
 
             if what_to_compute["vdens"] is not None:
-                volume_density = [self._compute_v_density(what_to_compute["vdens"], axis=0),self._compute_v_density(what_to_compute["vdens"], axis=1),self._compute_v_density(what_to_compute["vdens"], axis=2)]
+                volume_density = [self._compute_v_density(what_to_compute["vdens"], axis=ax)]
 
         if beam != None:
             LOGGER.warn(f"Column and volume density maps convolved to beam size: {beam[0]} arcsec at distance: {beam[1]} pc.")
@@ -653,6 +657,64 @@ class Simulation_DC():
             ax.legend()
 
         return lambda X: fit_function(X, *popt)
+    
+    def plot_power_spectrum(self, ax:Optional["matplotlib.axes.Axes"]=None, bins:int=30, vdens_method:Optional[Callable]=None, label:Optional[str]="$<n_H>_m$"
+                            , color:Optional[str]=None, plot_coldens:bool=True, normalize:bool=True,
+                            linestyle:str="-"):
+        if ax is None:
+            fig, ax = plt.subplots()
+        else:
+            fig = ax.figure
+
+        pixel_size = self.cell_size/PC_TO_CM
+        if plot_coldens:
+            column_density = [compute_column_density(self.data['RHO'], self.cell_size, axis=i) for i in range(3)]
+            k_coldens, Pk_coldens = power_spectrum_2d(column_density[0], px_size=pixel_size, bins=bins)
+            if normalize:
+                Pk_coldens = Pk_coldens / np.max(Pk_coldens)
+            ax.plot(k_coldens, Pk_coldens, color="black", label="$N_H$")
+
+            cut_index = (np.where(k_coldens > 0.0)[0][0],np.where(k_coldens > 10)[0][0])
+
+            dPk_coldens = np.gradient(Pk_coldens[cut_index[0]:cut_index[-1]])
+            ddPk_coldens = np.gradient(dPk_coldens)
+
+            sorted_indexes = np.argsort(np.abs(ddPk_coldens))
+
+            sonic_index = sorted_indexes[-1]
+            k_sonic = k_coldens[cut_index[0]:cut_index[-1]][sonic_index]
+            ax.vlines(k_sonic, ax.get_ylim()[0], ax.get_ylim()[1], color="red")
+            ax.text(k_sonic - 0.3,0.5,rf'$k={k_sonic:.2}={1/k_sonic:.2}$',
+            rotation=90,va='center',ha='left',color='red',fontsize=11, transform=ax.get_xaxis_transform())
+
+
+
+        if vdens_method is not None:
+            volume_density = [self._compute_v_density(vdens_method, axis=i) for i in range(3)]
+            k_voldens, Pk_voldens = power_spectrum_2d(volume_density[0], px_size=pixel_size, bins=bins)
+            if normalize:
+                Pk_voldens = Pk_voldens / np.max(Pk_voldens)
+            ax.plot(k_voldens, Pk_voldens, label=label, color=color)
+
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        
+        #if 'FORCING_MACH' in self.data:
+        #    sonic_freq = self.data['FORCING_MACH']**(3)/self.global_size
+        #    ax.vlines(sonic_freq, ax.get_ylim()[0], ax.get_ylim()[1], color="red")
+
+        #ax.vlines(1/pixel_size, ax.get_ylim()[0], ax.get_ylim()[1], color="red")
+
+        ax.set_xlabel(r"$k\ \mathrm{[pc^{-1}]}$")
+        ylabel = r"$P(k)$"
+        if normalize:
+            ylabel += " (normalized)"
+        ax.set_ylabel(ylabel)
+        ax.grid(visible=True)
+
+        ax.legend()
+
+        return fig, ax
 
     def plot_pdf(self,ax=None,bins: int = 20,vdens_method=compute_mass_weighted_density,offset_method: Literal["mean", "max", "none"] = "mean",what: Literal["both", "cdens", "vdens"] = "both",
                  color=None, legend=True, scatter=True, swap_axis=False):

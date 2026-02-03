@@ -96,18 +96,20 @@ def plot_lognorm(ax, mean, std, amp=1., x_min=1e-2, x_max=1e3, n_points=100,
     ax.plot(x, amp*pdf, color=color, lw=lw, label=label, linestyle=ls)
     return ax
 
-def dcmf_func(M, amp, mu, sigma, alpha, cutoff, logM=True):
+def dcmf_func(M, amp, mu, sigma, alpha, cutoff, logM:bool=True, enable_cutoff:bool=True):
         pdf_low = lognorm.pdf(M, s=sigma, scale=np.abs(mu))
 
+        if not(enable_cutoff):
+            pdf_low *= amp
+            return pdf_low*M if logM else pdf_low
         pdf_high = M**(-alpha)
         join_mass = cutoff
         scale_factor = (pdf_low[np.argmin(np.abs(M - join_mass))] /
                         pdf_high[np.argmin(np.abs(M - join_mass))])
         pdf_high *= scale_factor
-        amp_scaled = amp#/np.max(pdf_low)
 
-        pdf_low *= amp_scaled
-        pdf_high *= amp_scaled
+        pdf_low *= amp
+        pdf_high *= amp
 
         if type(M) is np.ndarray or type(M) is list:
             return np.concatenate((pdf_low[M <= cutoff],pdf_high[M > cutoff]),axis=0)*M
@@ -152,3 +154,29 @@ def plot_imf_chabrier(ax, color='black', x_min=1e-2, x_max=1e3, n_points=100,
     
 def density_gaussian(r, n0, sigma, r0):
     return n0 * np.exp(-0.5 * ((r-r0) / sigma)**2)
+
+def power_spectrum_2d(map2d, px_size, bins=20):
+    mask = np.isnan(map2d)
+    map2d[mask] = np.nanmean(map2d)
+    
+    map2d = map2d - np.mean(map2d)
+    fft_map = np.fft.fft2(map2d)
+    fft_map = np.fft.fftshift(fft_map)
+    power = np.abs(fft_map)**2
+
+    ny, nx = map2d.shape
+    kx = np.fft.fftfreq(nx, d=px_size)
+    ky = np.fft.fftfreq(ny, d=px_size)
+    kx, ky = np.meshgrid(kx, ky)
+    k = np.sqrt(kx**2 + ky**2)
+    k = np.fft.fftshift(k)
+
+    k_bins = np.linspace(0, k.max(), bins)
+    Pk = np.zeros(len(k_bins)-1)
+    k_centers = 0.5 * (k_bins[1:] + k_bins[:-1])
+
+    for i in range(len(k_bins)-1):
+        mask = (k >= k_bins[i]) & (k < k_bins[i+1])
+        Pk[i] = power[mask].mean()
+
+    return k_centers, Pk

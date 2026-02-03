@@ -1,9 +1,12 @@
 from POLARIScore.config import LOGGER
+from POLARIScore.utils.physics_utils import PC_TO_CM
 from astropy import units as u
 import json, os
 import numpy as np
 import glob
 from typing import Tuple, List, Union, Callable, Any, Optional
+import re
+
 
 def init_ramses(simulation, loadTemp=False, loadVel=False):
     """
@@ -37,7 +40,7 @@ def init_ramses(simulation, loadTemp=False, loadVel=False):
         simulation.axis = ([simulation.center[0]*simulation.global_size-simulation.size/2,simulation.center[0]*simulation.global_size+simulation.size/2],[simulation.center[1]*simulation.global_size-simulation.size/2,simulation.center[1]*simulation.global_size+simulation.size/2],[simulation.center[2]*simulation.global_size-simulation.size/2,simulation.center[2]*simulation.global_size+simulation.size/2])    
     LOGGER.log(f"Simulation {simulation.name} loaded.")
 
-from POLARIScore.utils.vtk_io import readVTKCart
+from POLARIScore.utils.vtk_io import readVTK
 def init_idefix(simulation, blacklist=[], invert_axes=False):
     """
     Init a simulation made with idefix
@@ -45,33 +48,43 @@ def init_idefix(simulation, blacklist=[], invert_axes=False):
     #Add idefix.ini for units bcs for now this is units code
 
     LOGGER.log(f"Loading simulation {simulation.name} using IDEFIX init")
-    vtk = readVTKCart(glob.glob(os.path.join(simulation.folder, "*.vtk"))[0])
+    vtk = readVTK(glob.glob(os.path.join(simulation.folder, "*.vtk"))[0], geometry="cartesian")
 
     ini_path = os.path.join(simulation.folder, "idefix.ini")
     dens_unit = 1.
     vel_unit = 1.
-    length_unit = 1.
+    forcing_mach = None
     if os.path.exists(ini_path):
         with open(ini_path, "r", encoding="utf-8") as file:
             lines = file.readlines()
             units_index = len(lines)
             for i, line in enumerate(lines):
-                if i > units_index+3:
-                    break
                 props = line.strip().split()
                 if "[Units]" in line:
                     units_index = i
-                if i > units_index:
+                if i > units_index and i <= units_index+3:
                     if "length" in props[0]:
                         length_unit = float(props[1])
+                        simulation.data['BOX_LENGTH'] = length_unit
+                        simulation.global_size = length_unit/PC_TO_CM
                     elif "density" in props[0]:
                         dens_unit = float(props[1])
                     elif "velocity" in props[0]:
                         vel_unit = float(props[1])
+            
+                if len(props) > 0 and "mach" in props[0]:
+                    forcing_mach = float(props[1])
+                    simulation.data['FORCING_MACH'] = forcing_mach
+
             if units_index == len(lines):
-                LOGGER.warn("When reading idefix.ini, no units block was found -> Data is maybe in code units.")
+                LOGGER.warn("When reading idefix.ini, no [Units] block was found -> Data may be in code units.")
+
+            if forcing_mach is None:
+                LOGGER.warn("Mach number not found in idefix.ini")
+
+
     else:
-        LOGGER.warn("No idefix.ini found in simulation folder -> Data is maybe in code units.")
+        LOGGER.warn("No idefix.ini found in simulation folder -> Data may be in code units.")
     #!! RHO IS HYDROGEN NUMBER DENSITY
     key_match_unit = {
         "RHO": dens_unit / (1.673e-24 *1.4),

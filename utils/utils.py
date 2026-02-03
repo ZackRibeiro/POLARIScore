@@ -562,3 +562,33 @@ def plot_rect_bg(fig, axes, color, pad=0.01, text=None, opacity=0.3, text_offset
         )
 
     fig.add_artist(rect)
+
+def longest_common_substring(strings):
+    if not strings:
+        return ""
+    if len(strings) == 1:
+        return strings[0]
+
+    shortest = min(strings, key=len)
+
+    def has_common(length):
+        seen = {shortest[i:i+length] for i in range(len(shortest) - length + 1)}
+        for s in strings[1:]:
+            seen = {sub for sub in seen if sub in s}
+            if not seen:
+                return None
+        return next(iter(seen))
+
+    left, right = 0, len(shortest)
+    result = ""
+
+    while left <= right:
+        mid = (left + right) // 2
+        common = has_common(mid)
+        if common:
+            result = common
+            left = mid + 1
+        else:
+            right = mid - 1
+
+    return result

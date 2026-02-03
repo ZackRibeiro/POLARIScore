@@ -24,7 +24,7 @@ from scipy.ndimage import gaussian_filter
 from scipy.optimize import curve_fit
 from POLARIScore.scripts.plotORIONsimDCMF import plot_sim_dcmf
 from POLARIScore.utils.batch_utils import compute_smoothness
-from POLARIScore.utils.physics_utils import CONVERT_massn_TO_n_coldens
+from POLARIScore.utils.physics_utils import CONVERT_massn_TO_n_coldens, power_spectrum_2d
 from POLARIScore.objects.DenseCore import DenseCore
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 import matplotlib.font_manager as fm
@@ -1334,40 +1334,15 @@ class Observation():
             fig = ax.figure
 
         pixel_size = 1./self.pc_to_pixels(1)
-        def _power_spectrum_2d(map2d):
-            mask = np.isnan(map2d)
-            map2d[mask] = np.nanmean(map2d)
-            
-            map2d = map2d - np.mean(map2d)
-            fft_map = np.fft.fft2(map2d)
-            fft_map = np.fft.fftshift(fft_map)
-            power = np.abs(fft_map)**2
-
-            ny, nx = map2d.shape
-            kx = np.fft.fftfreq(nx, d=pixel_size)
-            ky = np.fft.fftfreq(ny, d=pixel_size)
-            kx, ky = np.meshgrid(kx, ky)
-            k = np.sqrt(kx**2 + ky**2)
-            k = np.fft.fftshift(k)
-
-            k_bins = np.linspace(0, k.max(), bins)
-            Pk = np.zeros(len(k_bins)-1)
-            k_centers = 0.5 * (k_bins[1:] + k_bins[:-1])
-
-            for i in range(len(k_bins)-1):
-                mask = (k >= k_bins[i]) & (k < k_bins[i+1])
-                Pk[i] = power[mask].mean()
-
-            return k_centers, Pk
 
         if plot_coldens:
-            k_coldens, Pk_coldens = _power_spectrum_2d(self.data)
+            k_coldens, Pk_coldens = power_spectrum_2d(self.data, px_size=pixel_size, bins=bins)
             if normalize:
                 Pk_coldens = Pk_coldens / np.max(Pk_coldens)
             ax.plot(k_coldens, Pk_coldens, color="black", label="$N_H$")
 
         if self.prediction is not None:
-            k_voldens, Pk_voldens = _power_spectrum_2d(self.prediction)
+            k_voldens, Pk_voldens = power_spectrum_2d(self.prediction, px_size=pixel_size, bins=bins)
             if normalize:
                 Pk_voldens = Pk_voldens / np.max(Pk_voldens)
             ax.plot(k_voldens, Pk_voldens, label=label, color=color)
