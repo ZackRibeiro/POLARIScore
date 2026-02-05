@@ -53,7 +53,7 @@ tturb = t/2/Ms
 G_code = G * t**2*rho
 print("G_code="+str(G_code))
 
-B_code = B/(np.sqrt(rho)*Cs)
+B_code = B/(np.sqrt(4*np.pi*rho)*Cs)
 print("B_code="+str(B_code))
 
 virial = 5*(Ms*Cs)**2*L/2 / (G*Mass)

@@ -10,7 +10,17 @@ from scipy.optimize import curve_fit
 
 from POLARIScore.objects.Simulation_DC import Simulation_DC
 from POLARIScore.utils.sim_utils import init_idefix,init_ramses
+from POLARIScore.utils.utils import compute_mass_weighted_density
 
+from POLARIScore.objects.SimulationArray import SimulationArray
+sims = SimulationArray(simulations=[] ,name="idefix_sim_E")
+#sims.plot(Simulation_DC.plot_power_spectrum, mode="mixed", normalize=True, plot_coldens=False, vdens_method=compute_mass_weighted_density,
+#          colors = "copper")
+sims.plot(Simulation_DC.plot, mode="slider", color_bar=False, plot_pdf=True)
+
+plt.show()
+
+"""
 #sim = Simulation_DC("orionHD_all_512")
 sim = Simulation_DC("idefix_turb")
 
@@ -65,3 +75,4 @@ from POLARIScore.utils.utils import compute_mass_weighted_density, compute_volum
 sim.plot_power_spectrum(vdens_method=compute_mass_weighted_density)
 
 plt.show()
+"""

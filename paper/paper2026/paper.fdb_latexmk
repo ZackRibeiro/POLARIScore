@@ -1,15 +1,15 @@
 # Fdb version 4
-["bibtex paper"] 1770072279.65824 "paper.aux" "paper.bbl" "paper" 1770072280.86156 0
+["bibtex paper"] 1770302360.47649 "paper.aux" "paper.bbl" "paper" 1770302478.95807 0
   "./aa.bst" 1764341164.45061 32103 296074362bd3e822c5209e1570c1d28f ""
   "./biblio.bib" 1769166915.37427 206514 02886c0c48555dce16384a7e49a58cde ""
-  "paper.aux" 1770072280.63659 33901 cf846ee279a1905af68d45e6ad0db9a7 "pdflatex"
+  "paper.aux" 1770302478.73672 34681 8413c273a190b3ae8525a91bb8e5be05 "pdflatex"
   (generated)
   "paper.bbl"
   "paper.blg"
   (rewritten before read)
-["pdflatex"] 1770072279.7334 "/home/zack/POLARIScore/paper/paper2026/paper.tex" "paper.pdf" "paper" 1770072280.86182 0
+["pdflatex"] 1770302477.75758 "/home/zack/POLARIScore/paper/paper2026/paper.tex" "paper.pdf" "paper" 1770302478.95834 0
   "/etc/texmf/web2c/texmf.cnf" 1767998866.90418 475 c0e671620eb5563b2130f56340a5fde8 ""
-  "/home/zack/POLARIScore/paper/paper2026/paper.tex" 1770072280.53533 59526 6411aab9993463e661e3dca62cc2fe27 ""
+  "/home/zack/POLARIScore/paper/paper2026/paper.tex" 1770302477.44072 62387 d6b78805d828099fb240b3b2bfcb21b3 ""
   "/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc" 1165713224 4850 80dc9bab7f31fb78a000ccfed0e27cab ""
   "/usr/share/texlive/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/jknappen/ec/ecrm1000.tfm" 1136768653 3584 adb004a0c8e7c46ee66cad73671f37b4 ""
@@ -201,10 +201,10 @@
   "figures/unet_architecture.jpg" 1764857584 247154 d0e632fc890598a7cb4b1f068631efec ""
   "lineno.sty" 1764341164.45461 151723 f406be88dbdad6c97fb774bd975d0393 ""
   "linenoaa.sty" 1764341164.45461 4221 64fc978f7ff26cff65f5a8f1adc2a33b ""
-  "paper.aux" 1770072280.63659 33901 cf846ee279a1905af68d45e6ad0db9a7 "pdflatex"
-  "paper.bbl" 1770072279.72209 5899 a7fbfb661db80de5703b61288449734b "bibtex paper"
-  "paper.out" 1770072280.63659 4469 724ddcd4633db27d13cc5289b955cda6 "pdflatex"
-  "paper.tex" 1770072280.53533 59526 6411aab9993463e661e3dca62cc2fe27 ""
+  "paper.aux" 1770302478.73672 34681 8413c273a190b3ae8525a91bb8e5be05 "pdflatex"
+  "paper.bbl" 1770302360.54074 5899 a7fbfb661db80de5703b61288449734b "bibtex paper"
+  "paper.out" 1770302478.73672 4592 b1b10641fea1856305e414fd1bf17270 "pdflatex"
+  "paper.tex" 1770302477.44072 62387 d6b78805d828099fb240b3b2bfcb21b3 ""
   (generated)
   "paper.aux"
   "paper.log"

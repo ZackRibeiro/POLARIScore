@@ -41,18 +41,19 @@ def init_ramses(simulation, loadTemp=False, loadVel=False):
     LOGGER.log(f"Simulation {simulation.name} loaded.")
 
 from POLARIScore.utils.vtk_io import readVTK
-def init_idefix(simulation, blacklist=[], invert_axes=False):
+def init_idefix(simulation, blacklist=[], vtk_path:Optional[str]=None, invert_axes=False):
     """
     Init a simulation made with idefix
     """
     #Add idefix.ini for units bcs for now this is units code
 
     LOGGER.log(f"Loading simulation {simulation.name} using IDEFIX init")
-    vtk = readVTK(glob.glob(os.path.join(simulation.folder, "*.vtk"))[0], geometry="cartesian")
+    vtk = readVTK(glob.glob(os.path.join(simulation.folder, "*.vtk"))[0] if vtk_path is None else vtk_path, geometry="cartesian")
 
     ini_path = os.path.join(simulation.folder, "idefix.ini")
     dens_unit = 1.
     vel_unit = 1.
+    length_unit = 1.
     forcing_mach = None
     if os.path.exists(ini_path):
         with open(ini_path, "r", encoding="utf-8") as file:
@@ -75,6 +76,11 @@ def init_idefix(simulation, blacklist=[], invert_axes=False):
                 if len(props) > 0 and "mach" in props[0]:
                     forcing_mach = float(props[1])
                     simulation.data['FORCING_MACH'] = forcing_mach
+
+                if len(props) > 0 and "vtk" in props[0]:
+                    simulation.data['OUT_VTK'] = float(props[1])
+
+            simulation.data['TIME'] = length_unit / vel_unit
 
             if units_index == len(lines):
                 LOGGER.warn("When reading idefix.ini, no [Units] block was found -> Data may be in code units.")
@@ -120,8 +126,4 @@ def init_idefix(simulation, blacklist=[], invert_axes=False):
 from POLARIScore.utils.utils import compute_column_density, compute_mass_weighted_density
 from POLARIScore.networks.utils.nn_utils import predict_map
 def predict_average_density(simulation, model_trainer, average_method=compute_mass_weighted_density, patch_size:Tuple[int,int]=(128, 128), nan_value:float=-1.0, overlap:float=0.5, downsample_factor:float=1., apply_baseline:bool=True):
-    
-    column_density = [compute_column_density(simulation.data['RHO'], simulation.cell_size, axis=i) for i in range(3)]
-    volume_density = [simulation._compute_v_density(average_method, axis=i) for i in range(3)]
-    
     return [predict_map(compute_column_density(simulation.data['RHO'], simulation.cell_size, axis=i), model_trainer, patch_size, nan_value, overlap, downsample_factor, apply_baseline) for i in range(3)]

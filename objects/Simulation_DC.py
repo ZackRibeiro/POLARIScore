@@ -455,7 +455,7 @@ class Simulation_DC():
 
                 fig._slice_slider.on_changed(update_slice)
 
-    def plot(self,method:Callable=compute_column_density,axis:Union[List[int],int]=[0,1,2],plot_pdf:bool=False,color_bar:bool=True,derivate:int=0):
+    def plot(self,method:Callable=compute_column_density,fig=None,axis:Union[List[int],int]=[0,1,2],plot_pdf:bool=False,color_bar:bool=True,derivate:int=0):
         """
         Plot simulations faces with probabiliy density function
 
@@ -475,29 +475,42 @@ class Simulation_DC():
         axis = np.array(axis)
         axis = axis[np.argsort(axis)]
 
+        if fig is not None:
+            color_bar = False
+
         densities = []
         for ax in axis:
-            d = method(self.data['RHO'], self.cell_size, axis=ax)
+            if len(inspect.signature(method).parameters) == 3:
+                d = method(self.data['RHO'], self.cell_size, axis=ax)
+            else:
+                d = method(self.data['RHO'], axis=ax)
             d = compute_derivative(d, order=derivate)
             d = np.abs(d)
             densities.append(d)  
 
-        fig, axes = plt.subplots(2 if plot_pdf else 1, len(axis), figsize=(4*len(axis), 6 if plot_pdf else 3.5))
-        if len(axis) <= 1:
+        if fig is None:
+            fig = plt.figure(figsize=(4 * len(axis), 6 if plot_pdf else 3.5))
+
+        nrows = 2 if plot_pdf else 1
+        ncols = len(axis)
+
+        axes = fig.subplots(nrows, ncols)
+
+        if ncols == 1:
             axes = [axes]
-        if not(plot_pdf):
+        if not plot_pdf:
             axes = [axes]
 
         def _plot(column, data):
-            print(np.mean(data))
             cd = axes[0][column].imshow(data, extent=[self.axis[0][0], self.axis[0][1], self.axis[1][0],self.axis[1][1]], cmap="jet", norm=LogNorm())
             if plot_pdf:
-                pdf = compute_pdf(data)
-                axes[1][column].plot([(pdf[1][i+1]+pdf[1][i])/2 for i in range(len(pdf[1])-1)],pdf[0])
-                axes[1][column].scatter([(pdf[1][i+1]+pdf[1][i])/2 for i in range(len(pdf[1])-1)],pdf[0])
+                pdf = compute_pdf(data/np.mean(data))
+                pdf[1] = pdf[1]/np.sum(pdf[1])
+                axes[1][column].plot([(pdf[1][i+1]+pdf[1][i])/2 for i in range(len(pdf[1])-1)],pdf[0],color='black')
                 axes[1][column].set_xlabel("s")
                 axes[1][column].set_ylabel("p")
                 axes[1][column].set_title("PDF")
+                axes[1][column].grid()
             return cd
 
         for i, ai in enumerate(axis):
@@ -672,7 +685,7 @@ class Simulation_DC():
             k_coldens, Pk_coldens = power_spectrum_2d(column_density[0], px_size=pixel_size, bins=bins)
             if normalize:
                 Pk_coldens = Pk_coldens / np.max(Pk_coldens)
-            ax.plot(k_coldens, Pk_coldens, color="black", label="$N_H$")
+            ax.plot(k_coldens, Pk_coldens, color="black" if vdens_method is not None else color, label="$N_H$" if vdens_method is not None else label)
 
             cut_index = (np.where(k_coldens > 0.0)[0][0],np.where(k_coldens > 10)[0][0])
 

@@ -12,6 +12,7 @@ import numpy as np
 import time
 from POLARIScore.objects.Dataset import Dataset, getDataset
 from POLARIScore.objects.Simulation_DC import Simulation_DC
+from POLARIScore.objects.SimulationArray import SimulationArray
 
 """
 Generate full benchmark of trained models with plots.
@@ -133,6 +134,8 @@ if len(REGIONS) > 0:
         fig.subplots_adjust(hspace=0.05)
 
 if len(args.ds_imgs) > 0:
+    if "range" in args.ds_imgs[0]:
+        args.ds_imgs = range(int(args.ds_imgs[0].split("range")[-1]))
     ds_figs = [plt.figure(figsize=((1+len(args.models))*2.5,6),dpi=300.) for _ in args.ds_imgs]
     for fig in ds_figs:
         fig.subplots_adjust(hspace=0.05)
@@ -263,9 +266,12 @@ for i,t,m in zip(range(len(trainers)),trainers, args.models):
         if args.ds is None:
             validation_set = trainer.validation_set
         else:
-            if "sim:" in args.ds:
-                sim = Simulation_DC(args.ds.split("sim:")[-1], global_size=5)
-                sim.init()
+            if "sim:" in args.ds or "sims:" in args.ds:
+                if "sim:" in args.ds:
+                    sim = Simulation_DC(args.ds.split("sim:")[-1])
+                    sim.init()
+                else:
+                    sim = SimulationArray(simulations=[] ,name=args.ds.split("sims:")[-1])
                 uuid_name = str(uuid.uuid4())
                 sim.generate_dataset(name=uuid_name, number=100)
                 validation_set = getDataset("batch_"+uuid_name)

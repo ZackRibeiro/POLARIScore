@@ -460,7 +460,10 @@ class Dataset():
         if not(os.path.exists(TRAINING_BATCH_FOLDER)):
             os.mkdir(TRAINING_BATCH_FOLDER)
 
-        batch_uuid = self.name if name is None else name
+        old_name = self.name
+        if name is not None:
+            self.name = name
+        batch_uuid = self.name
 
         if os.path.exists(os.path.join(TRAINING_BATCH_FOLDER,"batch_"+str(batch_uuid).split("batch_")[-1])) and force:
             LOGGER.warn(f"Dataset {batch_uuid} already exists, but force save enabled so previous batch was removed.")
@@ -491,6 +494,7 @@ class Dataset():
                 del img
 
         LOGGER.log(f"Dataset with {len(batch)} images saved.")
+        self.name = old_name
 
         return True
 

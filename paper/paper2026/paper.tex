@@ -919,8 +919,31 @@ All networks were trained on an NVIDIA GeForce RTX 2070 SUPER with 8~GB of VRAM.
          \end{subfigure}
         \caption{\centering Dense core predictions produced by the networks.
          White circles indicate the dense core radii from the catalog of \cite{konyvesPropertiesDenseCore2020}.
-         From top to bottom, the cores correspond to 054106$-$021917, 054109$-$014535, 05413$-$021434, and 055116$-$024833, which also denote their RA–Dec coordinates.}
+         From top to bottom, the cores correspond to 054106$-$021917, 054109$-$014535, 05413$-$021434, and 055116$-$024833, which also denote their RA-Dec coordinates.}
       \end{figure*}
+
+      \pagebreak
+\section{Demande d'heure}
+
+La fonction de masse initiale des étoiles (IMF) est une composante essentielle de la théorie de la formation stellaire,
+mais l'origine de sa masse caractéristique demeure mal comprise. De nombreux travaux suggèrent qu'elle pourrait émerger des propriétés de la turbulence supersonique dans les nuages moléculaires.
+En parallèle, la fonction de masse des cœurs denses (CMF), précurseurs directs des étoiles, reste mal contrainte aux faibles masses en raison de limitations observationnelles, la détection reposant majoritairement sur l'émission thermique des poussières.
+L'émission moléculaire, bien que plus complexe à exploiter, permet cependant de lever des dégénérescences le long de la ligne de visée et d'améliorer significativement l'estimation des masses.
+
+Dans ce contexte, l'objectif est de développer des méthodes de deep learning (UNet, cINN, DDPM...) pour la détection et la caractérisation des cœurs denses à partir de cartes de poussières et de cubes hyperspectraux de CO.
+L'entraînement de ces modèles nécessite des simulations numériques réalistes et à haute résolution. Un ensemble de simulations de turbulence MHD isotherme auto-gravitante sera donc réalisé avec le code IDEFIX, couvrant un espace de paramètres représentatif des nuages moléculaires (nombres de Mach sonique et Alfvénique). 
+Les simulations consisteront en des boîtes périodiques turbulentes avec auto-gravitée (setup de Mathew and Federrath, 2021)  de 5 à 10 pc de largeur, avec une résolution minimale de 1024³ afin de résoudre correctement la longueur de Jeans et les cœurs denses.
+
+Neuf simulations sont prévues, correspondant à trois valeurs du nombre de Mach sonique et trois valeurs du nombre de Mach Alfvénique, chacune évoluée sur cinq temps de retournement de la turbulence (environ 5e5 à 1e6 pas de temps). Sur la base des performances mesurées du code IDEFIX (environ 3e8 cellules/s sur GPU Mi300),
+le coût de calcul est estimé à environ 800 heures GPU par simulation, soit un total d'environ 7000 heures Mi300.
+Le pipeline d'analyse, d'entraînement des réseaux de neurones et d'application aux observations est déjà opérationnel (Z.Ribeiro and P.Hily-Blant, en préparation) et des simulations pilotes à plus faible résolution ont permis de valider la faisabilité numérique et la pertinence physique d'utiliser des boxes turbulentes périodiques.
+   
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/Benchmark_Idefix/ds_0.jpg}
+  \caption{Exemple de sortie d'une simulation IDEFIX : région de 3.33 pc. La densité moyennée massiquement le long de la ligne de visée est prédite par un réseau de neurones entraîné en utilisant uniquement la densité de colonne (émission thermique des poussières).}
+\end{figure}
+
 
 \end{appendix}
 \end{document}
