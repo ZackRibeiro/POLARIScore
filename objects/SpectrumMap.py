@@ -18,12 +18,10 @@ from matplotlib.widgets import Slider
 import multiprocessing as mp
 from functools import partial
 
-#BEFORE THIS WAS COMPUTED USING VELOCITY km/s BUT NOW THE SIMS ARE IN cgs
-
 def _output_v_function(lsr,chan,res):
     return lsr+(np.array(range(chan))-chan/2)*res
 DEFAULT_OUTPUT_SETTINGS = {
-    "velocity_channels": 256,
+    "velocity_channels": 128,
     "velocity_resolution": 1e3*0.1,
     "lsr_velocity": 0,
     "v_function": _output_v_function,
@@ -240,6 +238,13 @@ class SpectrumMap():
         LOGGER.global_color = LOGGER._init_gc
         LOGGER.border("SPECTRUM-GENERATING", level=1)
 
+        for key in ['VX1','VX2','VX3','RHO','TEMP']:
+            assert key in simulation.data, LOGGER.error(f"Can't generate spectra -> Simulation has no {key}.")
+        TEMPERATURE = simulation.data['TEMP']
+        if type(simulation.data['TEMP']) is float:
+            LOGGER.warn(f"Temperature is not an array -> Uniform temperature of {TEMPERATURE}")
+            
+
         if not(self.map is None) and not(force_compute):
             LOGGER.log("Intensity is already computed, use force_compute=True to recompute the map")
             return self.map
@@ -248,8 +253,7 @@ class SpectrumMap():
             if "simulation_name" in self.global_settings and not(self.global_settings["simulation_name"] is None):
                 LOGGER.warn("Simulation is loaded using the settings, this can give an error if the simulation can't be opened by the easy way.")
                 from .Simulation_DC import Simulation_DC
-                simulation = Simulation_DC(name=self.global_settings["simulation_name"], global_size=66.0948, init=False)
-                simulation.init(loadTemp=True,loadVel=True)
+                simulation = Simulation_DC(name=self.global_settings["simulation_name"], init=True)
             else:
                 LOGGER.error(f"Can't compute spectrum map because there is no simulation specified.")
                 return None
@@ -261,7 +265,10 @@ class SpectrumMap():
         LOGGER.log(f"Computing spectrum map for simulation {simulation.name} and for face/axis: {axis}")
 
         def _compute_function(simulation, position, direction, last_step, spectra_object):
-            temperature = simulation.data_temp[position[0],position[1],position[2]]
+            if type(TEMPERATURE) is float:
+                temperature = TEMPERATURE
+            else:
+                temperature = TEMPERATURE[position[0],position[1],position[2]]
 
             line_settings = spectra_object.line_settings
             global_settings = spectra_object.global_settings
@@ -275,10 +282,10 @@ class SpectrumMap():
             def _get_velocity(pos):
                 if not(all(0 <= pos[i] < simulation.nres for i in range(len(pos)))):
                     return _get_velocity(position)[0], False
-                v = np.array([simulation.data_vel[0][pos[0],pos[1],pos[2]],simulation.data_vel[1][pos[0],pos[1],pos[2]],simulation.data_vel[2][pos[0],pos[1],pos[2]]])
-                return np.dot(v,direction)*1e3, True
+                v = np.array([simulation.data['VX1'][pos[0],pos[1],pos[2]],simulation.data['VX2'][pos[0],pos[1],pos[2]],simulation.data['VX3'][pos[0],pos[1],pos[2]]])
+                return np.dot(v,direction)*1e-2, True
 
-            density = simulation.data[position[0],position[1],position[2]]
+            density = simulation.data['RHO'][position[0],position[1],position[2]]
             velocity, _ = _get_velocity(position)
 
             if not("intensity_spectrum" in last_step):
@@ -298,8 +305,8 @@ class SpectrumMap():
                 sigma_turb = 0.5*(vp1-vm1) if fm1 and fp1 else vp1-vm1
             sigma = np.sqrt(sigma_doppler**2 + sigma_turb**2)
 
-            #TODO Change the fct partition approximation, this is an approximation valid just to CO J=1-0
-            low_density_col = 1e4*simulation.cell_size.value*density*line_settings["abundance"]*g_l*np.exp(-line_settings["temp_low"]/(temperature))/(1/3+2*temperature/5.5)
+            #TODO Change the fct partition approximation, this is an approximation valid just for CO J=1-0
+            low_density_col = 1e4*density*simulation.cell_size*line_settings["abundance"]*g_l*np.exp(-line_settings["temp_low"]/(temperature))/(1/3+2*temperature/5.5)
             tau0 = LIGHT_SPEED**3/(8*np.pi*line_settings["frequency"]**3)*line_settings["estein_emission"] * g_u/g_l * (1-np.exp(-line_settings["temperature"]/temperature)) * low_density_col
             tau = tau0 * GAUSSIAN(V-velocity,sigma)
 
@@ -362,6 +369,7 @@ class SpectrumMap():
         if not(mean_mod) and enable_slider:
             ax_slider = plt.axes([0.2, 0.05, 0.6, 0.03])
             slider = Slider(ax_slider, 'Slice', 0, intensity_map.shape[2] - 1, valinit=slice, valfmt='%0.0f')
+            fig._slice_slider = slider
 
             def update_slice(val):
                 slice_idx = int(slider.val)
@@ -396,9 +404,9 @@ class SpectrumMap():
                     y = int((y-y0)/(y1-y0) * ny)
             return x,y
         fig2, ax2 = plt.subplots()
-        spectrum_used = Spectrum(intensity_map[255,255])
+        spectrum_used = Spectrum(intensity_map[0,0])
         spectrum_used.plot(ax=ax2, channels=spectrum_used.getX(self.output_settings))
-        x0, y0 = _convert_to_phys(255,255)
+        x0, y0 = _convert_to_phys(0,0)
         marker, = ax.plot([x0], [y0], marker='x', color='red', markersize=6, mew=2)
 
         def onclick(event):
@@ -408,12 +416,11 @@ class SpectrumMap():
                 #data, data_fit = fit_gaussians(intensity_map[x,y,:])
                 #plot_fit(data,data_fit, ax=ax2)
                 x0, y0 = _convert_to_phys(x_click,y_click, invert=True)
-                print(x0,y0)
                 spectrum_used = Spectrum(intensity_map[x0,y0])
                 #ax2.plot(spectrum_used.getX(self.output_settings), spectrum_used.spectrum, label='Data')
                 spectrum_used.plot(ax=ax2, channels=spectrum_used.getX(self.output_settings))
                 if fit:
-                    spectrum_used.fit(ax=ax2)
+                    spectrum_used.fit(ax=ax2, X=spectrum_used.getX(self.output_settings))
                 #plotSpectrum(intensity_map, ax=ax2, pos=(x, y))
                 ax2.set_title(f"Spectrum at ({round(x_click,2)}pc, {round(y_click,2)}pc)")
                 marker.set_data([x_click], [y_click])
@@ -443,7 +450,6 @@ def getSimulationSpectra(simulation, name_used=None):
             LOGGER.log(f"Spectrum for face {i} doesn't exist, generating it: ")
             s.generate(axis=i, simulation=simulation)
             s.save()
-        spectra[i] = s.map
     return spectra
 
 from .Spectrum import _method_getMoment

@@ -13,11 +13,16 @@ from POLARIScore.utils.sim_utils import init_idefix,init_ramses
 from POLARIScore.utils.utils import compute_mass_weighted_density
 
 from POLARIScore.objects.SimulationArray import SimulationArray
-sims = SimulationArray(simulations=[] ,name="idefix_sim_E")
+#sims = SimulationArray(simulations=[] ,name="turb_sim_C")
 #sims.plot(Simulation_DC.plot_power_spectrum, mode="mixed", normalize=True, plot_coldens=False, vdens_method=compute_mass_weighted_density,
 #          colors = "copper")
-sims.plot(Simulation_DC.plot, mode="slider", color_bar=False, plot_pdf=True)
+#sims.plot(Simulation_DC.plot, mode="slider", color_bar=False, plot_pdf=True)
 
+sim = Simulation_DC("idefix_sim_A")
+#sim.plot()
+from POLARIScore.objects.SpectrumMap import SpectrumMap, getSimulationSpectra
+maps = getSimulationSpectra(simulation=sim)
+maps[1].plot(simulation=sim, fit=True)
 plt.show()
 
 """

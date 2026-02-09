@@ -8,25 +8,25 @@ from typing import Tuple, List, Union, Callable, Any, Optional
 import re
 
 
-def init_ramses(simulation, loadTemp=False, loadVel=False):
+def init_ramses(simulation, load_temp=True, load_vel=True):
     """
     Init a simulation made with ramses
 
     Args:
-        loadTemp (bool): try to load temperature ?
-        loadVel (bool): try to load velocity ?
+        load_temp (bool): try to load temperature ?
+        load_vel (bool): try to load velocity ?
     """
     LOGGER.log(f"Loading simulation {simulation.name} using RAMSES init")
     
     assert simulation.load_fit(key="RHO", path="datacube")
-    if loadTemp:
+    if load_temp:
         LOGGER.log(f"Loading temperature of simulation {simulation.name}")
         simulation.load_fit(key="TEMP", path="datacube_temp")
-    if loadVel:
+    if load_vel:
         LOGGER.log(f"Loading velocity of simulation {simulation.name}")
-        simulation.load_fit(key="VX1", path="datacube_velx", unit=1e4)
-        simulation.load_fit(key="VX2", path="datacube_vely", unit=1e4)
-        simulation.load_fit(key="VX3", path="datacube_velz", unit=1e4)
+        simulation.load_fit(key="VX1", path="datacube_velx", unit=1e5)
+        simulation.load_fit(key="VX2", path="datacube_vely", unit=1e5)
+        simulation.load_fit(key="VX3", path="datacube_velz", unit=1e5)
 
     simulation.nres = simulation.data['RHO'].shape[0]
     if os.path.exists(os.path.join(simulation.folder,"processing_config.json")):
@@ -47,8 +47,9 @@ def init_idefix(simulation, blacklist=[], vtk_path:Optional[str]=None, invert_ax
     """
     #Add idefix.ini for units bcs for now this is units code
 
-    LOGGER.log(f"Loading simulation {simulation.name} using IDEFIX init")
-    vtk = readVTK(glob.glob(os.path.join(simulation.folder, "*.vtk"))[0] if vtk_path is None else vtk_path, geometry="cartesian")
+    vtk_path = sorted(glob.glob(os.path.join(simulation.folder, "*.vtk")))[-1] if vtk_path is None else vtk_path
+    vtk = readVTK(vtk_path, geometry="cartesian")
+    LOGGER.log(f"Loading simulation {simulation.name} using IDEFIX init, reading vtk: {os.path.split(vtk_path)[-1]}")
 
     ini_path = os.path.join(simulation.folder, "idefix.ini")
     dens_unit = 1.
@@ -71,7 +72,7 @@ def init_idefix(simulation, blacklist=[], vtk_path:Optional[str]=None, invert_ax
                     elif "density" in props[0]:
                         dens_unit = float(props[1])
                     elif "velocity" in props[0]:
-                        vel_unit = float(props[1])
+                        vel_unit = float(props[1]) #= sound speed
             
                 if len(props) > 0 and "mach" in props[0]:
                     forcing_mach = float(props[1])
@@ -80,6 +81,8 @@ def init_idefix(simulation, blacklist=[], vtk_path:Optional[str]=None, invert_ax
                 if len(props) > 0 and "vtk" in props[0]:
                     simulation.data['OUT_VTK'] = float(props[1])
 
+            #TODO Verify if there is no pression in vtk
+            simulation.data['TEMP'] = (vel_unit/100)**2*2.33*1.6735575e-27/1.380649e-23
             simulation.data['TIME'] = length_unit / vel_unit
 
             if units_index == len(lines):
@@ -119,8 +122,10 @@ def init_idefix(simulation, blacklist=[], vtk_path:Optional[str]=None, invert_ax
                 del simulation.data["vel_cache"]
     
     simulation.nres = simulation.data['RHO'].shape[0]
+    simulation.size = simulation.global_size
     simulation.cell_size = (simulation.global_size*simulation.relative_size/simulation.nres) * u.parsec
     simulation.cell_size = simulation.cell_size.to(u.cm).value
+    simulation.axis = ([simulation.center[0]*simulation.global_size-simulation.size/2,simulation.center[0]*simulation.global_size+simulation.size/2],[simulation.center[1]*simulation.global_size-simulation.size/2,simulation.center[1]*simulation.global_size+simulation.size/2],[simulation.center[2]*simulation.global_size-simulation.size/2,simulation.center[2]*simulation.global_size+simulation.size/2])
     LOGGER.log(f"Simulation {simulation.name} loaded.")
 
 from POLARIScore.utils.utils import compute_column_density, compute_mass_weighted_density

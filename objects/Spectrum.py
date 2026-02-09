@@ -66,9 +66,9 @@ class Spectrum():
             self.derivatives[1] = np.gradient(self.derivatives[0])
         return self.derivatives
 
-    def fit(self, max_components=10, ax=None, score_threshold=50):
-        Y = self.spectrum 
-        X = np.arange(len(Y), dtype=float)
+    def fit(self, max_components=10, ax=None, score_threshold=50, X=None):
+        Y = self.spectrum
+        X = np.arange(len(Y), dtype=float) if X is None else X
 
         def _gaussian_sum(x, params, N):
             y = np.zeros_like(x)
@@ -91,8 +91,8 @@ class Spectrum():
         if np.sum(Y) > 1e-5:
             for N in range(1, max_components+1):
                 guess = []
-                for i in range(N):
-                    guess.extend([max(Y)/2, X[int(len(X)/2)], np.random.uniform(1,10)])
+                for _ in range(N):
+                    guess.extend([max(Y)/2, X[int(len(X)/2)], np.random.uniform(10,100)])
                 
                 res = minimize(_chi_squared, guess, args=(X, Y, N), method='L-BFGS-B')
                 k = len(res.x)

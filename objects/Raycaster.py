@@ -20,7 +20,7 @@ class Raycaster():
         self.stop_pos:Tuple[int,int,int] = stop_pos
         self.ray_direction:Tuple[int,int,int] = np.array(self._get_direction())
         self.ray_direction = self.ray_direction/np.linalg.norm(self.ray_direction)
-        self.dimensions:Tuple[int,int,int] = self.simulation.data.shape
+        self.dimensions:Tuple[int,int,int] = self.simulation.data['RHO'].shape
         self.result:Dict = None
 
     def start(self)->Dict:
