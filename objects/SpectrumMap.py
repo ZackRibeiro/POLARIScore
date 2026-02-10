@@ -1,9 +1,5 @@
 import os
 import sys
-
-if __name__ == "__main__":
-    parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    sys.path.append(parent_dir)
 from POLARIScore.config import CACHES_FOLDER, LOGGER, SPECTRA_FOLDER, FIGURE_FOLDER
 import numpy as np
 from POLARIScore.utils.utils import *
@@ -17,6 +13,7 @@ from matplotlib.colors import LogNorm
 from matplotlib.widgets import Slider
 import multiprocessing as mp
 from functools import partial
+from typing import Literal, List, Tuple, Optional
 
 def _output_v_function(lsr,chan,res):
     return lsr+(np.array(range(chan))-chan/2)*res
@@ -27,17 +24,17 @@ DEFAULT_OUTPUT_SETTINGS = {
     "v_function": _output_v_function,
 }
 
-#Line settings example for 12CO J=U-L
+#Line settings example for 13CO J=U-L
 _L = 0
 _U = 1
 DEFAULT_LINE_SETTINGS = {
     "l":_L,
     "u":_U,
-    "abundance":CO_ABUNDANCE/70,
-    "temp_low":ROT_ENERGY(_L,CO_ROT_CST),
-    "temperature":ROT_ENERGY(_U,CO_ROT_CST)-ROT_ENERGY(_L,CO_ROT_CST),
-    "frequency":CO_FREQUENCY[_U-1],
-    "estein_emission":CO_A[_U-1]
+    "abundance":CO13_ABUNDANCE,
+    "temp_low":ROT_ENERGY(_L,CO13_ROT_CST),
+    "temperature":ROT_ENERGY(_U,CO13_ROT_CST)-ROT_ENERGY(_L,CO13_ROT_CST),
+    "frequency":CO13_FREQUENCY[_U-1],
+    "estein_emission":CO13_A[_U-1]
 }
 """Default line settings used for generate emission map, used in basic radiative transfer equations"""
 
@@ -53,6 +50,72 @@ def _unpack_and_call(worker_func, job):
 
 def _worker(method, y, row):
     return (y, [method({"x": x, "y": y, "data": val["data"], "output": val["output"]}) for x, val in enumerate(row)])
+
+def _worker_ray_radiative_transfer(cube_dimension, position, direction, last_step, extra_args):
+    
+    if np.linalg.norm(position) == 0:
+        position = 0
+    else:
+        #position = int(np.floor(
+        #    abs(cube_dimension*np.dot(position, direction)/np.linalg.norm(position))
+        #    ))
+
+        axis = np.argmax(np.abs(direction))
+        position = int(position[axis])
+
+        position = max(min(position, cube_dimension-1),0)
+    
+    if type(extra_args['TEMP']) is float:
+        temperature = extra_args['TEMP']
+    else:
+        temperature = extra_args['TEMP'][position]
+
+    line_settings = extra_args['line_settings']
+    global_settings = extra_args['global_settings']
+    output_settings = extra_args['output_settings']
+
+    g_l = 2*line_settings["l"]+1
+    g_u = 2*line_settings["u"]+1
+    V = output_settings["v_function"](output_settings["lsr_velocity"],output_settings["velocity_channels"],output_settings["velocity_resolution"])
+
+    def _get_velocity(pos):
+        if 0 > pos or pos >= cube_dimension:
+            return _get_velocity(position)[0], False
+        v = np.array([extra_args['VX1'][pos],extra_args['VX2'][pos],extra_args['VX3'][pos]])
+        return np.dot(v,direction)*1e-2, True #maybe a -1 is needed for the dot prod
+
+    density = extra_args['RHO'][position]
+    velocity, _ = _get_velocity(position)
+
+    if not("intensity_spectrum" in last_step):
+        intensity_spectrum = BLACKBODY_EMISSION((V/LIGHT_SPEED+1)*line_settings["frequency"],CMB_TEMPERATURE)
+    else:
+        intensity_spectrum = last_step["intensity_spectrum"]
+
+    if density < global_settings["density_threshold"]:
+        return {"intensity_spectrum": intensity_spectrum}
+
+
+    sigma_doppler = 0.08*1e3*np.sqrt(temperature/20)
+    sigma_turb = 0
+    if global_settings["with_turbulence"]:
+        vm1,fm1 = _get_velocity(int(position-1))
+        vp1,fp1 = _get_velocity(int(position+1))
+        sigma_turb = 0.5*(vp1-vm1)/np.sqrt(12) if fm1 and fp1 else vp1-vm1
+    sigma = np.sqrt(sigma_doppler**2 + sigma_turb**2)
+
+    #TODO Change the fct partition approximation, this is an approximation valid just for CO J=1-0
+    low_density_col = 1e4*density*extra_args['cell_size']*line_settings["abundance"]*g_l*np.exp(-line_settings["temp_low"]/(temperature))/(1/3+2*temperature/5.5)
+    tau0 = LIGHT_SPEED**3/(8*np.pi*line_settings["frequency"]**3)*line_settings["estein_emission"] * g_u/g_l * (1-np.exp(-line_settings["temperature"]/temperature)) * low_density_col
+    tau = tau0 * GAUSSIAN(V-velocity,sigma)
+
+    tau_exp = np.exp(-tau)
+    intensity_spectrum = intensity_spectrum*tau_exp+BLACKBODY_EMISSION(nu=line_settings["frequency"],T=temperature)*(1-tau_exp) 
+
+    result = {
+        "intensity_spectrum": intensity_spectrum,
+    }
+    return result
 
 #TODO As for training sets, make this memory less by opening the spectra just when it is needed
 class SpectrumMap():
@@ -233,7 +296,7 @@ class SpectrumMap():
 
         return results
 
-    def generate(self, simulation=None, axis=None, force_compute=False):
+    def generate(self, simulation=None, axis:Optional[int]=None, force_compute:bool=False, method:Literal["ray","vectorized"]="ray"):
 
         LOGGER.global_color = LOGGER._init_gc
         LOGGER.border("SPECTRUM-GENERATING", level=1)
@@ -264,70 +327,64 @@ class SpectrumMap():
 
         LOGGER.log(f"Computing spectrum map for simulation {simulation.name} and for face/axis: {axis}")
 
-        def _compute_function(simulation, position, direction, last_step, spectra_object):
-            if type(TEMPERATURE) is float:
-                temperature = TEMPERATURE
-            else:
-                temperature = TEMPERATURE[position[0],position[1],position[2]]
+        if method == "ray":
+            
+            results = ray_mapping(simulation, _worker_ray_radiative_transfer, axis=axis, region=[0,-1,0,-1], extra_args=
+                                    {"line_settings": self.line_settings,
+                                    "output_settings": self.output_settings,
+                                    "global_settings": self.global_settings,
+                                    "cell_size": simulation.cell_size,
+                                    })
+            intensity_map = []
+            for i in range(len(results)):
+                intensity_map.append([])
+                for j in range(len(results[i])):
+                    intensity_map[i].append(results[i][j]["intensity_spectrum"])
 
-            line_settings = spectra_object.line_settings
-            global_settings = spectra_object.global_settings
-            output_settings = spectra_object.output_settings
-
+        elif method == "vectorized":
+            #Dont work, physics is wrong somewhere
+            is_isothermal = not isinstance(TEMPERATURE, np.ndarray)
+            temperature_cube = TEMPERATURE*np.ones_like(simulation.data['RHO']) if is_isothermal else TEMPERATURE
+            line_settings = self.line_settings
+            global_settings = self.global_settings
+            output_settings = self.output_settings
             g_l = 2*line_settings["l"]+1
             g_u = 2*line_settings["u"]+1
-
             V = output_settings["v_function"](output_settings["lsr_velocity"],output_settings["velocity_channels"],output_settings["velocity_resolution"])
 
-            def _get_velocity(pos):
-                if not(all(0 <= pos[i] < simulation.nres for i in range(len(pos)))):
-                    return _get_velocity(position)[0], False
-                v = np.array([simulation.data['VX1'][pos[0],pos[1],pos[2]],simulation.data['VX2'][pos[0],pos[1],pos[2]],simulation.data['VX3'][pos[0],pos[1],pos[2]]])
-                return np.dot(v,direction)*1e-2, True
-
-            density = simulation.data['RHO'][position[0],position[1],position[2]]
-            velocity, _ = _get_velocity(position)
-
-            if not("intensity_spectrum" in last_step):
-                intensity_spectrum = BLACKBODY_EMISSION((V/LIGHT_SPEED+1)*line_settings["frequency"],CMB_TEMPERATURE)
-            else:
-                intensity_spectrum = last_step["intensity_spectrum"]
-
-            if density < global_settings["density_threshold"]:
-                return {"intensity_spectrum": intensity_spectrum}
-
-
-            sigma_doppler = 0.08*1e3*np.sqrt(temperature/20)
-            sigma_turb = 0
-            if global_settings["with_turbulence"]:
-                vm1,fm1 = _get_velocity((position-direction).astype(int))
-                vp1,fp1 = _get_velocity((position+direction).astype(int))
-                sigma_turb = 0.5*(vp1-vm1) if fm1 and fp1 else vp1-vm1
-            sigma = np.sqrt(sigma_doppler**2 + sigma_turb**2)
-
-            #TODO Change the fct partition approximation, this is an approximation valid just for CO J=1-0
-            low_density_col = 1e4*density*simulation.cell_size*line_settings["abundance"]*g_l*np.exp(-line_settings["temp_low"]/(temperature))/(1/3+2*temperature/5.5)
-            tau0 = LIGHT_SPEED**3/(8*np.pi*line_settings["frequency"]**3)*line_settings["estein_emission"] * g_u/g_l * (1-np.exp(-line_settings["temperature"]/temperature)) * low_density_col
-            tau = tau0 * GAUSSIAN(V-velocity,sigma)
-
+            intensity_map = BLACKBODY_EMISSION((V/LIGHT_SPEED+1)*line_settings["frequency"],CMB_TEMPERATURE)
+            rho = simulation.data["RHO"]
+            vx1 = simulation.data["VX1"]
+            vx2 = simulation.data["VX2"]
+            vx3 = simulation.data["VX3"]
+            direction = np.eye(3, dtype=int)[axis]
+            for ite,i in enumerate(reversed(range(rho.shape[axis]))):
+                printProgressBar(ite, rho.shape[axis], prefix="Radiative Transfer",length=30)
+                density = np.take(rho, i, axis=axis)
+                temperature = np.take(temperature_cube, i, axis=axis)
+                v = (np.take(vx1, i, axis=axis)*direction[0] + np.take(vx2, i, axis=axis)*direction[1] + np.take(vx3, i, axis=axis)*direction[2])*1e-2
+                mask = density >= global_settings["density_threshold"]
+                if not np.any(mask):
+                    continue
+                sigma_doppler = 0.08e3 * np.sqrt(temperature / 20.0)
+                sigma_turb = 0.0
+                if global_settings["with_turbulence"]:
+                    v_m = np.take(vx1*direction[0] + vx2*direction[1] + vx3*direction[2],max(i-1, 0),axis=axis)*1e-2
+                    v_p = np.take(vx1*direction[0] + vx2*direction[1] + vx3*direction[2],min(i+1, rho.shape[axis]-1),axis=axis)*1e-2
+                    sigma_turb = 0.5 * (v_p - v_m)
+                sigma = np.sqrt(sigma_doppler**2 + sigma_turb**2)
+            low_density_col = (1e4*density*simulation.cell_size*line_settings["abundance"]*g_l*np.exp(-line_settings["temp_low"] / temperature)/(1 / 3 + 2 * temperature / 5.5))
+            tau0 = (LIGHT_SPEED**3/(8 * np.pi * line_settings["frequency"]**3)*line_settings["estein_emission"]*g_u/g_l*(1 - np.exp(-line_settings["temperature"] / temperature))*low_density_col)
+            tau = tau0[..., None] * GAUSSIAN(V - v[..., None], sigma[..., None])
             tau_exp = np.exp(-tau)
-            intensity_spectrum = intensity_spectrum*tau_exp+BLACKBODY_EMISSION(nu=line_settings["frequency"],T=temperature)*(1-tau_exp) 
+            source = BLACKBODY_EMISSION(nu=line_settings["frequency"],T=temperature)
+            intensity_map = (intensity_map * tau_exp + source[..., None] * (1 - tau_exp))
 
-            result = {
-                "intensity_spectrum": intensity_spectrum,
-            }
-            return result
-        results = ray_mapping(simulation, lambda simulation,position,direction,last_step: _compute_function(simulation,position,direction,last_step,self), axis=axis, region=[0,-1,0,-1])
-        
-        intensity_map = []
-        for i in range(len(results)):
-            intensity_map.append([])
-            for j in range(len(results[i])):
-                intensity_map[i].append(results[i][j]["intensity_spectrum"])
+        intensity_map = np.array(intensity_map)
         V = self.output_settings["v_function"](self.output_settings["lsr_velocity"],self.output_settings["velocity_channels"],self.output_settings["velocity_resolution"])
         intensity_map = intensity_map-BLACKBODY_EMISSION(((V)/LIGHT_SPEED+1)*self.line_settings["frequency"],CMB_TEMPERATURE)
-        intensity_map = np.array(intensity_map)
         intensity_map = CONVERT_INTENSITY_TO_KELVIN(intensity_map,self.line_settings["frequency"])
+
 
         self.map = intensity_map
         self.global_settings["shape"] = intensity_map.shape
@@ -339,7 +396,7 @@ class SpectrumMap():
 
         return intensity_map
     
-    def plotChannelMap(self, simulation=None, slice=None, mean_mod=False, ax=None, norm=None, enable_slider=True):
+    def plot_channel_map(self, simulation=None, slice=None, mean_mod=False, ax=None, norm=None, enable_slider=True):
         if ax is None:
             fig, ax = plt.subplots()
         else:
@@ -380,10 +437,12 @@ class SpectrumMap():
 
         return fig, ax
 
-    def plot(self, fit=False, simulation=None):
+    def plot(self, fit=False, simulation=None, norm=LogNorm):
         fig, ax = plt.subplots()
         intensity_map = self.map
-        image = ax.imshow(self.getIntegratedIntensity(),extent=None if simulation is None else [simulation.axis[0][0], simulation.axis[0][1], simulation.axis[1][0],simulation.axis[1][1]])
+        image = ax.imshow(self.getIntegratedIntensity(),extent=None if simulation is None else [simulation.axis[0][0], simulation.axis[0][1], simulation.axis[1][0],simulation.axis[1][1]],
+                          norm=norm() if norm is not None else None)
+        plt.colorbar(image, label="Integrated intensity [K]")
         if simulation is None:
             ax.set_xlabel(r"$x_1$ [pixel]")
             ax.set_ylabel(r"$x_2$ [pixel]")
@@ -402,7 +461,7 @@ class SpectrumMap():
                 else:
                     x = int((x-x0)/(x1-x0) * nx)
                     y = int((y-y0)/(y1-y0) * ny)
-            return x,y
+            return int(np.floor(x)),int(np.floor(y))
         fig2, ax2 = plt.subplots()
         spectrum_used = Spectrum(intensity_map[0,0])
         spectrum_used.plot(ax=ax2, channels=spectrum_used.getX(self.output_settings))
@@ -413,15 +472,11 @@ class SpectrumMap():
             if event.inaxes == ax:
                 x_click, y_click = event.xdata, event.ydata
                 ax2.cla()
-                #data, data_fit = fit_gaussians(intensity_map[x,y,:])
-                #plot_fit(data,data_fit, ax=ax2)
                 x0, y0 = _convert_to_phys(x_click,y_click, invert=True)
                 spectrum_used = Spectrum(intensity_map[x0,y0])
-                #ax2.plot(spectrum_used.getX(self.output_settings), spectrum_used.spectrum, label='Data')
                 spectrum_used.plot(ax=ax2, channels=spectrum_used.getX(self.output_settings))
                 if fit:
                     spectrum_used.fit(ax=ax2, X=spectrum_used.getX(self.output_settings))
-                #plotSpectrum(intensity_map, ax=ax2, pos=(x, y))
                 ax2.set_title(f"Spectrum at ({round(x_click,2)}pc, {round(y_click,2)}pc)")
                 marker.set_data([x_click], [y_click])
                 fig.canvas.draw_idle()
@@ -455,19 +510,3 @@ def getSimulationSpectra(simulation, name_used=None):
 from .Spectrum import _method_getMoment
 def _method_getMom(args):
     return _method_getMoment(args, m=0)
-
-if __name__ == "__main__":
-
-    #generate_spectrummap_using_orphan("spectrum_orionMHD_lowB_0.39_512_1")
-    #map = SpectrumMap(name="spectrum_highresspec_0")
-    from .Simulation_DC import Simulation_DC
-    sim = Simulation_DC(name="orionMHD_lowB_0.39_512", global_size=66.0948, init=True)
-    map = SpectrumMap(name="spectrum_orionMHD_lowB_0.39_512_2")
-    #map.plot(simulation=sim)
-    #result = map.compute(, stride=1, used_cpu=1)
-    #result = np.array(result)
-    #plt.savefig(os.path.join(FIGURE_FOLDER,"13CO_integratedmap.jpg"))
-    #plt.imshow(result)
-    fig, ax=  map.plotChannelMap(simulation=sim, enable_slider=False)
-    fig.savefig(os.path.join(FIGURE_FOLDER,"13CO_channelmap_0.jpg"))
-    plt.show()

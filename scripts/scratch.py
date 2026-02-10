@@ -21,8 +21,15 @@ from POLARIScore.objects.SimulationArray import SimulationArray
 sim = Simulation_DC("idefix_sim_A")
 #sim.plot()
 from POLARIScore.objects.SpectrumMap import SpectrumMap, getSimulationSpectra
+#plt.show()
+
 maps = getSimulationSpectra(simulation=sim)
-maps[1].plot(simulation=sim, fit=True)
+maps[0].plot(simulation=sim)
+
+v_map = sim.compute_velocity_decomposition()
+v_map.plot()
+
+
 plt.show()
 
 """

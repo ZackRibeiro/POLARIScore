@@ -22,6 +22,7 @@ import matplotlib.cm as cm
 import matplotlib.axes
 import glob
 from POLARIScore.utils.sim_utils import init_idefix, init_ramses
+from POLARIScore.objects.SpectrumMap import SpectrumMap
 
 class Simulation_DC():
     """
@@ -77,6 +78,73 @@ class Simulation_DC():
             init_idefix(self, **kwargs)
         elif len(glob.glob(os.path.join(self.folder,"*.fits"))) > 0:
             init_ramses(self, **kwargs)
+        
+    def project_data(self, key:Union[str,np.ndarray], i,j ,axis):
+        """Return 1D Vector with data on an axis.
+        Args:
+            key: data key or np.ndarray cube
+            i,j: 2D position on the face
+            axis: face
+        Returns:
+            1D Vector with data on the axis
+        """
+        cube = key if isinstance(key, np.ndarray) else self.data[key]
+        if isinstance(cube, float):
+            return cube
+        
+        if i < 0 or i >= cube.shape[0]:
+            old_i = i
+            i = min(max(i,0),cube.shape[0]-1)
+            LOGGER.warn(f"Position i is out of bounds: {old_i}, replacing it with {i}")
+        if j < 0 or j >= cube.shape[0]:
+            old_j = j
+            j = min(max(j,0),cube.shape[0]-1)
+            LOGGER.warn(f"Position j is out of bounds: {old_j}, replacing it with {j}")
+
+        if axis == 0:
+            ray_values = cube[:, i, j].copy()
+        elif axis == 1:
+            ray_values = cube[i, :, j].copy()
+        elif axis == 2:
+            ray_values = cube[i, j, :].copy()
+        else:
+            raise ValueError("Axis must be 0, 1, or 2")
+
+        return ray_values
+    
+    def compute_velocity_decomposition(self, density_weighted:bool=True, axis=0, 
+                                       bins:int=128, bin_min:Optional[float]=None, bin_max:Optional[float]=None)->"SpectrumMap":
+        LOGGER.log(f"Computing velocity decomposition on axis {axis}.")
+        direction = np.array([0, 0, 0])
+        direction[axis] = -1
+        bin_min = min(np.min(self.data['VX1']),np.min(self.data['VX2']),np.min(self.data['VX3'])) if bin_min is None else bin_min
+        bin_max = max(np.max(self.data['VX1']),np.max(self.data['VX2']),np.max(self.data['VX3'])) if bin_max is None else bin_max
+        bins = np.linspace(bin_min,bin_max,bins+1)
+        result = []
+        ite = 0
+        for i in range(self.nres):
+            result.append([])
+            for j in range(self.nres):
+                ite += 1
+                printProgressBar(ite, total=self.nres**2, length=30, prefix="Computing velocity decomposition")
+                rho = self.project_data('RHO', i=i, j=j, axis=axis)
+                vx1 = self.project_data('VX1', i=i, j=j, axis=axis)
+                vx2 = self.project_data('VX2', i=i, j=j, axis=axis)
+                vx3 = self.project_data('VX3', i=i, j=j, axis=axis)
+                vel = np.array([vx1, vx2, vx3]).transpose().dot(direction)
+                hist, _ = np.histogram(vel,bins=bins,weights=rho if density_weighted else None)
+                result[i].append(hist)
+        result =  np.array(result)
+        smap = SpectrumMap(self.name+f"_vel_decomposition_ax_{axis}", map=result ,load=False)
+        smap.output_settings = {
+            "velocity_channels": len(bins)-1,
+            "velocity_resolution": (bin_max-bin_min)/(len(bins)-1),
+            "lsr_velocity": 0,
+            "v_function": lambda _,chan,res: (bin_min+np.array(range(chan))*res)/1e2
+            }
+        smap.global_settings = {}
+        smap.line_settings = {}
+        return smap
         
 
     def load_fit(self, key:str, path:str, unit:float=1.)->bool:

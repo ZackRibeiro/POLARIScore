@@ -110,7 +110,7 @@ _time_0 = 0
 def printProgressBar(iteration,total,prefix='',suffix='',decimals=1,length=50,fill='█',printEnd="\r",show_tr=True):
     global _time_0
     delta_time = 0.
-    if iteration==0:
+    if iteration==0 or iteration==1:
         _time_0 = time.process_time()
     else:  
         delta_time = (time.process_time()-_time_0)/iteration * (total-iteration)
@@ -142,6 +142,7 @@ def printProgressBar(iteration,total,prefix='',suffix='',decimals=1,length=50,fi
     else:
         print(f'\r{prefix} {bar} {color+percent_str}%{reset} {suffix}', end=printEnd)
     if iteration >= total:
+        print(f'\r{prefix} - Done in {format_time(time.process_time()-_time_0)}'+' '*(length+10), end=printEnd)
         print()
 
 def divide_matrix_to_sub(matrix:np.ndarray,final_dim:int=128)->List[np.ndarray]:
