@@ -578,6 +578,7 @@ class Simulation_DC():
                 axes[1][column].set_xlabel("s")
                 axes[1][column].set_ylabel("p")
                 axes[1][column].set_title("PDF")
+                axes[1][column].set_yscale("log")
                 axes[1][column].grid()
             return cd
 

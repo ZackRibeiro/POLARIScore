@@ -18,23 +18,23 @@ from POLARIScore.objects.SimulationArray import SimulationArray
 #          colors = "copper")
 #sims.plot(Simulation_DC.plot, mode="slider", color_bar=False, plot_pdf=True)
 
-sim = Simulation_DC("idefix_sim_A")
+#sim = Simulation_DC("turb_sim_A")
 #sim.plot()
-from POLARIScore.objects.SpectrumMap import SpectrumMap, getSimulationSpectra
+#from POLARIScore.objects.SpectrumMap import SpectrumMap, getSimulationSpectra
 #plt.show()
 
-maps = getSimulationSpectra(simulation=sim)
-maps[0].plot(simulation=sim)
+#maps = getSimulationSpectra(simulation=sim)
+#maps[0].plot(simulation=sim)
 
-v_map = sim.compute_velocity_decomposition()
-v_map.plot()
+#v_map = sim.compute_velocity_decomposition()
+#v_map.plot()
 
 
-plt.show()
+#plt.show()
 
-"""
+
 #sim = Simulation_DC("orionHD_all_512")
-sim = Simulation_DC("idefix_turb")
+sim = Simulation_DC("turb_sim_E")
 
 from POLARIScore.utils.physics_utils import dcmf_func, density_gaussian
 from POLARIScore.utils.utils import plot_function
@@ -59,6 +59,7 @@ ax.plot(10**pdf[1][:100], pdf[0], marker="+", color="black", label=f"b={b:.3}")
 plot_function(func, ax=ax, scatter=False, logspace=True, lims= (np.min(10**bin_centers), np.max(10**bin_centers)), color="red", linestyle="--")
 
 ax.set_xscale("log")
+ax.set_yscale("log")
 fig.legend()
 
 fig = plt.figure()
@@ -68,7 +69,7 @@ def _plot_velocity(key, fit:bool=False):
     bin_centers = pdf[1][:100]
     values = pdf[0]
 
-    ax.plot(pdf[1][:100], pdf[0], marker="+", label=rf"{key}: $M=${np.sqrt(np.mean(np.power(sim.data[key],2)))/3.2591e+4:.2}")
+    ax.plot(pdf[1][:100], pdf[0], marker="+", label=rf"{key}: $M=${np.sqrt(np.mean(np.power(sim.data[key],2)))*np.sqrt(3)/3.2591e+4:.2}")
 
     if fit:
         popt, _ = curve_fit(density_gaussian, bin_centers, values,
@@ -87,4 +88,3 @@ from POLARIScore.utils.utils import compute_mass_weighted_density, compute_volum
 sim.plot_power_spectrum(vdens_method=compute_mass_weighted_density)
 
 plt.show()
-"""
