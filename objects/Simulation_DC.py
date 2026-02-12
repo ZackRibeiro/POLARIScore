@@ -2,7 +2,7 @@ import os
 import sys
 from POLARIScore.utils.utils import *
 from POLARIScore.config import *
-from POLARIScore.utils.physics_utils import PC_TO_CM, power_spectrum_2d
+from POLARIScore.utils.physics_utils import PC_TO_CM, power_spectrum_2d, power_spectrum_3d
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 import json
@@ -78,6 +78,8 @@ class Simulation_DC():
             init_idefix(self, **kwargs)
         elif len(glob.glob(os.path.join(self.folder,"*.fits"))) > 0:
             init_ramses(self, **kwargs)
+        else:
+            LOGGER.warn("Can't initialize simulation {self.name}, verify if the folder exists and if there is data files in it.")
         
     def project_data(self, key:Union[str,np.ndarray], i,j ,axis):
         """Return 1D Vector with data on an axis.
@@ -740,55 +742,64 @@ class Simulation_DC():
 
         return lambda X: fit_function(X, *popt)
     
-    def plot_power_spectrum(self, ax:Optional["matplotlib.axes.Axes"]=None, bins:int=30, vdens_method:Optional[Callable]=None, label:Optional[str]="$<n_H>_m$"
-                            , color:Optional[str]=None, plot_coldens:bool=True, normalize:bool=True,
-                            linestyle:str="-"):
+    def get_rms_velocity(self):
+        for key in ['VX1', 'VX2', 'VX3']:
+            assert key in self.data, LOGGER.error(f"No {key} in simulation data.")
+        return np.sqrt(self.data['VX1']**2+self.data['VX2']**2+self.data['VX3']**2)  
+
+    def plot_power_spectrum(self, ax:Optional["matplotlib.axes.Axes"]=None
+                            , what_to_plot:Literal['column_density','density','rms_velocity']="column_density" , bins:int=30, label:Optional[str]=None
+                            , color:Optional[str]=None, normalize:bool=False, linestyle:str="-", energy:bool=False):
         if ax is None:
             fig, ax = plt.subplots()
         else:
             fig = ax.figure
 
+        data = None
+        if what_to_plot in self.data:
+            data = self.data[what_to_plot]
+        elif what_to_plot == "rms_velocity":
+            label = r"v rms" if label is None else label
+            data = self.get_rms_velocity()
+        elif what_to_plot == "density":
+            label = r"n_H" if label is None else label
+            data = self.data['RHO']
+        else:
+            label = r"$N_H$" if label is None else label
+            data = compute_column_density(self.data['RHO'], self.cell_size, axis=0)
+
         pixel_size = self.cell_size/PC_TO_CM
-        if plot_coldens:
-            column_density = [compute_column_density(self.data['RHO'], self.cell_size, axis=i) for i in range(3)]
-            k_coldens, Pk_coldens = power_spectrum_2d(column_density[0], px_size=pixel_size, bins=bins)
-            if normalize:
-                Pk_coldens = Pk_coldens / np.max(Pk_coldens)
-            ax.plot(k_coldens, Pk_coldens, color="black" if vdens_method is not None else color, label="$N_H$" if vdens_method is not None else label)
 
-            cut_index = (np.where(k_coldens > 0.0)[0][0],np.where(k_coldens > 10)[0][0])
-
-            dPk_coldens = np.gradient(Pk_coldens[cut_index[0]:cut_index[-1]])
-            ddPk_coldens = np.gradient(dPk_coldens)
-
-            sorted_indexes = np.argsort(np.abs(ddPk_coldens))
-
-            sonic_index = sorted_indexes[-1]
-            k_sonic = k_coldens[cut_index[0]:cut_index[-1]][sonic_index]
-            ax.vlines(k_sonic, ax.get_ylim()[0], ax.get_ylim()[1], color="red")
-            ax.text(k_sonic - 0.3,0.5,rf'$k={k_sonic:.2}={1/k_sonic:.2}$',
-            rotation=90,va='center',ha='left',color='red',fontsize=11, transform=ax.get_xaxis_transform())
+        LOGGER.log("Computing power spectrum...")
+        ylabel = r"$P(k)$"
+        if energy:
+            ylabel = r"$E(k)$"
+        if len(data.shape) == 2:
+            k, Pk = power_spectrum_2d(data, px_size=pixel_size, bins=bins)
+            if energy:
+                Pk = Pk*2*np.pi*k
+        else:
+            assert len(data.shape) == 3, LOGGER.error("If data is not 2D then it needs to be 3D")
+            k, Pk = power_spectrum_3d(data, px_size=pixel_size, bins=bins)
+            if energy:
+                Pk = Pk*4*np.pi*k*k
 
 
+        if normalize:
+            Pk = Pk / np.max(Pk)
+        ax.plot(k,Pk, color=color, label=label, linestyle=linestyle)
 
-        if vdens_method is not None:
-            volume_density = [self._compute_v_density(vdens_method, axis=i) for i in range(3)]
-            k_voldens, Pk_voldens = power_spectrum_2d(volume_density[0], px_size=pixel_size, bins=bins)
-            if normalize:
-                Pk_voldens = Pk_voldens / np.max(Pk_voldens)
-            ax.plot(k_voldens, Pk_voldens, label=label, color=color)
-
-        ax.set_xscale("log")
-        ax.set_yscale("log")
-        
-        #if 'FORCING_MACH' in self.data:
-        #    sonic_freq = self.data['FORCING_MACH']**(3)/self.global_size
-        #    ax.vlines(sonic_freq, ax.get_ylim()[0], ax.get_ylim()[1], color="red")
-
-        #ax.vlines(1/pixel_size, ax.get_ylim()[0], ax.get_ylim()[1], color="red")
+        #cut_index = (np.where(k > 0.0)[0][0],np.where(k > 10)[0][0])
+        #dPk = np.gradient(Pk[cut_index[0]:cut_index[-1]])
+        #ddPk = np.gradient(dPk)
+        #sorted_indexes = np.argsort(np.abs(ddPk))
+        #sonic_index = sorted_indexes[-1]
+        #k_sonic = k_coldens[cut_index[0]:cut_index[-1]][sonic_index]
+        #ax.vlines(k_sonic, ax.get_ylim()[0], ax.get_ylim()[1], color="red")
+        #ax.text(k_sonic - 0.3,0.5,rf'$k={k_sonic:.2}={1/k_sonic:.2}$',
+        #rotation=90,va='center',ha='left',color='red',fontsize=11, transform=ax.get_xaxis_transform())
 
         ax.set_xlabel(r"$k\ \mathrm{[pc^{-1}]}$")
-        ylabel = r"$P(k)$"
         if normalize:
             ylabel += " (normalized)"
         ax.set_ylabel(ylabel)

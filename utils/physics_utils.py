@@ -185,3 +185,43 @@ def power_spectrum_2d(map2d, px_size, bins=20):
         Pk[i] = power[mask].mean()
 
     return k_centers, Pk
+
+def power_spectrum_3d(cube, px_size, bins=20):
+
+    # Replace NaNs with mean value
+    mask = np.isnan(cube)
+    cube[mask] = np.nanmean(cube)
+
+    # Remove mean
+    cube = cube - np.mean(cube)
+
+    # 3D FFT
+    fft_cube = np.fft.fftn(cube)
+    fft_cube = np.fft.fftshift(fft_cube)
+    power = np.abs(fft_cube)**2
+
+    # Grid size
+    nz, ny, nx = cube.shape
+
+    # Wavenumbers
+    kx = np.fft.fftfreq(nx, d=px_size)
+    ky = np.fft.fftfreq(ny, d=px_size)
+    kz = np.fft.fftfreq(nz, d=px_size)
+
+    kx, ky, kz = np.meshgrid(kx, ky, kz, indexing='xy')
+    k = np.sqrt(kx**2 + ky**2 + kz**2)
+    k = np.fft.fftshift(k)
+
+    # Radial binning
+    k_bins = np.linspace(0, k.max(), bins)
+    Pk = np.zeros(len(k_bins) - 1)
+    k_centers = 0.5 * (k_bins[1:] + k_bins[:-1])
+
+    for i in range(len(k_bins) - 1):
+        shell_mask = (k >= k_bins[i]) & (k < k_bins[i+1])
+        if np.any(shell_mask):
+            Pk[i] = power[shell_mask].mean()
+        else:
+            Pk[i] = np.nan
+
+    return k_centers, Pk

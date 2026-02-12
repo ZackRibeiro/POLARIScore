@@ -34,8 +34,10 @@ from POLARIScore.objects.SimulationArray import SimulationArray
 
 
 #sim = Simulation_DC("orionHD_all_512")
-sim = Simulation_DC("turb_sim_E")
+sim = Simulation_DC("idefix_sim_A")
+sim.plot_power_spectrum(what_to_plot="rms_velocity", bins=30, energy=True )
 
+"""
 from POLARIScore.utils.physics_utils import dcmf_func, density_gaussian
 from POLARIScore.utils.utils import plot_function
 _dcmf_function = lambda M,amp,mu,sigma,alpha,cutoff: dcmf_func(M,amp,mu,sigma,alpha,cutoff, enable_cutoff=False)
@@ -85,6 +87,5 @@ fig.legend()
 
 sim.plot_slice(slice=100,)
 from POLARIScore.utils.utils import compute_mass_weighted_density, compute_volume_weighted_density
-sim.plot_power_spectrum(vdens_method=compute_mass_weighted_density)
-
+"""
 plt.show()
