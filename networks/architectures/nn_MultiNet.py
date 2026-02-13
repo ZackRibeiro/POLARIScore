@@ -7,15 +7,15 @@ from POLARIScore.config import LOGGER
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from POLARIScore.networks.architectures.nn_UNet import ConvBlock, GatedAttentionBlock
+from POLARIScore.networks.architectures.nn_UNet import ConvBlock, DoubleConvBlock, GatedAttentionBlock
 from POLARIScore.networks.architectures.nn_BaseModule import BaseModule
 import numpy as np
-from kan import KAN
+#from kan import KAN
 from POLARIScore.networks.utils.fastkanconv import FastKANConvLayer
 from POLARIScore.networks.architectures.nn_KNet import JustKAN
 
 class MultiNet(BaseModule):
-    def __init__(self, convBlock=ConvBlock, channel_dimensions=[2], channel_modes=[None] , num_layers=3, base_filters=32, attention = False, is3D=None):
+    def __init__(self, convBlock=DoubleConvBlock, channel_dimensions=[2], channel_modes=[None] , num_layers=3, base_filters=32, attention = True, is3D=None):
         super(MultiNet, self).__init__()
 
         self.channel_dimensions = channel_dimensions if type(channel_dimensions) is list else [channel_dimensions]
@@ -134,6 +134,8 @@ class MultiNet(BaseModule):
                     if channel_index is None or len(self.channel_modes) < channel_index+1 or self.channel_modes[channel_index] is None or not(type(self.channel_modes[channel_index]) is list or type(self.channel_modes[channel_index]) is tuple):
                         return torch.sum(t, dim=-1)
                     channel_mode = self.channel_modes[channel_index]
+                    if "split" in channel_mode[0]:
+                        return torch.split(t, dim=-1)
                     if "proj" in channel_mode[0]:
                         assert cV == channel_mode[1].in_channels, LOGGER.error(f"Model can't work because you defined a channel projection on {channel_mode[1].in_channels} but the input tensor has a {cV} depth")
                         return channel_mode[1](t.view(cB, cC*cV, cH, cW))

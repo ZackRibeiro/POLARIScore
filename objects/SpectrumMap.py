@@ -14,6 +14,7 @@ from matplotlib.widgets import Slider
 import multiprocessing as mp
 from functools import partial
 from typing import Literal, List, Tuple, Optional
+from sklearn.decomposition import PCA
 
 def _output_v_function(lsr,chan,res):
     return lsr+(np.array(range(chan))-chan/2)*res
@@ -122,15 +123,15 @@ class SpectrumMap():
     """
     Map (matrix NxN) of spectra. Each element of the matrix contains a list of values (which can be passed easily to Spectra object).
     """
-    def __init__(self, name,map=None, load=True):
+    def __init__(self, name:str,map:np.ndarray=None, load:bool=True):
 
-        self.name = name
+        self.name:str = name
 
-        self.map = map
+        self.map:np.ndarray = map
         
-        self.line_settings = DEFAULT_LINE_SETTINGS
-        self.output_settings = DEFAULT_OUTPUT_SETTINGS
-        self.global_settings = DEFAULT_GLOBAL_SETTINGS
+        self.line_settings:Dict = DEFAULT_LINE_SETTINGS
+        self.output_settings:Dict = DEFAULT_OUTPUT_SETTINGS
+        self.global_settings:Dict = DEFAULT_GLOBAL_SETTINGS
 
         if load:
             self.load()
@@ -228,6 +229,64 @@ class SpectrumMap():
             map: Map with the sum of the spectra
         """
         return np.sum(self.map, axis=2)
+    
+    def pca(self, plot:bool=False, return_cube:bool=True):
+        assert self.map is not None, LOGGER.error("Spectrum map is empty.")
+        nx, ny, nv = self.map.shape
+        data = self.map.reshape(nx*ny,nv)
+        data_mean = np.mean(data, axis=0)
+        data_centered = data - data_mean
+        pca = PCA()
+        pca.fit(data_centered)
+
+        components = pca.components_ #evectors: (ncomp, nv)
+        variance = pca.explained_variance_ratio_
+        scores = pca.transform(data_centered)
+
+        if plot:
+            ncomp = components.shape[0]
+
+            comp_index = 0
+
+            eigenvector = components[comp_index]
+            eigenimage = scores[:, comp_index].reshape(nx, ny)
+
+            fig, (ax_spec, ax_img) = plt.subplots(1, 2, figsize=(12, 5))
+            plt.subplots_adjust(bottom=0.25)
+
+            line, = ax_spec.plot(eigenvector)
+            ax_spec.set_title(f"Eigenvector {comp_index}")
+            ax_spec.set_xlabel("Velocity Channel")
+            ax_spec.set_ylabel("Amplitude")
+
+            im = ax_img.imshow(eigenimage, origin='lower', cmap='RdBu_r')
+            ax_img.set_title(f"Projection {comp_index}")
+            fig.colorbar(im, ax=ax_img, fraction=0.046, pad=0.04)
+
+            ax_slider = plt.axes([0.2, 0.1, 0.6, 0.03])
+            slider = Slider(ax_slider,"Component",0,ncomp - 1,valinit=0,valstep=1)
+            fig._c_slider = slider
+
+            def update(val):
+                i = int(slider.val)
+
+                line.set_ydata(components[i])
+                ax_spec.set_title(f"Eigenvector {i}")
+
+                new_img = scores[:, i].reshape(nx, ny)
+                im.set_data(new_img)
+                im.set_clim(vmin=np.min(new_img), vmax=np.max(new_img))
+                ax_img.set_title(f"Projection {i}")
+
+                fig.canvas.draw_idle()
+
+            slider.on_changed(update)
+
+        if return_cube:            
+                return scores.reshape(nx, ny, nv)
+        return components, variance, scores
+
+
     
     #TODO add region args
     def compute(self, method, save=True, used_cpu=1., stride=1):
@@ -442,7 +501,7 @@ class SpectrumMap():
         intensity_map = self.map
         image = ax.imshow(self.getIntegratedIntensity(),extent=None if simulation is None else [simulation.axis[0][0], simulation.axis[0][1], simulation.axis[1][0],simulation.axis[1][1]],
                           norm=norm() if norm is not None else None)
-        plt.colorbar(image, label="Integrated intensity [K]")
+        plt.colorbar(image, label=r"Integrated intensity [K m s$^{-1}$]")
         if simulation is None:
             ax.set_xlabel(r"$x_1$ [pixel]")
             ax.set_ylabel(r"$x_2$ [pixel]")
@@ -499,6 +558,8 @@ def generate_spectrummap_using_orphan(name, folder=CACHES_FOLDER):
 def getSimulationSpectra(simulation, name_used=None):
 
     name = simulation.name if name_used is None else name_used
+    if "T_INDEX" in simulation.data and name_used is None:
+        name=name+"_"+str(simulation.data["T_INDEX"])
     spectra = [SpectrumMap("spectrum_"+name+"_"+str(int(i+1))) for i in range(3)]
     for i,s in enumerate(spectra):
         if s.map is None:

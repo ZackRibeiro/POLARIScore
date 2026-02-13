@@ -250,9 +250,18 @@ class Simulation_DC():
             column_density = [convolve_map(c, self.cell_size*3.24078e-19, beam_size=beam[0], distance=beam[1]) if c is not None else None for c in column_density]
             volume_density = [convolve_map(v, self.cell_size*3.24078e-19, beam_size=beam[0], distance=beam[1]) if v is not None else None for v in volume_density]
 
-        flag_cospectra = what_to_compute["cospectra"] if "cospectra" in what_to_compute else False
+        flag_cospectra = False
+        if "cospectra" in what_to_compute and what_to_compute["cospectra"] is not None:
+            if isinstance(what_to_compute["cospectra"], bool):
+                flag_cospectra = what_to_compute["cospectra"]
+            else:
+                flag_cospectra = True
+
         if flag_cospectra:
             co_spectra = getSimulationSpectra(self)
+            if isinstance(what_to_compute["cospectra"], str):
+                if what_to_compute["cospectra"] == "pca":
+                    co_spectra = [smap.pca(return_cube=True) for smap in co_spectra]
         flag_number_density = what_to_compute["density"] if "density" in what_to_compute else False
         flag_context = (what_to_compute["context"] is not None and what_to_compute["context"]) if "context" in what_to_compute else False
         flag_physize = True
@@ -798,6 +807,9 @@ class Simulation_DC():
         #ax.vlines(k_sonic, ax.get_ylim()[0], ax.get_ylim()[1], color="red")
         #ax.text(k_sonic - 0.3,0.5,rf'$k={k_sonic:.2}={1/k_sonic:.2}$',
         #rotation=90,va='center',ha='left',color='red',fontsize=11, transform=ax.get_xaxis_transform())
+
+        ax.set_xscale("log")
+        ax.set_yscale("log")
 
         ax.set_xlabel(r"$k\ \mathrm{[pc^{-1}]}$")
         if normalize:

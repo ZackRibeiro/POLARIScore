@@ -41,6 +41,7 @@ class SimulationArray():
                     for i,s in enumerate(simulations):
                         init_idefix(s, vtk_path=vtk_files[i])
                         if 'TIME' in s.data and 'OUT_VTK' in s.data:
+                            s.data["T_INDEX"] = indexes[i]
                             indexes[i] = indexes[i]*s.data['OUT_VTK']
                     if indexes_was_none:
                         self.indexes = indexes

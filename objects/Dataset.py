@@ -171,6 +171,36 @@ class Dataset():
         del self.active_batch
         self.active_batch = result
         return result
+    
+    def transform(self, channel_names:Union[List[str],str], method:Literal["split"], new_names:Union[List[str],str]=None):
+        """
+        Transform channels into new ones.
+        """
+        LOGGER.log(f"Transforming {channel_names} using {method}.")
+        channel_names = channel_names if type(channel_names) is list else [channel_names]
+        if new_names is not None:
+            new_names = new_names if type(new_names) is list else [new_names]
+            assert len(channel_names) == len(new_names), LOGGER.error("When specified, new names need to be the same length of channel names.")
+        
+
+        channel_indexes = ([self.get_element_index(c) for c in channel_names])
+
+        order = self.settings['order']
+        for bi in range(len(self.batch)):
+            batch = self.get(bi)
+            for ci, channel_index in enumerate(channel_indexes):
+                img = batch[channel_index]
+
+                if method=="split":
+                    assert len(img.shape) == 3, LOGGER.error("To use 'split', the tensor need to be 3D.")
+                    for s,sli in enumerate(img.transpose()):
+                        if not(order[channel_index]+str(s) in order):
+                            order.append(order[channel_index]+str(s))
+                        batch.append(sli)
+            self.save_batch(batch=batch, i=bi)
+        self.settings['order'] = order
+        self.save_settings()    
+                
 
     def split(self, cutoff:float=0.7)->Tuple['Dataset','Dataset']:
         """
@@ -198,11 +228,12 @@ class Dataset():
 
         return (b1, b2)
     
-    def merge(self, dataset:Union['Dataset',List['Dataset']],force:bool=False)->'Dataset':
+    def merge(self, dataset:Union['Dataset',List['Dataset']],force:bool=False,delete:bool=False,name:str=None,save:bool=False)->'Dataset':
         """Merge the dataset with another dataset (or list of datasets).
         Args:
             dataset: the other dataset(s)
             force: force the merging, like if a dataset have extra elements that others don't have, the extra channel will be removed.
+            delete: delete older datasets
         Returns:
             merged_dataset
         """
@@ -274,6 +305,15 @@ class Dataset():
         for d in datasets:
             assert isinstance(d, Dataset), LOGGER.error("There is an object that isn't a dataset in merge function.")
             ds = _merge(ds, d)
+
+        if save:
+            self.save(name=name, force=True)
+
+        if delete:
+            for o_ds in datasets:
+                o_ds.delete()
+            self.delete()
+
         return ds
     
     def clone(self, new_name:str)->'Dataset':
@@ -284,7 +324,7 @@ class Dataset():
         ds.name = new_name
         return ds
 
-    def downsample(self, channel_names:Union[List[str],str], target_sizes:Union[List[int], int], axis:Union[int,List[int]]=2, methods:Literal['mean','max','crop','nn']="mean"):
+    def downsample(self, channel_names:Union[List[str],str], target_sizes:Union[List[int], int], axis:Union[int,List[int]]=2, methods:Literal['mean','max','crop','first','nn']="mean", replace:bool=False):
         """
         Downsample the dataset and save into a new folder.
         <br />e.g: dataset.downsample(channel_names=["cospectra"], target_sizes=[128], methods=["mean"])
@@ -293,19 +333,24 @@ class Dataset():
                 target_sizes: Target size(s) along the specified axis (or axes).
                 axis: Axis or list of axes to downsample (default: 2 for z-axis).
                 methods: Downsampling method(s) - 'mean', 'max', 'crop', or 'nn' (nearest neighbor).
+                replace: If True, remove the current dataset and save the downsampled one
         Returns:
             Dataset: the downsampled dataset
         """
         LOGGER.log(f"Downsampling ({methods}) channels: {channel_names} to sizes {target_sizes} along axis {axis}")
 
-        ds = self.clone(self.name + "_downsampled")
-        ds.save(force=True)
+        if replace:
+            ds = self
+        else:
+            ds = self.clone(self.name + "_downsampled")
+            ds.save(force=True)
 
         channel_indexes = (
             [ds.get_element_index(c) for c in channel_names]
             if isinstance(channel_names, list)
             else [ds.get_element_index(channel_names)]
         )
+        
 
         target_sizes = target_sizes if isinstance(target_sizes, list) else [target_sizes]
         methods = methods if isinstance(methods, list) else [methods]
@@ -345,6 +390,13 @@ class Dataset():
                         slicer[ax] = slice(start, end)
                         img = img[tuple(slicer)]
 
+                    elif method == "first":
+                        start = 0
+                        end = start + target_size
+                        slicer = [slice(None)] * img.ndim
+                        slicer[ax] = slice(start, end)
+                        img = img[tuple(slicer)]
+                        
                     elif method == "nn":
                         step = max(1, original_size // target_size)
                         slicer = [slice(None)] * img.ndim
@@ -465,9 +517,15 @@ class Dataset():
             self.name = name
         batch_uuid = self.name
 
+        delete_temp_ds = False
         if os.path.exists(os.path.join(TRAINING_BATCH_FOLDER,"batch_"+str(batch_uuid).split("batch_")[-1])) and force:
             LOGGER.warn(f"Dataset {batch_uuid} already exists, but force save enabled so previous batch was removed.")
+            
+            temp_ds = self.clone(new_name="temp_ds")
             shutil.rmtree(os.path.join(TRAINING_BATCH_FOLDER,"batch_"+str(batch_uuid).split("batch_")[-1]))
+            temp_ds.name = self.name
+            self = temp_ds
+            delete_temp_ds = True
 
         while os.path.exists(os.path.join(TRAINING_BATCH_FOLDER,"batch_"+str(batch_uuid).split("batch_")[-1])):
             self.name = str(uuid.uuid4())
@@ -482,19 +540,22 @@ class Dataset():
 
         order = self.settings["order"]
         if batch is not None:
-            for i,img in enumerate(batch):
+            for i,imgs in enumerate(batch):
                 for j,o in enumerate(order):
-                    np.save(os.path.join(batch_path,str(i)+"_"+o+".npy"), img[j])
+                    np.save(os.path.join(batch_path,str(i)+"_"+o+".npy"), imgs[j])
         else:
             batch = self.batch
             for i,_ in enumerate(self.batch):
-                img = self.get(i)
+                imgs = self.get(i)
                 for j,o in enumerate(order):
-                    np.save(os.path.join(batch_path,str(i)+"_"+o+".npy"), img[j])
-                del img
+                    np.save(os.path.join(batch_path,str(i)+"_"+o+".npy"), imgs[j])
+                del imgs
 
         LOGGER.log(f"Dataset with {len(batch)} images saved.")
         self.name = old_name
+
+        if delete_temp_ds:
+            temp_ds.delete()
 
         return True
 

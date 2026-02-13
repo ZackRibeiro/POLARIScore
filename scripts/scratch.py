@@ -13,18 +13,52 @@ from POLARIScore.utils.sim_utils import init_idefix,init_ramses
 from POLARIScore.utils.utils import compute_mass_weighted_density
 
 from POLARIScore.objects.SimulationArray import SimulationArray
-#sims = SimulationArray(simulations=[] ,name="turb_sim_C")
-#sims.plot(Simulation_DC.plot_power_spectrum, mode="mixed", normalize=True, plot_coldens=False, vdens_method=compute_mass_weighted_density,
-#          colors = "copper")
-#sims.plot(Simulation_DC.plot, mode="slider", color_bar=False, plot_pdf=True)
+from POLARIScore.objects.Dataset import getDataset
 
-#sim = Simulation_DC("turb_sim_A")
+sim_names=[
+    "turb_sim_A",#"turb_sim_B","turb_sim_C","turb_sim_E"
+]
+for name in sim_names:
+    sims = SimulationArray(simulations=[] ,name=name)
+
+    sims.generate_dataset(name=name,what_to_compute={"cospectra":"pca", "vdens":compute_mass_weighted_density}, number=100, axes=[0,1])
+    ds = getDataset("batch_"+name)
+    ds.downsample(channel_names=["cospectra"], target_sizes=7, methods="first", replace=True)
+    ds.transform(channel_names="cospectra", method="split")
+
+    #validation dataset
+    sims.generate_dataset(name=name+"_v",what_to_compute={"cospectra":"pca", "vdens":compute_mass_weighted_density}, number=100, axes=[2])
+    ds = getDataset("batch_"+name+"_v")
+    ds.downsample(channel_names=["cospectra"], target_sizes=7, methods="first", replace=True)
+    ds.transform(channel_names="cospectra", method="split")
+
+#training_datasets = [getDataset("batch_"+name) for name in sim_names]
+#validation_datasets = [getDataset("batch_"+name+"_v") for name in sim_names]
+#training_ds = training_datasets[0].merge(training_datasets[1:], delete=True, name="idefix_training")
+#validation_ds = validation_datasets[0].merge(validation_datasets[1:], delete=True, name="idefix_validation")
+training_ds = getDataset("batch_turb_sim_A")
+validation_ds = getDataset("batch_turb_sim_A_v")
+
+from POLARIScore.networks.Trainer import Trainer
+from POLARIScore.networks.architectures import nn_MultiNet
+from torch import nn
+trainer = Trainer(network=nn_MultiNet, training_set=training_ds, validation_set=validation_ds, model_name="MultiNet_ID_13CO_PCA7")
+trainer.validation_loss_method = nn.MSELoss
+trainer.learning_rate = 1e-4
+trainer.network_settings["channel_dimensions"]=[2,2,2,2,2,2,2,2]
+trainer.input_names = ["cdens","cospectra0","cospectra1","cospectra2","cospectra3","cospectra4","cospectra5","cospectra6","cospectra7"]
+
+#sim = Simulation_DC("turb_sim_B")
 #sim.plot()
 #from POLARIScore.objects.SpectrumMap import SpectrumMap, getSimulationSpectra
 #plt.show()
 
 #maps = getSimulationSpectra(simulation=sim)
-#maps[0].plot(simulation=sim)
+#maps[0].plot()
+#map = maps[0]
+#pca = map.pca(plot=True)
+
+
 
 #v_map = sim.compute_velocity_decomposition()
 #v_map.plot()
@@ -34,8 +68,8 @@ from POLARIScore.objects.SimulationArray import SimulationArray
 
 
 #sim = Simulation_DC("orionHD_all_512")
-sim = Simulation_DC("idefix_sim_A")
-sim.plot_power_spectrum(what_to_plot="rms_velocity", bins=30, energy=True )
+#sim = Simulation_DC("turb_sim_A")
+#sim.plot_power_spectrum(what_to_plot="rms_velocity", bins=30, energy=True )
 
 """
 from POLARIScore.utils.physics_utils import dcmf_func, density_gaussian
