@@ -68,7 +68,7 @@ def plot_batch_correlation(batch, ax=None, bins_number:int=256, show_yx:bool=Tru
     plt.colorbar(hist, ax=ax, label="counts")
     ax = plt.gca()
 
-    plot_lines(column_density, volume_density, ax, lines=lines)
+    plot_lines(ax, column_density, volume_density, lines=lines)
 
     ax.grid(True)
     ax.set_axisbelow(True)

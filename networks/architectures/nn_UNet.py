@@ -275,6 +275,7 @@ class UNet(BaseModule):
                 xj = self.decoders[j][i](xj)
                 self._plot_tensor(xj, subfolder=f"decoder_out_{str(j)}_{str(i)}")
             decoded_x.append(xj)
+            
         
         # Output
         if self.out_channels > 1:

@@ -226,7 +226,7 @@ class Trainer():
         l_ep = self.last_epoch
         batch_size = len(self.training_set.batch)
         validation_batch_size = len(self.validation_set.batch)
-        start_time = time.process_time()
+        start_time = time.time()
 
         minimimum_validation_loss = self.cache_threshold
 
@@ -240,7 +240,7 @@ class Trainer():
             if training_mode == "accumulation":
                 self.optimizer.zero_grad()
             minbatch_nbr = int(np.floor(batch_size/batch_number))
-            epoch_time = time.process_time()
+            epoch_time = time.time()
             for b in range(minbatch_nbr if minbatch_nbr > 1 else 1):
                 printProgressBar(b, minbatch_nbr, length=10, prefix=f"{b}/{minbatch_nbr}")
                 if training_mode == "normal":
@@ -257,6 +257,7 @@ class Trainer():
                     t_input, t_target = _random_transform(t_input, t_target)
                 output = self._train_model(self.model,t_input,t_target)
                 target = t_target
+
                 #In some cases the train function can also returns the target (like in DDPMs where it returns the noise added).
                 if self._has_target_in_train_output:
                     output, target = output
@@ -310,7 +311,7 @@ class Trainer():
                                                                                 target_names=self.target_names, input_names=self.input_names, norms=self.norms, segmentation=self.segmentation)
                         if not(type(v_input_tensor) is list):
                             v_input_tensor = [v_input_tensor]
-                        validation_output = self._infer_model(eval_model, v_input_tensor)                        
+                        validation_output = self._infer_model(eval_model, v_input_tensor)
                         v_loss = 0
                         try:
                             v_loss = self.validation_loss_method(validation_output,v_target_tensor).item()
@@ -338,7 +339,7 @@ class Trainer():
                 self.last_epoch = total_epoch
                 self.save(is_cache=True)
 
-            actual_time = time.process_time()
+            actual_time = time.time()
             epoch_time = actual_time - epoch_time
             time_left = (actual_time-start_time) / (epoch+1) * (epoch_number-(epoch+1))
             LOGGER.print(f'Epoch {total_epoch}/{l_ep + epoch_number} | Elapsed: {_format_time(actual_time-start_time)} | Time Left: {_format_time(time_left)} | Training Loss: {epoch_loss}, Validation loss: {val_total_loss if val_total_loss else "Not computed"}', type="training", level=1, color="34m")
@@ -457,9 +458,9 @@ class Trainer():
         if not(self.prediction_batch is None or force_compute):
             return self.prediction_batch
         
-        start_time = time.process_time()
+        start_time = time.time()
         self.prediction_batch = self.predict(self.validation_set)
-        end_time = time.process_time()
+        end_time = time.time()
 
         self.inference_time = (end_time - start_time)/len(self.prediction_batch[0])
 
@@ -1116,103 +1117,3 @@ def heatmap(root_name, validation_batch, X, Y, ax=None):
     ax.set_ylabel("Layers")
 
     return fig, ax
-
-if __name__ == "__main__":
-
-    def binned_loss(output, target, bin_edges=[0,2,4,6,8,10]):
-        loss = 0.0
-        for i in range(len(bin_edges) - 1):
-            mask = (target >= bin_edges[i]) & (target < bin_edges[i + 1])
-            
-            if mask.any():
-                bin_loss = torch.mean((output[mask] - target[mask]) ** 2)
-                loss += bin_loss
-        return loss
-    
-    class WeightedMSELoss(nn.Module):
-        def __init__(self, bin_edges, bin_weights):
-            super(WeightedMSELoss, self).__init__()
-            self.bin_edges = torch.tensor(bin_edges, dtype=torch.float32, device="cuda")
-            self.bin_weights = torch.tensor(bin_weights, dtype=torch.float32, device="cuda")
-
-        def forward(self, y_pred, y_true):
-            flag = type(y_pred) is list
-            if flag:
-                column_y_pred = y_pred[1]
-                y_pred  = y_pred[0]
-                column_y_true = y_true[1]
-                y_true  = y_true[0]
-
-            y_true_flat = y_true.reshape(-1)
-            y_pred_flat = y_pred.reshape(-1)
-            
-            bin_indices = torch.bucketize(y_true_flat, self.bin_edges[:-1], right=False)
-            bin_indices = torch.clamp(bin_indices, 0, len(self.bin_weights) - 1)
-            weights = self.bin_weights[bin_indices]
-
-            loss = torch.mean(weights * (y_true_flat - y_pred_flat) ** 2)
-            if flag:
-                loss += 0.1* torch.mean((column_y_true - column_y_pred)**2)
-            return loss
-    
-    def MSELoss2outputs(output, target):
-        o1 = output[0]
-        o2 = output[1]
-        t1 = target[0]
-        t2 = target[1]
-        return torch.mean((o1 - t1) ** 2)+0.1*torch.mean((o2 - t2) ** 2)
-    
-    #trainer.model.plot_features(ds2.get(3)[0], os.path.join(EXPORT_FOLDER,"model_features"))
-
-    #ds = ds.downsample(channel_names=["cospectra"], target_depths=[128], methods=["mean"])
-    ds = getDataset("batch_highres_2")
-    ds1, ds2 = ds.split(0.7)
-
-    #trainer = Trainer(UNet, ds1, ds2, model_name="UNet")
-    trainer = load_trainer("UNet")
-    #trainer.norms = {
-    #    "cdens": DATA_NORMALIZATION_CDENS,
-    #    "vdens": DATA_NORMALIZATION_VDENS,
-    #}
-    trainer.validation_loss_method = nn.MSELoss()
-    trainer.learning_rate = 1e-4
-    trainer.training_set = ds1
-    trainer.validation_set = ds2
-    #trainer.network_settings["base_filters"] = 64
-    #trainer.network_settings["num_layers"] = 5
-    #trainer.network_settings["convBlock"] = ResConvBlock
-    trainer.training_random_transform = True
-    trainer.optimizer_name = "Adam"
-    trainer.target_names = ["vdens"]
-    trainer.input_names = ["cdens"]
-    #trainer.init()
-    trainer.train(10000,batch_number=16,compute_validation=10,early_stopping=False, training_mode="normal")
-    trainer.save()
-    trainer.plot(save=True)
-    trainer.plot_validation(save=True)
-    trainer.get_validation_error()
-    #plot_models_accuracy([load_trainer("UneK"),load_trainer("UNet")], sigmas=(0,1,20), bins=[0,2,4,8], use_linestyles=True) 
-
-
-    """
-    #How to create and use baseline on a model
-    #trainer.plot()
-    trainer = load_trainer("General_UNet")
-    trainer.create_baseline()
-
-    batch = trainer.get_prediction_batch()
-    reconstructed_batch = []
-    for b in batch:
-        pred = b[1]
-        pred = trainer.apply_baseline(pred)
-        reconstructed_batch.append((b[0], pred))
-    trainer.prediction_batch = reconstructed_batch
-    #trainer.plot()
-    #trainer.plot_validation()
-    trainer.plot_validation()
-    trainer.plot_validation_spatial_error()
-    fig, ax=  trainer.plot_residuals()
-    #fig.savefig(os.path.join(FIGURE_FOLDER,"unek_residuals_fitted.jpg"))
-    """
-    
-    plt.show()

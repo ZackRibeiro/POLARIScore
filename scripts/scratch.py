@@ -16,37 +16,56 @@ from POLARIScore.objects.SimulationArray import SimulationArray
 from POLARIScore.objects.Dataset import getDataset
 
 sim_names=[
-    "turb_sim_A",#"turb_sim_B","turb_sim_C","turb_sim_E"
+    "turb_sim_A","turb_sim_B","turb_sim_C","turb_sim_E"
 ]
-for name in sim_names:
-    sims = SimulationArray(simulations=[] ,name=name)
+spectra_dim = 15
+enable_dataset_gen = False
 
-    sims.generate_dataset(name=name,what_to_compute={"cospectra":"pca", "vdens":compute_mass_weighted_density}, number=100, axes=[0,1])
-    ds = getDataset("batch_"+name)
-    ds.downsample(channel_names=["cospectra"], target_sizes=7, methods="first", replace=True)
-    ds.transform(channel_names="cospectra", method="split")
+if enable_dataset_gen:
+    for name in sim_names:
+        sims = SimulationArray(simulations=[] ,name=name)
 
-    #validation dataset
-    sims.generate_dataset(name=name+"_v",what_to_compute={"cospectra":"pca", "vdens":compute_mass_weighted_density}, number=100, axes=[2])
-    ds = getDataset("batch_"+name+"_v")
-    ds.downsample(channel_names=["cospectra"], target_sizes=7, methods="first", replace=True)
-    ds.transform(channel_names="cospectra", method="split")
+        sims.generate_dataset(name=name,what_to_compute={"cospectra":"pca", "vdens":compute_mass_weighted_density}, number=100, axes=[0,1])
+        ds = getDataset("batch_"+name)
+        ds.downsample(channel_names=["cospectra"], target_sizes=spectra_dim, methods="first", replace=True)
+        ds.transform(channel_names="cospectra", method="split")
 
-#training_datasets = [getDataset("batch_"+name) for name in sim_names]
-#validation_datasets = [getDataset("batch_"+name+"_v") for name in sim_names]
-#training_ds = training_datasets[0].merge(training_datasets[1:], delete=True, name="idefix_training")
-#validation_ds = validation_datasets[0].merge(validation_datasets[1:], delete=True, name="idefix_validation")
-training_ds = getDataset("batch_turb_sim_A")
-validation_ds = getDataset("batch_turb_sim_A_v")
+        #validation dataset
+        sims.generate_dataset(name=name+"_v",what_to_compute={"cospectra":"pca", "vdens":compute_mass_weighted_density}, number=100, axes=[2])
+        ds = getDataset("batch_"+name+"_v")
+        ds.downsample(channel_names=["cospectra"], target_sizes=spectra_dim, methods="first", replace=True)
+        ds.transform(channel_names="cospectra", method="split")
+        
+    training_datasets = [getDataset("batch_"+name) for name in sim_names]
+    validation_datasets = [getDataset("batch_"+name+"_v") for name in sim_names]
+    training_datasets[0].merge(training_datasets[1:], delete=False, name="idefix_training_"+str(spectra_dim), save=True)
+    validation_datasets[0].merge(validation_datasets[1:], delete=False, name="idefix_validation_"+str(spectra_dim), save=True)
+training_ds = getDataset("batch_idefix_training_"+str(spectra_dim))
+validation_ds = getDataset("batch_idefix_validation_"+str(spectra_dim))
 
-from POLARIScore.networks.Trainer import Trainer
-from POLARIScore.networks.architectures import nn_MultiNet
+
+from POLARIScore.networks.Trainer import Trainer, load_trainer
+from POLARIScore.networks.architectures.nn_MultiNet import MultiNet
+from POLARIScore.networks.architectures.nn_UNet import UNet
 from torch import nn
-trainer = Trainer(network=nn_MultiNet, training_set=training_ds, validation_set=validation_ds, model_name="MultiNet_ID_13CO_PCA7")
-trainer.validation_loss_method = nn.MSELoss
-trainer.learning_rate = 1e-4
-trainer.network_settings["channel_dimensions"]=[2,2,2,2,2,2,2,2]
-trainer.input_names = ["cdens","cospectra0","cospectra1","cospectra2","cospectra3","cospectra4","cospectra5","cospectra6","cospectra7"]
+trainer = Trainer(MultiNet, training_set=training_ds, validation_set=validation_ds, model_name="MultiNet_ID_13CO_PCA"+str(spectra_dim))
+#trainer = load_trainer("cached_model")
+trainer.validation_set = validation_ds
+trainer.training_set = training_ds
+trainer.validation_loss_method = nn.MSELoss()
+trainer.learning_rate = 1e-3
+trainer.network_settings["base_filters"] = 32
+trainer.network_settings["num_layers"] = 4
+trainer.network_settings["channel_dimensions"]=[2 for _ in range(spectra_dim+1)]
+trainer.input_names = ["cdens",*["cospectra"+str(i) for i in range(spectra_dim)]]
+trainer.target_names = ["vdens"]
+trainer.network_settings["channel_modes"] = [None for _ in range(spectra_dim+1)]
+trainer.init()
+trainer.train(500, batch_number=4, compute_validation=10,early_stopping=True)
+trainer.save()
+trainer.plot(save=False)
+trainer.plot_validation(save=False)
+trainer.model.plot_channel_weights(channel_names=trainer.input_names, cmap='viridis')
 
 #sim = Simulation_DC("turb_sim_B")
 #sim.plot()

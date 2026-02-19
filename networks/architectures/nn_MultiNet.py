@@ -12,7 +12,9 @@ from POLARIScore.networks.architectures.nn_BaseModule import BaseModule
 import numpy as np
 #from kan import KAN
 from POLARIScore.networks.utils.fastkanconv import FastKANConvLayer
-from POLARIScore.networks.architectures.nn_KNet import JustKAN
+from typing import Optional, List
+
+import matplotlib.pyplot as plt
 
 class MultiNet(BaseModule):
     def __init__(self, convBlock=DoubleConvBlock, channel_dimensions=[2], channel_modes=[None] , num_layers=3, base_filters=32, attention = True, is3D=None):
@@ -55,17 +57,17 @@ class MultiNet(BaseModule):
         self.channels_encoder = nn.ModuleList()
         self.channels_merger = nn.ModuleList()
         #self.channels_merger.append(JustKAN(in_channels=self.num_channels, out_channels=1))
-        self.channels_merger.append(FastKANConvLayer(in_channels=self.num_channels, out_channels=1, kernel_size=1))
-        for j,is3D in enumerate(channel_is3D): 
+        self.channels_merger.append(nn.Conv2d(in_channels=self.num_channels, out_channels=1, kernel_size=1))
+        for j,is3D in enumerate(channel_is3D): #Loop over channels
             encoders = nn.ModuleList()
             in_channels = self.channel_inchannels[j]
-            for i in range(num_layers):
+            for i in range(num_layers): #Loop over layers
                 out_channels = filter_sizes[i]
                 encoders.append(convBlock(in_channels, out_channels, is3D=is3D))
                 
-                if j == 0:
+                if j == 0: #Need just one list of mergers
                     #k = JustKAN(in_channels=(self.num_channels+1)*out_channels, out_channels=out_channels)
-                    k = FastKANConvLayer(in_channels=(self.num_channels+1)*out_channels, out_channels=out_channels, kernel_size=1)
+                    k = nn.Conv2d(in_channels=(self.num_channels+1)*out_channels, out_channels=out_channels, kernel_size=1)
                     self.channels_merger.append(k)
                 
                 in_channels = out_channels
@@ -195,6 +197,68 @@ class MultiNet(BaseModule):
         # Output
         f_x = self.final_conv(x)
         return f_x if self.is3D else f_x
+    
+    def plot_channel_weights(self, ax=None, channel_names:Optional[List[str]]=None, cmap:Optional[str]=None):
+        if ax is None:
+            fig, ax = plt.subplots()
+        else:
+            fig = ax.figure
+
+        num_layers = len(self.channels_merger)
+        num_channels = self.num_channels
+
+        all_importances = []
+
+        for layer_idx, merger in enumerate(self.channels_merger):
+
+            conv = None
+            for m in merger.modules():
+                if isinstance(m, (nn.Conv2d, nn.Conv3d)):
+                    conv = m
+                    break
+
+            if conv is None:
+                raise RuntimeError("No convolution found in merger block")
+
+            weight = conv.weight.data  # shape: [out_channels, in_channels, 1, 1]
+            importance = weight.abs().mean(dim=0)
+            importance = importance.view(-1)
+
+            if layer_idx == 0:
+                importance = importance[:num_channels]
+            else:
+                chunk_size = importance.shape[0] // (num_channels + 1)
+                importance = importance[chunk_size:].view(num_channels, chunk_size).mean(dim=1)
+
+            all_importances.append(importance.cpu().numpy())
+
+        all_importances = np.array(all_importances)
+
+        x = np.arange(num_layers)
+        width = 0.8 / num_channels
+
+        if cmap is not None:
+            colormap = plt.get_cmap(cmap)
+            colors = [colormap(i / max(num_channels - 1, 1)) for i in range(num_channels)]
+        else:
+            colors = [None] * num_channels
+
+        for c in range(num_channels):
+            ax.bar(
+                x + c * width,
+                all_importances[:, c],
+                width,
+                label=f"Channel {c}" if channel_names is None else channel_names[c],
+                color=colors[c]
+            )
+
+        ax.set_xlabel("Layer / Depth")
+        ax.set_ylabel("Mean |Weight|")
+        ax.set_xticks(x + width * (num_channels - 1) / 2)
+        ax.set_xticklabels([f"L{i}" for i in range(num_layers)])
+        ax.legend()
+
+        return ax
     
 if __name__ == "__main__":
     model = MultiNet(channel_dimensions=[2,2], channel_modes=[None,("moments",2)])

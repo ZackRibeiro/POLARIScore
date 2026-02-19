@@ -307,7 +307,7 @@ class Dataset():
             ds = _merge(ds, d)
 
         if save:
-            self.save(name=name, force=True)
+            ds.save(name=name, force=True)
 
         if delete:
             for o_ds in datasets:
