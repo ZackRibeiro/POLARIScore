@@ -17,10 +17,13 @@ from typing import Optional, List
 import matplotlib.pyplot as plt
 
 class MultiNet(BaseModule):
-    def __init__(self, convBlock=DoubleConvBlock, channel_dimensions=[2], channel_modes=[None] , num_layers=3, base_filters=32, attention = True, is3D=None):
+    def __init__(self, convBlock=DoubleConvBlock, channel_dimensions=[2], channel_modes=[None] , num_layers=3, base_filters=32, branch_filters=0,
+                  attention = True, is3D=None):
         super(MultiNet, self).__init__()
 
         self.channel_dimensions = channel_dimensions if type(channel_dimensions) is list else [channel_dimensions]
+        branch_filters = base_filters if branch_filters <= 0 else branch_filters
+        self.branch_filters = branch_filters
         channel_is3D = []
         self.channel_modes = channel_modes.copy()
         self.channel_inchannels = [1 for _ in self.channel_dimensions]
@@ -49,6 +52,7 @@ class MultiNet(BaseModule):
         self.attention = attention
 
         filter_sizes = [int(base_filters * 2**i) for i in range(num_layers+1)]
+        branch_filter_sizes = [int(branch_filters *2**i) for i in range(num_layers+1)]
 
         self.pool2D = nn.MaxPool2d(2, 2)
         self.pool3D = nn.MaxPool3d(2, 2)
@@ -62,12 +66,18 @@ class MultiNet(BaseModule):
             encoders = nn.ModuleList()
             in_channels = self.channel_inchannels[j]
             for i in range(num_layers): #Loop over layers
-                out_channels = filter_sizes[i]
+                out_channels = branch_filter_sizes[i]
                 encoders.append(convBlock(in_channels, out_channels, is3D=is3D))
                 
                 if j == 0: #Need just one list of mergers
                     #k = JustKAN(in_channels=(self.num_channels+1)*out_channels, out_channels=out_channels)
-                    k = nn.Conv2d(in_channels=(self.num_channels+1)*out_channels, out_channels=out_channels, kernel_size=1)
+                    #k = nn.Conv2d(in_channels=(self.num_channels)*out_channels+filter_sizes[i], out_channels=filter_sizes[i], kernel_size=1)
+                    #k = nn.Sequential(
+                    #    nn.Conv2d((self.num_channels)*out_channels+filter_sizes[i], filter_sizes[i], 1),
+                    #    nn.ReLU(inplace=True),
+                    #    nn.Conv2d(filter_sizes[i], filter_sizes[i], 1),
+                    #)
+                    k = DoubleConvBlock((self.num_channels)*out_channels+filter_sizes[i], filter_sizes[i])
                     self.channels_merger.append(k)
                 
                 in_channels = out_channels
@@ -216,19 +226,22 @@ class MultiNet(BaseModule):
                 if isinstance(m, (nn.Conv2d, nn.Conv3d)):
                     conv = m
                     break
-
             if conv is None:
                 raise RuntimeError("No convolution found in merger block")
 
-            weight = conv.weight.data  # shape: [out_channels, in_channels, 1, 1]
-            importance = weight.abs().mean(dim=0)
-            importance = importance.view(-1)
+            weight = conv.weight.data
+            importance = weight.abs().mean(dim=(0, 2, 3)) 
+            #importance = weight.abs().mean(dim=0).view(-1)
 
             if layer_idx == 0:
                 importance = importance[:num_channels]
             else:
-                chunk_size = importance.shape[0] // (num_channels + 1)
-                importance = importance[chunk_size:].view(num_channels, chunk_size).mean(dim=1)
+                base_out = int(self.encoders[layer_idx-1].out_channels)
+                branch_out = int(self.channels_encoder[0][layer_idx-1].out_channels)
+
+                start = base_out
+                branch_weights = importance[start:]
+                importance = branch_weights.view(num_channels, branch_out).mean(dim=1)
 
             all_importances.append(importance.cpu().numpy())
 

@@ -11,6 +11,8 @@ class ConvBlock(nn.Module):
     def __init__(self, in_channels:int=1, out_channels:int=1, is3D:bool=False, init_method=init.kaiming_uniform_, dropout=0.05):
         super(ConvBlock, self).__init__()
         self.init_method = init_method
+        self.in_channels=in_channels
+        self.out_channels=out_channels
         c = nn.Conv2d
         b = nn.BatchNorm2d
         d = nn.Dropout2d
@@ -36,6 +38,8 @@ class DoubleConvBlock(nn.Module):
     def __init__(self, in_channels:int=1, out_channels:int=1, is3D:bool=False, init_method=init.kaiming_uniform_, dropout=0.05):
         super(DoubleConvBlock, self).__init__()
         self.init_method = init_method
+        self.in_channels=in_channels
+        self.out_channels=out_channels
         c = nn.Conv2d
         b = nn.BatchNorm2d
         d = nn.Dropout2d
@@ -65,6 +69,8 @@ class ResConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels, is3D=False, init_method=init.kaiming_uniform_):
         super(ResConvBlock, self).__init__()
         self.init_method = init_method
+        self.in_channels=in_channels
+        self.out_channels=out_channels
         c = nn.Conv2d
         b = nn.BatchNorm2d
         if is3D:
