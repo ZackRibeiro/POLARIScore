@@ -43,7 +43,7 @@ if enable_dataset_gen:
     validation_datasets[0].merge(validation_datasets[1:], delete=False, name="idefix_validation_"+str(spectra_dim), save=True)
 training_ds = getDataset("batch_idefix_training_"+str(spectra_dim))
 validation_ds = getDataset("batch_idefix_validation_"+str(spectra_dim))
-"""
+
 
 #sim = Simulation_DC("orionMHD_lowB_0.39_512", global_size=66.0948)
 #sim.generate_dataset(name="orion_training",what_to_compute={"cospectra":"pca", "vdens":compute_mass_weighted_density}, number=100, axes=[0,1])
@@ -79,14 +79,12 @@ trainer.save()
 trainer.plot(save=False)
 trainer.plot_validation(save=False)
 trainer.model.plot_channel_weights(channel_names=trainer.input_names, cmap='viridis')
+"""
 
-#sim = Simulation_DC("turb_sim_B")
-#sim.plot()
-#from POLARIScore.objects.SpectrumMap import SpectrumMap, getSimulationSpectra
-#plt.show()
-
-#maps = getSimulationSpectra(simulation=sim)
-#maps[0].plot()
+sim = Simulation_DC("turb_sim_C")
+from POLARIScore.objects.SpectrumMap import SpectrumMap, getSimulationSpectra
+maps = getSimulationSpectra(simulation=sim)
+maps[0].plot()
 #map = maps[0]
 #pca = map.pca(plot=True)
 
@@ -94,9 +92,6 @@ trainer.model.plot_channel_weights(channel_names=trainer.input_names, cmap='viri
 
 #v_map = sim.compute_velocity_decomposition()
 #v_map.plot()
-
-
-#plt.show()
 
 
 #sim = Simulation_DC("orionHD_all_512")

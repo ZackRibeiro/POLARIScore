@@ -593,3 +593,15 @@ def longest_common_substring(strings):
             right = mid - 1
 
     return result
+
+def find_roots(X, Y, interp="linear"):
+    idx = np.where(np.diff(np.signbit(Y)))[0]
+    if interp is None:
+        return idx
+    roots = []
+    for i in idx:
+        x0, x1 = X[i], X[i+1]
+        y0, y1 = Y[i], Y[i+1]
+        xr = x0 - y0 * (x1 - x0) / (y1 - y0)
+        roots.append(xr)
+    return np.array(roots)

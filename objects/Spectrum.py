@@ -6,10 +6,12 @@ if __name__ == "__main__":
 from POLARIScore.config import CACHES_FOLDER, LOGGER
 import numpy as np
 from POLARIScore.utils.physics_utils import *
+from POLARIScore.utils.utils import *
 import uuid
 import matplotlib.pyplot as plt
 from scipy.optimize import minimize
-from typing import Tuple, List, Union
+from typing import Tuple, List, Union, Literal, Optional
+from POLARIScore.objects.tools.Graph import Graph, Node
 
 class Spectrum():
     """
@@ -43,9 +45,14 @@ class Spectrum():
         else:
             fig = ax.figure
         channels = np.arange(len(self.spectrum)) if channels is None else channels
+
         ax.plot(channels,self.spectrum)
         ax.set_xlabel("Velocity [m/s]")
         ax.set_ylabel("Intensity [K]")
+
+        dendrogram = self.dendrogram(X=channels)
+        dendrogram.plot(ax=ax)
+
         ax.grid()
         return fig, ax
     
@@ -65,6 +72,68 @@ class Spectrum():
         if self.derivatives[1] is None or force_compute:
             self.derivatives[1] = np.gradient(self.derivatives[0])
         return self.derivatives
+    
+    def get_borders(self, X:Optional[np.ndarray]=None, threshold:float=0.01)->Tuple[float, float]:
+        Y = self.spectrum
+        X = np.arange(len(Y), dtype=float) if X is None else X
+        thr = threshold * np.max(Y)
+
+        valid = np.where(Y > thr)[0]
+        if len(valid) == 0:
+            return X[0], X[-1]
+
+        return valid[0], valid[-1]
+        
+    def dendrogram(self, X:Optional[np.ndarray]=None)->Graph:
+        Y = self.spectrum
+        X = np.arange(len(Y), dtype=float) if X is None else X
+
+        def _dendro(x,y,graph:Optional[Graph]=None,connect_node:Optional[Node]=None)->Graph:
+            x_mean = np.sum(x*y)/np.sum(y)
+            
+            if graph is None:
+                graph = Graph()
+
+            if connect_node is not None:
+                root_node = graph.add_node([x_mean, connect_node.position[1]])
+                graph.add_edge(connect_node, root_node)
+            else:
+                root_node = graph.add_node([x_mean, np.min(y)])
+            
+            dy = np.empty_like(y, dtype=float)
+            dy[0] = 0.0 
+            dy[1:] = (y[1:] - y[:-1])
+            ddy = np.gradient(dy)
+            roots = find_roots(x, dy, interp=None)
+
+            min_y = np.max(y)
+            min_y_idx = np.argmax(y)
+            is_a_minima = False
+            for r in roots:
+                if r == 0 or r == len(x)-1:
+                    continue
+                if not(y[r+1] > y[r] and y[r-1] > y[r]):
+                    continue
+                is_a_minima=True
+                if y[r] < min_y:
+                    min_y = y[r]
+                    min_y_idx = r
+
+            if is_a_minima:
+                min_node = graph.add_node([x[min_y_idx],min_y])
+                graph.add_edge(root_node,min_node)
+                _dendro(x[0:min_y_idx],y[0:min_y_idx],graph=graph,connect_node=min_node)
+                _dendro(x[min_y_idx:],y[min_y_idx:],graph=graph,connect_node=min_node)
+            else:
+                leaf_node = graph.add_node([x[min_y_idx],y[min_y_idx]])
+                graph.add_edge(root_node, leaf_node)
+
+            return graph
+
+        i1, i2 = self.get_borders(X=X)
+        dendro = _dendro(X[i1:i2+1], Y[i1:i2+1])
+
+        return dendro
 
     def fit(self, max_components=10, ax=None, score_threshold=50, X=None):
         Y = self.spectrum

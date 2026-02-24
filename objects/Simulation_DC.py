@@ -79,7 +79,7 @@ class Simulation_DC():
         elif len(glob.glob(os.path.join(self.folder,"*.fits"))) > 0:
             init_ramses(self, **kwargs)
         else:
-            LOGGER.warn("Can't initialize simulation {self.name}, verify if the folder exists and if there is data files in it.")
+            LOGGER.warn(f"Can't initialize simulation {self.name}, verify if the folder exists and if there is data files in it.")
         
     def project_data(self, key:Union[str,np.ndarray], i,j ,axis):
         """Return 1D Vector with data on an axis.
