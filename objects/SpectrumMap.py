@@ -136,7 +136,10 @@ class SpectrumMap():
         if load:
             self.load()
 
-    def format_map(self, map=None):
+    def format_map(self, map=None)->List[List[Spectrum]]:
+        """
+        Returns a 2D list with a spectrum for each pixel.
+        """
         map = self.map if map is None else map
         formatted_intensity_map = []
         for x in range(len(map)):
@@ -148,6 +151,7 @@ class SpectrumMap():
                     return map
                 s_name = f'x{x}_y{y}'
                 S = Spectrum(name=s_name, spectrum=spectrum)
+                S.host_map = self
                 formatted_intensity_map[x].append(S)
         return formatted_intensity_map
 
@@ -496,7 +500,7 @@ class SpectrumMap():
 
         return fig, ax
 
-    def plot(self, fit=False, simulation=None, norm=LogNorm):
+    def plot(self, fit:Optional[str]=None, simulation=None, norm=LogNorm):
         fig, ax = plt.subplots()
         intensity_map = self.map
         image = ax.imshow(self.getIntegratedIntensity(),extent=None if simulation is None else [simulation.axis[0][0], simulation.axis[0][1], simulation.axis[1][0],simulation.axis[1][1]],
@@ -523,7 +527,7 @@ class SpectrumMap():
             return int(np.floor(x)),int(np.floor(y))
         fig2, ax2 = plt.subplots()
         spectrum_used = Spectrum(intensity_map[0,0])
-        spectrum_used.plot(ax=ax2, channels=spectrum_used.getX(self.output_settings))
+        spectrum_used.plot(ax=ax2, channels=spectrum_used.get_X(self.output_settings))
         x0, y0 = _convert_to_phys(0,0)
         marker, = ax.plot([x0], [y0], marker='x', color='red', markersize=6, mew=2)
 
@@ -533,9 +537,9 @@ class SpectrumMap():
                 ax2.cla()
                 x0, y0 = _convert_to_phys(x_click,y_click, invert=True)
                 spectrum_used = Spectrum(intensity_map[x0,y0])
-                spectrum_used.plot(ax=ax2, channels=spectrum_used.getX(self.output_settings))
-                if fit:
-                    spectrum_used.fit(ax=ax2, X=spectrum_used.getX(self.output_settings))
+                spectrum_used.plot(ax=ax2, channels=spectrum_used.get_X(self.output_settings))
+                if fit is not None:
+                    spectrum_used.fit(ax=ax2, method=fit)
                 ax2.set_title(f"Spectrum at ({round(x_click,2)}pc, {round(y_click,2)}pc)")
                 marker.set_data([x_click], [y_click])
                 fig.canvas.draw_idle()

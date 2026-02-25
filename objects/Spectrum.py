@@ -12,6 +12,18 @@ import matplotlib.pyplot as plt
 from scipy.optimize import minimize
 from typing import Tuple, List, Union, Literal, Optional
 from POLARIScore.objects.tools.Graph import Graph, Node
+from POLARIScore.objects.tools.Dendrogram import Dendrogram
+
+def _gaussian_sum(x, params, N):
+    y = np.zeros_like(x)
+    for i in range(N):
+        A, mu, sigma = params[3*i], params[3*i+1], params[3*i+2]
+        y += np.abs(A) * np.exp(-((x - mu)**2) / (2 * sigma**2))
+    return y
+
+def _chi_squared(params, x, y, N):
+    y_model = _gaussian_sum(x, params, N)
+    return np.sum((y - y_model)**2/(y_model+1e-8))
 
 class Spectrum():
     """
@@ -21,9 +33,15 @@ class Spectrum():
         self.name = "spectrum_"+str(uuid.uuid4()) if name is None else name
         if not("spectrum" in self.name):
             self.namename = "spectrum_"+self.name
+        self.X = None
         self.spectrum:np.ndarray = spectrum
         """np.ndarray : 1D tensor"""
         self.derivatives:Tuple[Union[np.ndarray,None],Union[np.ndarray,None]] = [None, None]
+
+        self.dendro:Optional[Dendrogram] = None
+        self.fit_settings:Optional[Tuple[np.ndarray,Dict]]=None
+
+        self.host_map = None
 
     def save(self,folder:str=None, replace:bool=False, log:bool=True):
         folder = CACHES_FOLDER if folder is None else folder
@@ -50,13 +68,15 @@ class Spectrum():
         ax.set_xlabel("Velocity [m/s]")
         ax.set_ylabel("Intensity [K]")
 
-        dendrogram = self.dendrogram(X=channels)
+        dendrogram = self.dendrogram()
         dendrogram.plot(ax=ax)
 
         ax.grid()
         return fig, ax
     
-    def getX(self, output_settings):
+    def get_X(self, output_settings:Optional[Dict]=None, force_compute:bool=False):
+        if self.X is not None and not(force_compute):
+            return self.X
         if output_settings is None:
             LOGGER.warn("Can't get x axis of spectrum because there is no output settings")
             return
@@ -64,7 +84,8 @@ class Spectrum():
             if not(key in output_settings):
                 LOGGER.warn(f"Can't get x axis of spectrum because there is no key {key} in output settings")
                 return
-        return output_settings["v_function"](output_settings["lsr_velocity"],output_settings["velocity_channels"],output_settings["velocity_resolution"])
+        self.X = output_settings["v_function"](output_settings["lsr_velocity"],output_settings["velocity_channels"],output_settings["velocity_resolution"])
+        return self.X
 
     def get_derivatives(self, force_compute=False):
         if self.derivatives[0] is None or force_compute:
@@ -84,21 +105,26 @@ class Spectrum():
 
         return valid[0], valid[-1]
         
-    def dendrogram(self, X:Optional[np.ndarray]=None)->Graph:
-        Y = self.spectrum
-        X = np.arange(len(Y), dtype=float) if X is None else X
+    def dendrogram(self, force_compute:bool=False)->Dendrogram:
 
-        def _dendro(x,y,graph:Optional[Graph]=None,connect_node:Optional[Node]=None)->Graph:
+        if self.dendro is not None and not(force_compute):
+            return self.dendro
+
+        Y = self.spectrum
+        X = self.get_X()
+
+        def _dendro(x,y,graph:Optional[Dendrogram]=None,connect_node:Optional[Node]=None)->Dendrogram:
             x_mean = np.sum(x*y)/np.sum(y)
             
             if graph is None:
-                graph = Graph()
+                graph = Dendrogram()
 
             if connect_node is not None:
                 root_node = graph.add_node([x_mean, connect_node.position[1]])
                 graph.add_edge(connect_node, root_node)
             else:
-                root_node = graph.add_node([x_mean, np.min(y)])
+                root_node = graph.add_node([x_mean, np.min(y)]) 
+            root_node.properties["x_borders"] = (np.min(x),np.max(x))
             
             dy = np.empty_like(y, dtype=float)
             dy[0] = 0.0 
@@ -122,39 +148,91 @@ class Spectrum():
             if is_a_minima:
                 min_node = graph.add_node([x[min_y_idx],min_y])
                 graph.add_edge(root_node,min_node)
+                root_node.properties["is_root"] = True
                 _dendro(x[0:min_y_idx],y[0:min_y_idx],graph=graph,connect_node=min_node)
                 _dendro(x[min_y_idx:],y[min_y_idx:],graph=graph,connect_node=min_node)
             else:
                 leaf_node = graph.add_node([x[min_y_idx],y[min_y_idx]])
+                leaf_node.properties["is_leaf"] = True
+                leaf_node.properties["x_borders"] = (np.min(x),np.max(x))
                 graph.add_edge(root_node, leaf_node)
 
             return graph
 
         i1, i2 = self.get_borders(X=X)
         dendro = _dendro(X[i1:i2+1], Y[i1:i2+1])
+        self.dendro = dendro
 
         return dendro
-
-    def fit(self, max_components=10, ax=None, score_threshold=50, X=None):
+    
+    def fit(self, method:Literal['minimal','dendrogram','clean','iterative'], ax=None, force_compute:bool=False, **args)->Tuple[np.ndarray, Dict]:
+        X = self.get_X()
         Y = self.spectrum
-        X = np.arange(len(Y), dtype=float) if X is None else X
 
-        def _gaussian_sum(x, params, N):
-            y = np.zeros_like(x)
-            for i in range(N):
-                A, mu, sigma = params[3*i], params[3*i+1], params[3*i+2]
-                y += np.abs(A) * np.exp(-((x - mu)**2) / (2 * sigma**2))
-            return y
+        if (self.fit_settings is not None 
+            and 'method' in self.fit_settings[1] and self.fit_settings[1]['method'] == method
+            and not(force_compute)):
+            return self.fit_settings
 
-        def _chi_squared(params, x, y, N):
-            y_model = _gaussian_sum(x, params, N)
-            return np.sum((y - y_model)**2/(y_model+1e-8))
+        if method=="minimal":
+            y_fit, props = self.fit_minimize(**args)
+        elif method=="dendrogram":
+            y_fit, props = self.fit_dendrogram(**args)
+        elif method=="iterative":
+            assert self.host_map is not None, LOGGER.error("The iterative fitting method need the spectrum to be part of a spectrum map.")
+            #this launch a global fit of all spectra in the spectrummap
+            
+            pass 
+        
+        props['method'] = method
+        self.fit_settings = (y_fit, props)
+
+        if ax is not None:
+            ax.plot(X, y_fit, 'r-')
+
+        return self.fit_settings
+    
+    def fit_dendrogram(self, only_leaves:bool=False):
+
+        X = self.get_X()
+        Y = self.spectrum
+
+        dendro = self.dendrogram()
+        nodes = dendro.get_leaves()[1]
+        if not(only_leaves):
+            roots = dendro.get_roots()[1]
+            nodes.extend(roots)
+        number_components = len(nodes)
+        gauss_means = [n.position[0] for n in nodes]
+        gauss_amps = [n.position[1] for n in nodes]
+        gauss_sigmas = []
+        for i,n in enumerate(nodes):
+            assert 'x_borders' in n.properties, LOGGER.error("A node don't have the x domain in her properties.")
+            x_lims:Tuple[float, float] = n.properties['x_borders']
+            i0 = np.abs(X - x_lims[0]).argmin()
+            i1 = np.abs(X - x_lims[1]).argmin()
+            x_segment = X[min(i0, i1):max(i0, i1)]
+            y_segment = Y[min(i0, i1):max(i0, i1)]
+            std = np.sqrt(np.sum(y_segment * (x_segment - gauss_means[i])**2) / np.sum(y_segment))
+            gauss_sigmas.append(std)
+
+        guess = []
+        for i in range(number_components):
+            guess.extend([gauss_amps[i], gauss_means[i], gauss_sigmas[i]])
+        
+        res = minimize(_chi_squared, guess, args=(X, Y, number_components), method='L-BFGS-B')
+        y_fit = _gaussian_sum(X, res.x, number_components)
+        props = {"params":res.x,"N":number_components}
+        return y_fit, props
+
+
+    def fit_minimize(self, max_components:int=10, score_threshold:float=50)->Tuple[np.ndarray, Dict]:
+        Y = self.spectrum
+        X = self.get_X()
                 
         best_result = None
         results = []
-
         best_score = np.inf
-
 
         p_res = []
         if np.sum(Y) > 1e-5:
@@ -181,13 +259,8 @@ class Spectrum():
             y_fit = X*0.
             N_best = 0.
             
-
-        if not(ax is None):
-            ax.plot(X, y_fit, 'r-', label=f'Fit (N={N_best})')
-            ax.legend()
-            ax.set_title(f'N = {N_best}')
-
-        return (N_best, p_res)
+        props = {"params":p_res,"N":N_best}
+        return y_fit, props
 
 def loadSpectrum(name, folder=None, absolute_path=None):
     folder = CACHES_FOLDER if folder is None else folder

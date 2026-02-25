@@ -117,7 +117,7 @@ class Graph():
             self.nodes.append(node)
         return node
 
-    def get_nodes(self, node:Union[Node, np.ndarray, list, Dict])->Tuple[List[int],List[Node]]:
+    def get_nodes(self, object:Union[Node, np.ndarray, list, Dict])->Tuple[List[int],List[Node]]:
         nodes = []
         indexes = []
         for i, n in enumerate(self.nodes):
