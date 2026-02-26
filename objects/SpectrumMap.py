@@ -136,17 +136,32 @@ class SpectrumMap():
         if load:
             self.load()
 
-    def get_spectra(self, map=None)->Union[List[List[Spectrum]],Spectrum]:
+    def get_spectra(self, map=None,pos:Optional[Tuple[int,int]]=None)->Union[List[List[Spectrum]],Spectrum]:
         """
         Returns a 2D list with a spectrum for each pixel.
         """
-        map = self.map if map is None else map
+        if pos is None:
+            map = self.map if map is None else map
+        else:
+            map = self.map[pos[0],pos[1]]
+
         formatted_intensity_map = []
+        def make_spectrum(array,x:Optional[int]=None,y:Optional[int]=None):
+            x = pos[0] if x is None else x
+            y = pos[1] if y is None else y
+            s_name = f'x{x}_y{y}'
+            S = Spectrum(name=s_name, spectrum=array)
+            S.host_map = self
+            S.host_position=(x,y)
+            S.get_X(self.output_settings)
+            return S
         for x in range(len(map)):
             formatted_intensity_map.append([])
+            if isinstance(map[x],float):
+                assert pos is not None
+                return make_spectrum(map)
             for y in range(len(map[x])):
-                if len(map) != 1:
-                    printProgressBar(x*len(map[x])+y,len(map)*len(map[x]),prefix="Format map", length=10)
+                printProgressBar(x*len(map[x])+y,len(map)*len(map[x]),prefix="Format map", length=10)
                 spectrum = map[x,y]
                 if isinstance(spectrum, Spectrum):
                     return map
@@ -156,8 +171,6 @@ class SpectrumMap():
                 S.host_position=(x,y)
                 S.get_X(self.output_settings)
                 formatted_intensity_map[x].append(S)
-        if len(map) == 1:
-            return formatted_intensity_map[0][0]
         return formatted_intensity_map
 
     def load(self, name=None):
@@ -541,7 +554,7 @@ class SpectrumMap():
                 x_click, y_click = event.xdata, event.ydata
                 ax2.cla()
                 x0, y0 = _convert_to_phys(x_click,y_click, invert=True)
-                spectrum_used = self.get_spectra(intensity_map[x0,y0])
+                spectrum_used = self.get_spectra(intensity_map[x0,y0],(x0,y0))
                 spectrum_used.plot(ax=ax2, channels=spectrum_used.get_X(self.output_settings))
                 if fit is not None:
                     spectrum_used.fit(ax=ax2, method=fit)

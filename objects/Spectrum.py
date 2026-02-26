@@ -284,6 +284,9 @@ class Spectrum():
         chi2 = _chi_squared(res.x, X, Y, number_components)
         y_fit = _gaussian_sum(X, res.x, number_components)
         props = {"params":res.x,"N":number_components,"CHI":chi2}
+
+        print(chi2, res.x)
+
         return y_fit, props
 
 
