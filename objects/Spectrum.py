@@ -190,7 +190,9 @@ class Spectrum():
 
         return self.fit_settings
     
-    def fit_iterative(self, distance:int=5):
+    
+    def fit_iterative(self, distance:int=2, max_iteration:int=5, score_threshold:float=0.1,
+                      a:float=1., b:float=1.):
         assert self.host_map is not None, LOGGER.error("The iterative fitting method need the spectrum to be part of a spectrum map.")
         assert self.host_position is not None, LOGGER.error("The iterative fitting method requires the spectrum to have a position.")
         x_min = max(0, self.host_position[0]-distance)
@@ -199,11 +201,54 @@ class Spectrum():
         y_max =  min(len(self.host_map.map[0])-1,self.host_position[1]+distance)
         s_map=self.host_map.format_map(map=self.host_map.map[x_min:x_max, y_min:y_max])
         s_map = cast(List[List[Spectrum]], s_map)
+        
         for i in range(len(s_map)):
             for j in range(len(s_map[0])):
                 spectrum:Spectrum = s_map[i][j]
-                spectrum.fit_dendrogram()
+                if spectrum.fit_settings is None:
+                    spectrum.fit_dendrogram()
         
+        def _get_fit_props(key="N"):
+            props = []
+            for i in range(len(s_map)):
+                props.append([])
+                for j in range(len(s_map[0])):
+                    props[i].append(s_map[i][j].fit_settings[1][key])
+            return props
+        
+        iteration = 0   
+        has_changed = True
+        scores = [[np.inf for __ in range(len(s_map[0]))] for _ in range(len(s_map))]
+        while iteration < max_iteration and np.mean(scores) > score_threshold and has_changed:
+            #temp_has_changed = []
+            for i in range(len(s_map)):
+                #temp_has_changed.append([])
+                for j in range(len(s_map[0])):
+                    spectrum:Spectrum = s_map[i][j]
+                    old_fit_y, old_fit_props = spectrum.fit_settings
+                    component_matrix = np.array(_get_fit_props("N"))
+                    chi_matrix = np.array(_get_fit_props("CHI"))
+                    
+                    N_target = 0
+                    N_target_sum = 0
+                    for mi in range(len(component_matrix)):
+                        for mj in range(len(component_matrix[0])):
+                            if mi == i and mj == j:
+                                continue
+                            dist = np.sqrt((i-mi)**2+(j-mj)**2)
+                            N_target += component_matrix[mi,mj]*chi_matrix[mi,mj]
+                            N_target_sum += dist*chi_matrix[mi,mj]
+                    N_target = N_target/N_target_sum
+                    F = N_target-component_matrix[i,j]
+
+
+
+
+                    score = new_fit_props['CHI']+a*component_matrix[i,j]+b*F
+                    scores[i,j] = score if scores[i,j] > score else scores[i,j]
+
+                    
+            iteration += 1
     
 
 
@@ -236,8 +281,9 @@ class Spectrum():
             guess.extend([gauss_amps[i], gauss_means[i], gauss_sigmas[i]])
         
         res = minimize(_chi_squared, guess, args=(X, Y, number_components), method='L-BFGS-B')
+        chi2 = _chi_squared(res.x, X, Y, number_components)
         y_fit = _gaussian_sum(X, res.x, number_components)
-        props = {"params":res.x,"N":number_components}
+        props = {"params":res.x,"N":number_components,"CHI":chi2}
         return y_fit, props
 
 
@@ -248,6 +294,7 @@ class Spectrum():
         best_result = None
         results = []
         best_score = np.inf
+        best_chi2 = np.inf
 
         p_res = []
         if np.sum(Y) > 1e-5:
@@ -263,6 +310,7 @@ class Spectrum():
                 results.append((N, res, score))
                 if score < best_score:
                     best_score = score
+                    best_chi2 = chi2
                     best_result = (N, res)
                 if best_score < score_threshold:
                     break
@@ -274,7 +322,7 @@ class Spectrum():
             y_fit = X*0.
             N_best = 0.
             
-        props = {"params":p_res,"N":N_best}
+        props = {"params":p_res,"N":N_best,"CHI":best_chi2}
         return y_fit, props
 
 def loadSpectrum(name, folder=None, absolute_path=None):
