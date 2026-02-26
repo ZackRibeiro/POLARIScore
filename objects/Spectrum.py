@@ -10,7 +10,7 @@ from POLARIScore.utils.utils import *
 import uuid
 import matplotlib.pyplot as plt
 from scipy.optimize import minimize
-from typing import Tuple, List, Union, Literal, Optional
+from typing import Tuple, List, Union, Literal, Optional, cast
 from POLARIScore.objects.tools.Graph import Graph, Node
 from POLARIScore.objects.tools.Dendrogram import Dendrogram
 
@@ -42,6 +42,7 @@ class Spectrum():
         self.fit_settings:Optional[Tuple[np.ndarray,Dict]]=None
 
         self.host_map = None
+        self.host_position = None
 
     def save(self,folder:str=None, replace:bool=False, log:bool=True):
         folder = CACHES_FOLDER if folder is None else folder
@@ -179,10 +180,7 @@ class Spectrum():
         elif method=="dendrogram":
             y_fit, props = self.fit_dendrogram(**args)
         elif method=="iterative":
-            assert self.host_map is not None, LOGGER.error("The iterative fitting method need the spectrum to be part of a spectrum map.")
-            #this launch a global fit of all spectra in the spectrummap
-            
-            pass 
+            y_fit, props = self.fit_iterative(**args)
         
         props['method'] = method
         self.fit_settings = (y_fit, props)
@@ -192,6 +190,23 @@ class Spectrum():
 
         return self.fit_settings
     
+    def fit_iterative(self, distance:int=5):
+        assert self.host_map is not None, LOGGER.error("The iterative fitting method need the spectrum to be part of a spectrum map.")
+        assert self.host_position is not None, LOGGER.error("The iterative fitting method requires the spectrum to have a position.")
+        x_min = max(0, self.host_position[0]-distance)
+        x_max = min(len(self.host_map.map)-1,self.host_position[0]+distance)
+        y_min = max(0, self.host_position[1]-distance)
+        y_max =  min(len(self.host_map.map[0])-1,self.host_position[1]+distance)
+        s_map=self.host_map.format_map(map=self.host_map.map[x_min:x_max, y_min:y_max])
+        s_map = cast(List[List[Spectrum]], s_map)
+        for i in range(len(s_map)):
+            for j in range(len(s_map[0])):
+                spectrum:Spectrum = s_map[i][j]
+                spectrum.fit_dendrogram()
+        
+    
+
+
     def fit_dendrogram(self, only_leaves:bool=False):
 
         X = self.get_X()
