@@ -161,7 +161,7 @@ class SpectrumMap():
                 assert pos is not None
                 return make_spectrum(map)
             for y in range(len(map[x])):
-                printProgressBar(x*len(map[x])+y,len(map)*len(map[x]),prefix="Format map", length=10)
+                #printProgressBar(x*len(map[x])+y,len(map)*len(map[x]),prefix="Format map", length=10)
                 spectrum = map[x,y]
                 if isinstance(spectrum, Spectrum):
                     return map

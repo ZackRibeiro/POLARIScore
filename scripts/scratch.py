@@ -82,10 +82,11 @@ trainer.model.plot_channel_weights(channel_names=trainer.input_names, cmap='viri
 """
 
 sim = Simulation_DC("turb_sim_C")
+#sim.plot()
 from POLARIScore.objects.SpectrumMap import SpectrumMap, getSimulationSpectra
 maps = getSimulationSpectra(simulation=sim)
-maps[0].plot(fit='dendrogram')
-#map = maps[0]
+maps[0].plot(fit='iterative')
+map = maps[0]
 #pca = map.pca(plot=True)
 
 

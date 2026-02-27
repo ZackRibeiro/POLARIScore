@@ -48,6 +48,7 @@ def init_idefix(simulation, blacklist=[], vtk_path:Optional[str]=None, invert_ax
     #Add idefix.ini for units bcs for now this is units code
 
     vtk_path = sorted(glob.glob(os.path.join(simulation.folder, "*.vtk")))[-1] if vtk_path is None else vtk_path
+    print(vtk_path)
     vtk = readVTK(vtk_path, geometry="cartesian")
     LOGGER.log(f"Loading simulation {simulation.name} using IDEFIX init, reading vtk: {os.path.split(vtk_path)[-1]}")
 

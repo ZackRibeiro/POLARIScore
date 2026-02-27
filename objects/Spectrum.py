@@ -13,6 +13,7 @@ from scipy.optimize import minimize
 from typing import Tuple, List, Union, Literal, Optional, cast
 from POLARIScore.objects.tools.Graph import Graph, Node
 from POLARIScore.objects.tools.Dendrogram import Dendrogram
+import copy
 
 def _gaussian_sum(x, params, N):
     y = np.zeros_like(x)
@@ -191,22 +192,24 @@ class Spectrum():
         return self.fit_settings
     
     
-    def fit_iterative(self, distance:int=2, max_iteration:int=5, score_threshold:float=0.1,
-                      a:float=1., b:float=1.):
+    def fit_iterative(self, distance:int=2, max_iteration:int=10, early_stop:bool=True):
+        LOGGER.log("Iterative fitting launched")
         assert self.host_map is not None, LOGGER.error("The iterative fitting method need the spectrum to be part of a spectrum map.")
         assert self.host_position is not None, LOGGER.error("The iterative fitting method requires the spectrum to have a position.")
         x_min = max(0, self.host_position[0]-distance)
-        x_max = min(len(self.host_map.map)-1,self.host_position[0]+distance)
+        x_max = min(len(self.host_map.map)-1,self.host_position[0]+distance+1)
         y_min = max(0, self.host_position[1]-distance)
-        y_max =  min(len(self.host_map.map[0])-1,self.host_position[1]+distance)
-        s_map=self.host_map.format_map(map=self.host_map.map[x_min:x_max, y_min:y_max])
+        y_max =  min(len(self.host_map.map[0])-1,self.host_position[1]+distance+1)
+        s_map=self.host_map.get_spectra(map=self.host_map.map[x_min:x_max, y_min:y_max])
         s_map = cast(List[List[Spectrum]], s_map)
+
+        pos_X, pos_Y = self.host_position[0] - x_min, self.host_position[1] - y_min
         
         for i in range(len(s_map)):
             for j in range(len(s_map[0])):
                 spectrum:Spectrum = s_map[i][j]
                 if spectrum.fit_settings is None:
-                    spectrum.fit_dendrogram()
+                    spectrum.fit("dendrogram")
         
         def _get_fit_props(key="N"):
             props = []
@@ -219,16 +222,32 @@ class Spectrum():
         iteration = 0   
         has_changed = True
         scores = [[np.inf for __ in range(len(s_map[0]))] for _ in range(len(s_map))]
-        while iteration < max_iteration and np.mean(scores) > score_threshold and has_changed:
+        scores = np.array(scores)
+        
+        
+        a1=lambda x: x*1.
+        a2=lambda x: x*0.1
+        a3=lambda x: x*0.1
+
+        
+        mean_scores = []
+        start_time = time.time()
+        while iteration < max_iteration:
+            iteration_time = time.time()
+            temp_s_map = copy.deepcopy(s_map)
             #temp_has_changed = []
+
+            component_matrix = np.array(_get_fit_props("N"))
+            chi_matrix = np.array(_get_fit_props("CHI"))
             for i in range(len(s_map)):
                 #temp_has_changed.append([])
                 for j in range(len(s_map[0])):
-                    spectrum:Spectrum = s_map[i][j]
-                    old_fit_y, old_fit_props = spectrum.fit_settings
-                    component_matrix = np.array(_get_fit_props("N"))
-                    chi_matrix = np.array(_get_fit_props("CHI"))
-                    
+                    printProgressBar(i*len(s_map)+j, len(s_map)*len(s_map[0]), prefix="Iterative fitting", length=30)
+                    spectrum:Spectrum = temp_s_map[i][j]
+
+                    X = spectrum.get_X()
+                    Y = spectrum.spectrum
+
                     N_target = 0
                     N_target_sum = 0
                     for mi in range(len(component_matrix)):
@@ -236,20 +255,56 @@ class Spectrum():
                             if mi == i and mj == j:
                                 continue
                             dist = np.sqrt((i-mi)**2+(j-mj)**2)
-                            N_target += component_matrix[mi,mj]*chi_matrix[mi,mj]
-                            N_target_sum += dist*chi_matrix[mi,mj]
+                            N_target += component_matrix[mi,mj]/chi_matrix[mi,mj]/dist
+                            N_target_sum += 1./dist/chi_matrix[mi,mj]
                     N_target = N_target/N_target_sum
                     F = N_target-component_matrix[i,j]
+                    N_target = max(int(N_target),1)
 
-
-
-
-                    score = new_fit_props['CHI']+a*component_matrix[i,j]+b*F
-                    scores[i,j] = score if scores[i,j] > score else scores[i,j]
-
+                    target_gauss_index:int = np.argsort((component_matrix-N_target).flatten())[0]
+                    target_gauss_index_i, target_gauss_index_j = target_gauss_index // len(component_matrix), target_gauss_index % len(component_matrix)
                     
+
+                    _, target_gauss_props = s_map[target_gauss_index_i][target_gauss_index_j].fit_dendrogram()
+
+                    _, dendro_props = spectrum.fit_dendrogram()
+                    guess_params:List = dendro_props['params']
+                    if isinstance(guess_params, np.ndarray):
+                        guess_params = guess_params.tolist() 
+                    if dendro_props['N'] > N_target:
+                        guess_params = guess_params[3*int(np.abs(F)):]
+                    elif dendro_props['N'] < N_target:
+                        if target_gauss_props['N'] == N_target:
+                            guess_params = target_gauss_props['params']
+                        else:
+                            for _ in range(abs(int(dendro_props['N']-N_target))):
+                                guess_params.extend(guess_params[:3])
+
+                    res = minimize(_chi_squared, guess_params, args=(X, Y, N_target), method='L-BFGS-B')
+                    chi2 = _chi_squared(res.x, X, Y, N_target)
+                    new_y_fit = _gaussian_sum(X, res.x, N_target)
+                    new_props = {"params":res.x,"N":N_target,"CHI":chi2}
+
+                    score = a1(chi2)+a2(component_matrix[i,j])+a3(0)
+                    if score < scores[i,j]:
+                        spectrum.fit_settings = (new_y_fit, new_props)
+                    scores[i,j] = score if scores[i,j] > score else scores[i,j] 
+            s_map = temp_s_map           
+            
             iteration += 1
-    
+            actual_time = time.time()
+            iteration_time = actual_time-iteration_time
+            time_left = (actual_time-start_time)/(iteration)*(max_iteration-(iteration))
+            LOGGER.print(f'Iteration {iteration}/{max_iteration} | Elapsed: {format_time(actual_time-start_time)} | Time Left: {format_time(time_left)} | Mean score: {np.mean(scores):.2}(Chi:{np.mean(chi_matrix):.2},N:{np.mean(component_matrix)})', type="SpectrumFit", level=1, color="34m")
+            #print(component_matrix, chi_matrix)
+            mean_scores.append(np.mean(scores))
+            if (early_stop and len(mean_scores) >= 3 and 
+                ((len(mean_scores)-1)-np.argmin(mean_scores) > 3 or np.abs(np.gradient(mean_scores)[-1])/mean_scores[-1] < 0.05)): #Early stopped if changes are lows
+                LOGGER.print(f'Fitting early stopped.')
+                break
+
+        LOGGER.log(f"Fit done with {component_matrix[pos_X][pos_Y]} components and {chi_matrix[pos_X][pos_Y]}")
+        return s_map[pos_X][pos_Y].fit_settings
 
 
     def fit_dendrogram(self, only_leaves:bool=False):
@@ -281,11 +336,29 @@ class Spectrum():
             guess.extend([gauss_amps[i], gauss_means[i], gauss_sigmas[i]])
         
         res = minimize(_chi_squared, guess, args=(X, Y, number_components), method='L-BFGS-B')
+
+        #Clean not used gaussian components
+        res.x = res.x.tolist()
+        components_removed = 0
+        for i in range(number_components):
+            index = i-components_removed
+            A, mu, sigma = res.x[3*index], res.x[3*index+1], res.x[3*index+2]
+            if A < 0.01*np.max(Y) or sigma > .5*(np.max(X)-np.min(X)):
+                res.x.pop(3*index)
+                res.x.pop(3*index)
+                res.x.pop(3*index)
+                components_removed += 1
+        number_components -= components_removed
+        res.x = np.array(res.x)
+        if components_removed > 0:
+            res = minimize(_chi_squared, res.x, args=(X, Y, number_components), method='L-BFGS-B')
+
+
         chi2 = _chi_squared(res.x, X, Y, number_components)
         y_fit = _gaussian_sum(X, res.x, number_components)
         props = {"params":res.x,"N":number_components,"CHI":chi2}
 
-        print(chi2, res.x)
+        #print(chi2, res.x)
 
         return y_fit, props
 
