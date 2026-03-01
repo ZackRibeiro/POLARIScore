@@ -220,7 +220,6 @@ class Spectrum():
             return props
         
         iteration = 0   
-        has_changed = True
         scores = [[np.inf for __ in range(len(s_map[0]))] for _ in range(len(s_map))]
         scores = np.array(scores)
         
@@ -235,12 +234,10 @@ class Spectrum():
         while iteration < max_iteration:
             iteration_time = time.time()
             temp_s_map = copy.deepcopy(s_map)
-            #temp_has_changed = []
 
             component_matrix = np.array(_get_fit_props("N"))
             chi_matrix = np.array(_get_fit_props("CHI"))
             for i in range(len(s_map)):
-                #temp_has_changed.append([])
                 for j in range(len(s_map[0])):
                     printProgressBar(i*len(s_map)+j, len(s_map)*len(s_map[0]), prefix="Iterative fitting", length=30)
                     spectrum:Spectrum = temp_s_map[i][j]

@@ -556,10 +556,10 @@ class SpectrumMap():
                 x0, y0 = _convert_to_phys(x_click,y_click, invert=True)
                 spectrum_used = self.get_spectra(intensity_map[x0,y0],(x0,y0))
                 spectrum_used.plot(ax=ax2, channels=spectrum_used.get_X(self.output_settings))
-                if fit is not None:
-                    spectrum_used.fit(ax=ax2, method=fit)
                 ax2.set_title(f"Spectrum at ({round(x_click,2)}pc, {round(y_click,2)}pc)")
                 marker.set_data([x_click], [y_click])
+                if fit is not None:
+                    spectrum_used.fit(ax=ax2, method=fit)
                 fig.canvas.draw_idle()
                 fig2.canvas.draw_idle()
         cid = fig.canvas.mpl_connect('button_press_event', onclick)
@@ -577,12 +577,12 @@ def generate_spectrummap_using_orphan(name, folder=CACHES_FOLDER):
     spectrum_map.save()
     return spectrum_map
 
-def getSimulationSpectra(simulation, name_used=None):
+def getSimulationSpectra(simulation, name_used:Optional[str]=None, axes:List[int]=[0,1,2]):
 
     name = simulation.name if name_used is None else name_used
     if "T_INDEX" in simulation.data and name_used is None:
         name=name+"_"+str(simulation.data["T_INDEX"])
-    spectra = [SpectrumMap("spectrum_"+name+"_"+str(int(i+1))) for i in range(3)]
+    spectra = [SpectrumMap("spectrum_"+name+"_"+str(int(i+1))) for i in axes]
     for i,s in enumerate(spectra):
         if s.map is None:
             LOGGER.log(f"Spectrum for face {i} doesn't exist, generating it: ")

@@ -81,10 +81,10 @@ trainer.plot_validation(save=False)
 trainer.model.plot_channel_weights(channel_names=trainer.input_names, cmap='viridis')
 """
 
-sim = Simulation_DC("turb_sim_C")
+sim = Simulation_DC("adastra_512")
 #sim.plot()
 from POLARIScore.objects.SpectrumMap import SpectrumMap, getSimulationSpectra
-maps = getSimulationSpectra(simulation=sim)
+maps = getSimulationSpectra(simulation=sim, axes=[0])
 maps[0].plot(fit='iterative')
 map = maps[0]
 #pca = map.pca(plot=True)
