@@ -332,7 +332,7 @@ class Spectrum():
                 LOGGER.print(f'Fitting early stopped.')
                 break
 
-        LOGGER.log(f"Fit done with {component_matrix[pos_X][pos_Y]} components and {chi_matrix[pos_X][pos_Y]}")
+        LOGGER.log(f"Fit done with {component_matrix[pos_X][pos_Y]} components and chi={chi_matrix[pos_X][pos_Y]:.2f}")
         return s_map[pos_X][pos_Y].fit_settings
 
 
