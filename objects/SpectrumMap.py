@@ -108,7 +108,7 @@ def _worker_ray_radiative_transfer(cube_dimension, position, direction, last_ste
     #TODO Change the fct partition approximation, this is an approximation valid just for CO J=1-0
     low_density_col = 1e4*density*extra_args['cell_size']*line_settings["abundance"]*g_l*np.exp(-line_settings["temp_low"]/(temperature))/(1/3+2*temperature/5.5)
     tau0 = LIGHT_SPEED**3/(8*np.pi*line_settings["frequency"]**3)*line_settings["estein_emission"] * g_u/g_l * (1-np.exp(-line_settings["temperature"]/temperature)) * low_density_col
-    tau = tau0 * GAUSSIAN(V-velocity,sigma)
+    tau = tau0 * GAUSSIAN(x=V-velocity,sigma=sigma)
 
     tau_exp = np.exp(-tau)
     intensity_spectrum = intensity_spectrum*tau_exp+BLACKBODY_EMISSION(nu=line_settings["frequency"],T=temperature)*(1-tau_exp) 
@@ -456,7 +456,7 @@ class SpectrumMap():
                 sigma = np.sqrt(sigma_doppler**2 + sigma_turb**2)
             low_density_col = (1e4*density*simulation.cell_size*line_settings["abundance"]*g_l*np.exp(-line_settings["temp_low"] / temperature)/(1 / 3 + 2 * temperature / 5.5))
             tau0 = (LIGHT_SPEED**3/(8 * np.pi * line_settings["frequency"]**3)*line_settings["estein_emission"]*g_u/g_l*(1 - np.exp(-line_settings["temperature"] / temperature))*low_density_col)
-            tau = tau0[..., None] * GAUSSIAN(V - v[..., None], sigma[..., None])
+            tau = tau0[..., None] * GAUSSIAN(x=V - v[..., None], sigma=sigma[..., None])
             tau_exp = np.exp(-tau)
             source = BLACKBODY_EMISSION(nu=line_settings["frequency"],T=temperature)
             intensity_map = (intensity_map * tau_exp + source[..., None] * (1 - tau_exp))
@@ -555,11 +555,12 @@ class SpectrumMap():
                 ax2.cla()
                 x0, y0 = _convert_to_phys(x_click,y_click, invert=True)
                 spectrum_used = self.get_spectra(intensity_map[x0,y0],(x0,y0))
-                spectrum_used.plot(ax=ax2, channels=spectrum_used.get_X(self.output_settings))
+                if fit is not None:
+                    spectrum_used.fit(method=fit)
+                #spectrum_used.spectrum = spectrum_used.add_noise(10)
+                spectrum_used.plot(ax=ax2, channels=spectrum_used.get_X(self.output_settings), show_fit=True)
                 ax2.set_title(f"Spectrum at ({round(x_click,2)}pc, {round(y_click,2)}pc)")
                 marker.set_data([x_click], [y_click])
-                if fit is not None:
-                    spectrum_used.fit(ax=ax2, method=fit)
                 fig.canvas.draw_idle()
                 fig2.canvas.draw_idle()
         cid = fig.canvas.mpl_connect('button_press_event', onclick)

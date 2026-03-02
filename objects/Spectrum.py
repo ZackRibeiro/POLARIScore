@@ -15,11 +15,14 @@ from POLARIScore.objects.tools.Graph import Graph, Node
 from POLARIScore.objects.tools.Dendrogram import Dendrogram
 import copy
 
+def _gaussian(x, A, mu, sigma):
+    return np.abs(A) * np.exp(-((x - mu)**2) / (2 * sigma**2))
+
 def _gaussian_sum(x, params, N):
     y = np.zeros_like(x)
     for i in range(N):
         A, mu, sigma = params[3*i], params[3*i+1], params[3*i+2]
-        y += np.abs(A) * np.exp(-((x - mu)**2) / (2 * sigma**2))
+        y += _gaussian(x, A, mu, sigma)
     return y
 
 def _chi_squared(params, x, y, N):
@@ -59,21 +62,53 @@ class Spectrum():
             LOGGER.log(f"Spectrum {self.name} saved")
         np.save(path,self.spectrum)
 
-    def plot(self, ax=None, channels=None):
+    def add_noise(self, SNR: float, seed: Optional[int] = None):
+        """
+        Add white Gaussian noise to the spectrum to reach a target SNR.
+        """
+        if seed is not None:
+            np.random.seed(seed)
+
+        signal = self.spectrum.astype(float)
+        T_peak = np.max(signal)
+        sigma_noise = T_peak / SNR
+        noise = np.random.normal(loc=0.0, scale=sigma_noise, size=signal.shape)
+        self.spectrum = signal + noise
+        
+        return self.spectrum
+
+    def plot(self, ax=None, channels:Optional[np.ndarray]=None, show_fit:bool=False, show_fit_gaussians:bool=False, show_dendrogram:bool=True):
         if ax is None:
             fig, ax = plt.subplots()
         else:
             fig = ax.figure
         channels = np.arange(len(self.spectrum)) if channels is None else channels
 
-        ax.plot(channels,self.spectrum)
+        ax.plot(channels,self.spectrum, color="black", label="data")
         ax.set_xlabel("Velocity [m/s]")
         ax.set_ylabel("Intensity [K]")
 
-        dendrogram = self.dendrogram()
-        dendrogram.plot(ax=ax)
+        if show_dendrogram:
+            dendrogram = self.dendrogram()
+            dendrogram.plot(ax=ax)
+
+        if show_fit:
+            if self.fit_settings is None:
+                LOGGER.warn("Can't plot spectrum fit because there is no fit done. Launch self.fit() first.")
+            else:
+                y_fit, props = self.fit_settings
+                gaussian_params = props['params']
+                ax.plot(channels, y_fit, 'r-', label=rf'fit=$\sum^{props["N"]}_i G_i$')
+                if show_fit_gaussians:
+                    colormap = plt.get_cmap("viridis")
+                    for i in range(props['N']):
+                        color = colormap((i+1) / (props['N']+1))
+                        A, mu, sigma = gaussian_params[3*i],gaussian_params[3*i+1],gaussian_params[3*i+2]
+                        g_fit = _gaussian(channels, A, mu, sigma)
+                        ax.plot(channels, g_fit, color=color, label=rf"$G_{i}$")
 
         ax.grid()
+        ax.legend()
         return fig, ax
     
     def get_X(self, output_settings:Optional[Dict]=None, force_compute:bool=False):
@@ -167,7 +202,7 @@ class Spectrum():
 
         return dendro
     
-    def fit(self, method:Literal['minimal','dendrogram','clean','iterative'], ax=None, force_compute:bool=False, **args)->Tuple[np.ndarray, Dict]:
+    def fit(self, method:Literal['minimal','dendrogram','clean','iterative'], force_compute:bool=False, **args)->Tuple[np.ndarray, Dict]:
         X = self.get_X()
         Y = self.spectrum
 
@@ -185,9 +220,6 @@ class Spectrum():
         
         props['method'] = method
         self.fit_settings = (y_fit, props)
-
-        if ax is not None:
-            ax.plot(X, y_fit, 'r-')
 
         return self.fit_settings
     
