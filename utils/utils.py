@@ -107,13 +107,18 @@ def format_time(seconds:float)->str:
 
 import time
 _time_0 = 0
-def printProgressBar(iteration,total,prefix='',suffix='',decimals=1,length=50,fill='█',printEnd="\r",show_tr=True):
+def printProgressBar(iteration,total,prefix='',suffix='',decimals=1,length=50,fill='█',printEnd="\r",show_tr=True,show_speed=True):
     global _time_0
     delta_time = 0.
     if iteration==0 or iteration==1:
         _time_0 = time.time()
     else:  
         delta_time = (time.time()-_time_0)/iteration * (total-iteration)
+
+    if delta_time != 0:
+        speed = (total-iteration)/delta_time
+    else:
+        speed = 0
 
     if total == 0:
         total = 1
@@ -137,10 +142,14 @@ def printProgressBar(iteration,total,prefix='',suffix='',decimals=1,length=50,fi
         '█' * (length - filledLength)
     )
 
+    string = f'\r{prefix} {bar} {color+percent_str}%{reset} {suffix}'
     if show_tr:
-        print(f'\r{prefix} {bar} {color+percent_str}%{reset} {suffix} tr~{format_time(delta_time)}', end=printEnd)
-    else:
-        print(f'\r{prefix} {bar} {color+percent_str}%{reset} {suffix}', end=printEnd)
+        string += f" tr~{format_time(delta_time)}"
+    if show_speed:
+        string += f" s~{speed:0.1f}ite/s"
+
+    print(string, end=printEnd)
+        
     if iteration >= total:
         print(f'\r{prefix} - Done in {format_time(time.time()-_time_0)}'+' '*(length+10), end=printEnd)
         print()

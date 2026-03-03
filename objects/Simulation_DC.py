@@ -262,6 +262,8 @@ class Simulation_DC():
             if isinstance(what_to_compute["cospectra"], str):
                 if what_to_compute["cospectra"] == "pca":
                     co_spectra = [smap.pca(return_cube=True) for smap in co_spectra]
+                elif what_to_compute["cospectra"] == "gaussians":
+                    co_spectra = [smap.gaussians() for smap in co_spectra]
         flag_number_density = what_to_compute["density"] if "density" in what_to_compute else False
         flag_context = (what_to_compute["context"] is not None and what_to_compute["context"]) if "context" in what_to_compute else False
         flag_physize = True
@@ -829,7 +831,7 @@ class Simulation_DC():
             fig = ax.figure
 
         if what in ("both", "cdens"):
-            cdens = [compute_column_density(self.data['RHO'], self.cell_size, axis=i) for i in range(3)].flatten()
+            cdens = np.array([compute_column_density(self.data['RHO'], self.cell_size, axis=i) for i in range(3)]).flatten()
         else:
             cdens = None
 

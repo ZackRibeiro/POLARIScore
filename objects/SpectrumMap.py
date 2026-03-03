@@ -45,12 +45,21 @@ DEFAULT_GLOBAL_SETTINGS = {
 }
 """Default global settings when emission maps are generated"""
 
-#Don't use it, it is use just for multiprocessing
-def _unpack_and_call(worker_func, job):
-    return worker_func(*job)
-
-def _worker(method, y, row):
-    return (y, [method({"x": x, "y": y, "data": val["data"], "output": val["output"]}) for x, val in enumerate(row)])
+def _worker_get_gaussians_params(job):
+    index, args = job
+    max_gaussian_components = args["extra_args"]["max_gaussian_components"]
+    fit_method = args["extra_args"]["fit_method"]
+    spectrum = Spectrum(spectrum=args['data'])
+    spectrum.host_position=(args['x'],args['y'])
+    spectrum.get_X(output_settings=args["output"])
+    spectrum.fit(fit_method)
+    _, props= spectrum.fit_settings
+    if len(props['params']) > max_gaussian_components*3:
+        gaussian_params = props['params'][:max_gaussian_components*3]
+    else:
+        props['params'] = np.array(props['params'].tolist().extend([0 for _ in range(max_gaussian_components*3-len(props['params']))]))
+        gaussian_params = props['params']
+    return index, gaussian_params
 
 def _worker_ray_radiative_transfer(cube_dimension, position, direction, last_step, extra_args):
     
@@ -252,7 +261,24 @@ class SpectrumMap():
         """
         return np.sum(self.map, axis=2)
     
+    def gaussians(self, max_gaussian_components=10, fit_method:str="dendrogram"):
+        """
+        Apply gaussian fit on each spectrum of the cube.
+        Returns a cube of the shape: W, H, max_gaussian_components*3 containing the gaussians parameters in order: A, mean, std...
+        """
+        #LOGGER.global_color = LOGGER._init_gc
+        #LOGGER.border("Spectra-fitting", level=1)
+        #LOGGER.log(f"Fit method {fit_method} on map")
+            
+        return self.compute(method=_worker_get_gaussians_params,used_cpu=1., stride=1, 
+                            extra_args={'max_gaussian_components': max_gaussian_components, 'fit_method':fit_method})
+        
+    
     def pca(self, plot:bool=False, return_cube:bool=True):
+        """
+        Apply principal component analysis on the hyperspectra cube.
+        Returns components, variances and scores if return_cube is False else return scores reshaped to have the same shape of initial cube. 
+        """
         assert self.map is not None, LOGGER.error("Spectrum map is empty.")
         nx, ny, nv = self.map.shape
         data = self.map.reshape(nx*ny,nv)
@@ -310,8 +336,7 @@ class SpectrumMap():
 
 
     
-    #TODO add region args
-    def compute(self, method, save=True, used_cpu=1., stride=1):
+    def compute(self, method, save=True, used_cpu=1., stride=1, extra_args:Dict={}):
         """
         Compute "method" over the sprectra map, i.e each spectrum in the map is processed using method.
 
@@ -319,7 +344,7 @@ class SpectrumMap():
             method(function): Method to compute, need to have only one parameter: a dict with the spectrum used as the key "data".
             save(bool, default:True): When finished, save the result as cache.
             used_cpu(float, default:1.): percent (/100) of cpu cores used, 1.=100%, 0.= 1 core/no multiprocessing.
-            stride(int, default:1): compute with a step in the map of stride value, if =1 then all spectrum are processed.
+            stride(int, default:1): compute with a step in the map of stride value, if =1 then all spectra are processed.
         Returns:
             map: shape of self.map//stride containing the result of method
         """
@@ -329,39 +354,35 @@ class SpectrumMap():
 
         stride = int(stride)
 
-        if used_cpu > 0.:
-            used_cpu = max(used_cpu,1.)
+        used_cpu = max(used_cpu,1.)
 
-            jobs = [
-            (y,[{"data": data_point, "output": self.output_settings} for data_point in self.map[y][::stride]],)
-            for y in range(0, len(self.map), stride)
-]
-            total_jobs = len(jobs)
-            results = [None] * total_jobs
-            completed = 0
+        jobs = [
+            (i, {
+                "data": self.map[x][y],
+                "x": x,
+                "y": y,
+                "output": self.output_settings,
+                "extra_args": extra_args
+            })
+            for i, (y, x) in enumerate(
+                [(y, x)
+                for y in range(0, len(self.map[0]), stride)
+                for x in range(0, len(self.map), stride)]
+            )
+        ]
+        
+        total_jobs = len(jobs)
+        results = [None] * total_jobs
+        completed = 0
 
-            with mp.Pool(int(np.ceil(mp.cpu_count()*used_cpu))) as pool:
-                worker_func = partial(_worker, method)
-                for y, row_result in pool.imap_unordered(partial(_unpack_and_call, worker_func), jobs):
-                    results[y//stride] = row_result
-                    completed += 1
-                    printProgressBar(completed, total_jobs, prefix="Computing", length=30)
-        else:
-            results = []
-            for i,y in enumerate(range(0,len(self.map),stride)):
-                results.append([])
-                for j,x in enumerate(range(0,len(self.map[y]),stride)):
-                    printProgressBar(len(self.map[y])*y+x, len(self.map[y])*len(self.map), prefix="Computing", length=30)
-                    args = {
-                        "x": x,
-                        "y": y,
-                        "data": self.map[y][x],
-                        "output": self.output_settings
-                    }
-                    r = method(args)
-                    results[i].append(r)
-                    del args
+        with mp.Pool(int(np.ceil(mp.cpu_count()*used_cpu))) as pool:
+            worker_func = method
+            for index, spectrum_result in pool.imap_unordered(worker_func, jobs):
+                results[index] = spectrum_result
+                completed += 1
+                printProgressBar(completed, total_jobs, prefix="Computing", length=30)
         LOGGER.reset()
+        results = np.array(results).reshape((len(self.map),len(self.map),len(results[0])))
 
         if save:
             if not(os.path.exists(CACHES_FOLDER)):
