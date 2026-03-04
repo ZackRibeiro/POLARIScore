@@ -1,4 +1,5 @@
 
+import matplotlib.pyplot as plt
 from POLARIScore.utils.utils import compute_mass_weighted_density
 from POLARIScore.objects.SimulationArray import SimulationArray
 from POLARIScore.objects.Dataset import getDataset
@@ -67,3 +68,5 @@ trainer.training_random_transform = True
 trainer.plot(save=False)
 trainer.plot_validation(save=False)
 trainer.model.plot_channel_weights(channel_names=trainer.input_names, cmap='viridis')
+
+plt.show()

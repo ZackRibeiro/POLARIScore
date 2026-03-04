@@ -269,6 +269,7 @@ class Spectrum():
 
             component_matrix = np.array(_get_fit_props("N"))
             chi_matrix = np.array(_get_fit_props("CHI"))
+            print(component_matrix)
             for i in range(len(s_map)):
                 for j in range(len(s_map[0])):
                     printProgressBar(i*len(s_map)+j, len(s_map)*len(s_map[0]), prefix="Iterative fitting", length=30)

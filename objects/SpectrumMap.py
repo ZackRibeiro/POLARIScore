@@ -20,7 +20,7 @@ def _output_v_function(lsr,chan,res):
     return lsr+(np.array(range(chan))-chan/2)*res
 DEFAULT_OUTPUT_SETTINGS = {
     "velocity_channels": 128,
-    "velocity_resolution": 1e3*0.1,
+    "velocity_resolution": 1e3*0.05,
     "lsr_velocity": 0,
     "v_function": _output_v_function,
 }
@@ -261,6 +261,9 @@ class SpectrumMap():
         """
         return np.sum(self.map, axis=2)
     
+    #def generate_dataset(self,name:str=None,
+    #                     )
+
     def gaussians(self, max_gaussian_components=10, fit_method:str="dendrogram"):
         """
         Apply gaussian fit on each spectrum of the cube.
@@ -283,7 +286,7 @@ class SpectrumMap():
         nx, ny, nv = self.map.shape
         data = self.map.reshape(nx*ny,nv)
         data_mean = np.mean(data, axis=0)
-        data_centered = data - data_mean
+        data_centered = data# - data_mean
         pca = PCA()
         pca.fit(data_centered)
 
