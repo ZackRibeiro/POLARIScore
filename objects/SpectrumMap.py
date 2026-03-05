@@ -15,6 +15,8 @@ import multiprocessing as mp
 from functools import partial
 from typing import Literal, List, Tuple, Optional
 from sklearn.decomposition import PCA
+from POLARIScore.objects.Dataset import Dataset
+import copy
 
 def _output_v_function(lsr,chan,res):
     return lsr+(np.array(range(chan))-chan/2)*res
@@ -45,7 +47,7 @@ DEFAULT_GLOBAL_SETTINGS = {
 }
 """Default global settings when emission maps are generated"""
 
-def _worker_get_gaussians_params(job):
+def _worker_get_gaussians_params(job:Dict)->Tuple[int, np.ndarray]:
     index, args = job
     max_gaussian_components = args["extra_args"]["max_gaussian_components"]
     fit_method = args["extra_args"]["fit_method"]
@@ -261,8 +263,109 @@ class SpectrumMap():
         """
         return np.sum(self.map, axis=2)
     
-    #def generate_dataset(self,name:str=None,
-    #                     )
+    def generate_dataset(self,name:str=None,
+                         what_to_compute:Dict={"gaussians":10,},
+                         number:int=100, snr:Optional[Tuple[float, float]]=[7, 20]
+                         ,environment:int=1
+                         )->'Dataset':
+        """
+        Method to generate a dataset from spectrum map.
+
+        What can be computed:
+        - 'gaussians': fit the spectrum and save gaussian parameters
+        - 'noisy_spectrum' if snr is not None
+
+        Args:
+            number(int, default: 100): How many spectra do we want.
+            what_to_compute(dict)
+            environment: int, if not 0, the data is instead of shape [environment*2+1,environment*2+1,spectra_dim] so H,W,D
+            snr: Tuple of float, add white noise to achieve a random snr in the given tuple range.
+        Returns:
+            dataset: the new dataset.
+        """
+        order = ["spectrum", "snr"]
+        if "gaussians" in what_to_compute and what_to_compute["gaussians"] is not None and what_to_compute["gaussians"] > 0:
+            order.append("gaussians")
+        if snr is not None:
+            order.append("noisy_spectrum")
+
+        name = self.name if name is None else name
+
+        ds = Dataset()
+        ds.name = name
+        ds.settings = {"order": order}
+
+        spectra_generated = 0
+        pos_explored = []
+        iteration = 0
+        while spectra_generated < number and iteration < number*100:
+            iteration += 1
+            printProgressBar(pos_explored, number, prefix=f"Building dataset ({iteration})")
+            if iteration >= number*100:
+                LOGGER.warn("Failed to generated all the requested random spectras, nbr of spectra generated:"+str(spectra_generated))
+                break
+
+            x, y = np.floor(np.random.random()*(len(self.map)-environment*2)+environment), np.floor(np.random.random()*(len(self.map[0])-environment*2)+environment)
+            x, y = int(x), int(y)
+            if (x,y) in pos_explored:
+                continue
+
+            spectra:List[List[Spectrum]] = self.get_spectra(map=self.map[x-environment:x+environment+1,y-environment:y+environment+1:])
+            if snr is not None:
+                random_snr = np.random.random()*(snr[1]-snr[0])+snr[0]
+            else:
+                random_snr = 0
+            
+            
+            clean_spectra = []
+            for xi in len(spectra):
+                clean_spectra.append([])
+                for yi in len(spectra):
+                    clean_spectra[xi].append(spectra[xi][yi].spectrum)
+            b = [np.array(clean_spectra), random_snr]
+
+            if "gaussians" in order:
+                _, gaussian_parameters = _worker_get_gaussians_params(job={
+                    "data": self.map[x][y],
+                    "x": x,
+                    "y": y,
+                    "output": self.output_settings,
+                    'extra_args':{'max_gaussian_components': what_to_compute["gaussians"],
+                    'fit_method':'dendrogram'}
+                })
+                b.append(gaussian_parameters)
+            
+            if random_snr > 0:
+                noisy_spectra = []
+                for xi in len(spectra):
+                    noisy_spectra.append([])
+                    for yi in len(spectra):
+                        noisy_spectra[xi].append(spectra[xi][yi].add_noise(random_snr))
+                b.append(np.array(noisy_spectra))
+            
+            ds.save_batch(b, spectra_generated)
+            del b
+            pos_explored.append((x,y))
+            spectra_generated += 1
+
+        settings = {
+            "order": order,
+            "what_was_computed": what_to_compute,
+            "spectra_number": spectra_generated
+        }
+
+        #TODO, handle the error
+        ds.settings = settings
+        try:
+            ds.save_settings()
+        except:
+            del settings["what_was_computed"]
+            ds.save_settings()
+
+        LOGGER.log(f"New dataset {ds.name} saved")
+        LOGGER.reset()
+
+        return ds
 
     def gaussians(self, max_gaussian_components=10, fit_method:str="dendrogram"):
         """
@@ -276,7 +379,6 @@ class SpectrumMap():
         return self.compute(method=_worker_get_gaussians_params,used_cpu=1., stride=1, 
                             extra_args={'max_gaussian_components': max_gaussian_components, 'fit_method':fit_method})
         
-    
     def pca(self, plot:bool=False, return_cube:bool=True):
         """
         Apply principal component analysis on the hyperspectra cube.
@@ -337,8 +439,6 @@ class SpectrumMap():
                 return scores.reshape(nx, ny, nv)
         return components, variance, scores
 
-
-    
     def compute(self, method, save=True, used_cpu=1., stride=1, extra_args:Dict={}):
         """
         Compute "method" over the sprectra map, i.e each spectrum in the map is processed using method.
