@@ -823,8 +823,8 @@ class Simulation_DC():
 
         return fig, ax
 
-    def plot_pdf(self,ax=None,bins: int = 20,vdens_method=compute_mass_weighted_density,offset_method: Literal["mean", "max", "none"] = "mean",what: Literal["both", "cdens", "vdens"] = "both",
-                 color=None, legend=True, scatter=True, swap_axis=False):
+    def plot_pdf(self,ax=None,bins: int = 20,vdens_method=compute_mass_weighted_density,offset_method: Literal["mean", "max", "none"] = "none",what: Literal["both", "cdens", "vdens" "rho"] = "rho",
+                 color=None, legend=True, scatter=True, swap_axis=False, label:Optional[str]=None,drawstyle:Optional[str]="steps-mid"):
         if ax is None:
             fig, ax = plt.subplots()
         else:
@@ -844,7 +844,7 @@ class Simulation_DC():
             mask = (~np.isnan(vdens)) & (vdens > 0) & (~np.isnan(cdens)) & (cdens > 0)
         elif what == "cdens":
             mask = (~np.isnan(cdens)) & (cdens > 0)
-        else:
+        elif what == "vdens":
             mask = (~np.isnan(vdens)) & (vdens > 0)
 
         def _normalize_x(hist, bin_centers):
@@ -857,6 +857,12 @@ class Simulation_DC():
             else:
                 return bin_centers
 
+        if what in ("rho","RHO"):            
+            pdf = compute_pdf(self.data['RHO']/np.mean(self.data['RHO']), bins=bins)
+            ax.plot(pdf[0] if swap_axis else 10**pdf[1][:-1],10**pdf[1][:-1] if swap_axis else pdf[0], marker="+", color=color, drawstyle=drawstyle, label=label)
+
+
+
         if what in ("both", "cdens"):
             log10_coldens = np.log10(cdens[mask])
             hist_cd_raw, _ = np.histogram(log10_coldens, bins=bins+1, density=False)
@@ -864,7 +870,7 @@ class Simulation_DC():
             hist_cd, bin_edges_cd = np.histogram(log10_coldens, bins=bins+1, density=True)
             bin_centers_cd = 0.5 * (bin_edges_cd[1:] + bin_edges_cd[:-1])
             bin_centers_cd = _normalize_x(hist_cd, bin_centers_cd)
-            ax.plot(hist_cd if swap_axis else 10**bin_centers_cd, 10**bin_centers_cd if swap_axis else hist_cd, drawstyle="steps-mid", marker="o" if scatter else None, color="blue" if color is None else color, label=r"$N_H$ [$cm^{-2}$]")
+            ax.plot(hist_cd if swap_axis else 10**bin_centers_cd, 10**bin_centers_cd if swap_axis else hist_cd, drawstyle=drawstyle, marker="o" if scatter else None, color=color, label=r"$N_H$ [$cm^{-2}$]" if label is None else label)
             if not(swap_axis):
                 ax.errorbar(10**bin_centers_cd, hist_cd, yerr=hist_cd_stats_error * hist_cd, fmt='none', color="black")
 
@@ -876,7 +882,7 @@ class Simulation_DC():
             hist_pr, bin_edges_pr = np.histogram(log10_voldens, bins=bin_edges_pr, density=True)
             bin_centers_pr = 0.5 * (bin_edges_pr[1:] + bin_edges_pr[:-1])
             bin_centers_pr = _normalize_x(hist_pr, bin_centers_pr)
-            ax.plot(hist_pr if swap_axis else 10**bin_centers_pr, 10**bin_centers_pr if swap_axis else hist_pr, drawstyle="steps-mid", marker="o" if scatter else None, color="red" if color is None else color, label=r"$<n_H>_m$ [$cm^{-3}$]")
+            ax.plot(hist_pr if swap_axis else 10**bin_centers_pr, 10**bin_centers_pr if swap_axis else hist_pr, drawstyle=drawstyle, marker="o" if scatter else None, color=color, label=r"$<n_H>_m$ [$cm^{-3}$]" if label is None else label)
             if not(swap_axis):
                 ax.errorbar(10**bin_centers_pr, hist_pr, yerr=hist_pred_stats_error * hist_pr, fmt='none', color="black")
 
@@ -886,21 +892,21 @@ class Simulation_DC():
             ax.set_xlabel(r"($x-max(x)) / (max(x)-min(x))$")
         
         if swap_axis:
-            ax.set_xlabel("density")
+            ax.set_xlabel("pdf")
             if what == "cdens":
-                ax.set_ylim(np.min(cdens), np.max(cdens))
-                ax.set_xlim(np.min(hist_cd), np.max(hist_cd))
+                ax.set_ylim(np.min(cdens)*0.75, np.max(cdens)*1.25)
+                ax.set_xlim(np.min(hist_cd)*0.75, np.max(hist_cd)*1.25)
             elif what == "vdens":
-                ax.set_ylim(np.min(vdens), np.max(vdens))
-                ax.set_xlim(np.min(hist_pr), np.max(hist_pr))
+                ax.set_ylim(np.min(vdens)*0.75, np.max(vdens)*1.25)
+                ax.set_xlim(np.min(hist_pr)*0.75, np.max(hist_pr)*1.25)
         else:
-            ax.set_ylabel("density")
+            ax.set_ylabel("pdf")
             if what == "cdens":
-                ax.set_xlim(np.min(cdens), np.max(cdens))
-                ax.set_ylim(np.min(hist_cd), np.max(hist_cd))
+                ax.set_xlim(np.min(cdens)*0.75, np.max(cdens)*1.25)
+                ax.set_ylim(np.min(hist_cd)*0.75, np.max(hist_cd)*1.25)
             elif what == "vdens":
-                ax.set_xlim(np.min(vdens), np.max(vdens))
-                ax.set_ylim(np.min(hist_pr), np.max(hist_pr))
+                ax.set_xlim(np.min(vdens)*0.75, np.max(vdens)*1.25)
+                ax.set_ylim(np.min(hist_pr)*0.75, np.max(hist_pr)*1.25)
 
         ax.set_xscale("log")
         ax.set_yscale("log")

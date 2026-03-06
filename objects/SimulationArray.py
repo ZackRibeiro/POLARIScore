@@ -17,7 +17,7 @@ import uuid
 
 class SimulationArray():
 
-    def __init__(self, simulations:List['Simulation_DC'], indexes:Optional[List[float]]=None ,name:Optional[str]=None):
+    def __init__(self, simulations:List['Simulation_DC']=[], indexes:Optional[List[float]]=None ,name:Optional[str]=None):
         assert type(simulations) is list, LOGGER.error("SimulationArray need to be initialized with a list of simulations")
         indexes_was_none = False
         if indexes is None:
@@ -96,7 +96,10 @@ class SimulationArray():
             for i, sim in enumerate(self.simulations):
                 if colors is not None:
                     kwargs["color"] = colors[i]
-                plot_method(sim, ax=ax, label=str(self.indexes[i]), **kwargs)
+                try:
+                    plot_method(sim, ax=ax, label=str(self.indexes[i]), **kwargs)
+                except TypeError:
+                    plot_method(sim, ax=ax, **kwargs)
 
             return fig, ax
 

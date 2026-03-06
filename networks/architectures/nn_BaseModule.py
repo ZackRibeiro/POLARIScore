@@ -95,11 +95,7 @@ class BaseModule(nn.Module):
             return tensor
         
         rslt = torch.from_numpy(tensor).float()
-        #TODO adapt to 3D tensors (B,C,H,W,D)
-        if(len(tensor.shape)==2):
-            rslt = rslt.unsqueeze(0)
-        if len(tensor.shape)<4:
-            rslt = rslt.unsqueeze(1)
+        rslt = rslt.unsqueeze(1)
         return rslt.to(self.device)
 
     def shape_batch(self, batch, target_indexes:Union[int,List[int]]=[], input_indexes:Union[int, List[int]]=[], target_names:Union[str,List[str],None]=None, input_names:Union[str,List[str],None]=None, **args):

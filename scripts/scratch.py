@@ -13,81 +13,113 @@ from POLARIScore.utils.sim_utils import init_idefix,init_ramses
 from POLARIScore.utils.utils import compute_mass_weighted_density
 
 from POLARIScore.objects.SimulationArray import SimulationArray
-from POLARIScore.objects.Dataset import getDataset
-
-sim_names=[
-    "turb_sim_A","turb_sim_B","turb_sim_C","turb_sim_E"
-]
-spectra_dim = 4
-enable_dataset_gen = False
-"""
-if enable_dataset_gen:
-    for name in sim_names:
-        sims = SimulationArray(simulations=[] ,name=name)
-
-        sims.generate_dataset(name=name,what_to_compute={"cospectra":"pca", "vdens":compute_mass_weighted_density}, number=100, axes=[0,1])
-        ds = getDataset("batch_"+name)
-        ds.downsample(channel_names=["cospectra"], target_sizes=spectra_dim, methods="first", replace=True)
-        ds.transform(channel_names="cospectra", method="split")
-
-        #validation dataset
-        sims.generate_dataset(name=name+"_v",what_to_compute={"cospectra":"pca", "vdens":compute_mass_weighted_density}, number=100, axes=[2])
-        ds = getDataset("batch_"+name+"_v")
-        ds.downsample(channel_names=["cospectra"], target_sizes=spectra_dim, methods="first", replace=True)
-        ds.transform(channel_names="cospectra", method="split")
-        
-    training_datasets = [getDataset("batch_"+name) for name in sim_names]
-    validation_datasets = [getDataset("batch_"+name+"_v") for name in sim_names]
-    training_datasets[0].merge(training_datasets[1:], delete=False, name="idefix_training_"+str(spectra_dim), save=True)
-    validation_datasets[0].merge(validation_datasets[1:], delete=False, name="idefix_validation_"+str(spectra_dim), save=True)
-training_ds = getDataset("batch_idefix_training_"+str(15))
-validation_ds = getDataset("batch_idefix_validation_"+str(15))
-
-
-#sim = Simulation_DC("orionMHD_lowB_0.39_512", global_size=66.0948)
-#sim.generate_dataset(name="orion_training",what_to_compute={"cospectra":"pca", "vdens":compute_mass_weighted_density}, number=100, axes=[0,1])
-#sim.generate_dataset(name="orion_validation",what_to_compute={"cospectra":"pca", "vdens":compute_mass_weighted_density}, number=100, axes=[2])
-#training_ds = getDataset("batch_orion_training")
-#validation_ds = getDataset("batch_orion_validation")
-#training_ds.downsample(channel_names=["cospectra"], target_sizes=spectra_dim, methods="first", replace=True)
-#training_ds.transform(channel_names="cospectra", method="split")
-#validation_ds.downsample(channel_names=["cospectra"], target_sizes=spectra_dim, methods="first", replace=True)
-#validation_ds.transform(channel_names="cospectra", method="split")
-
-from POLARIScore.networks.Trainer import Trainer, load_trainer
-from POLARIScore.networks.architectures.nn_MultiNet import MultiNet
-from POLARIScore.networks.architectures.nn_UNet import UNet
+from POLARIScore.objects.Dataset import Dataset, getDataset
 from torch import nn
-#trainer = Trainer(MultiNet, training_set=training_ds, validation_set=validation_ds, model_name="MultiNet_ID_13CO_PCA"+str(spectra_dim))
-trainer = load_trainer("cached_model")
-trainer.validation_set = validation_ds
-trainer.training_set = training_ds
-trainer.validation_loss_method = nn.MSELoss()
-trainer.learning_rate = 1e-3
-trainer.network_settings["base_filters"] = 64
-trainer.network_settings["branch_filters"] = 32
-trainer.network_settings["num_layers"] = 3
-trainer.network_settings["channel_dimensions"]=[2 for _ in range(spectra_dim+1)]
-trainer.input_names = ["cdens",*["cospectra"+str(i) for i in range(spectra_dim)]]
-trainer.target_names = ["vdens"]
-trainer.network_settings["channel_modes"] = [None for _ in range(spectra_dim+1)]
-trainer.training_random_transform = True
-#trainer.init()
-#trainer.train(750, batch_number=8, compute_validation=10,early_stopping=False)
-#trainer.save()
-trainer.plot(save=False)
-trainer.plot_validation(save=False)
-trainer.model.plot_channel_weights(channel_names=trainer.input_names, cmap='viridis')
-"""
 
 sim = Simulation_DC("turb_sim_C")
-#sim.plot_pdf(what="cdens", offset_method="none")
-
 from POLARIScore.objects.SpectrumMap import SpectrumMap, getSimulationSpectra
+from POLARIScore.objects.Spectrum import Spectrum
 maps = getSimulationSpectra(simulation=sim, axes=[0])
-maps[0].plot(fit='dendrogram')
-map = maps[0]
-pca = map.pca(plot=True)
+#maps[0].plot(fit='dendrogram')
+#map = maps[0]
+#pca = map.pca(plot=True)
+#sim.plot_pdf(offset_method="none", what="cdens")
+
+#ds = maps[0].generate_dataset(name="spectra_C", number=128*10)
+ds = getDataset("batch_spectra_C")
+def _plot_spectrum(ds:'Dataset',ds_index:int=0):
+    data = ds.get(ds_index)
+    env_spectra = data[ds.get_element_index("noisy_spectrum")]
+    spectrum = env_spectra[len(env_spectra)//2][len(env_spectra)//2]
+    spect = Spectrum(spectrum, name="test")
+    spect.X = data[ds.get_element_index("channels")]
+    gauss_params = data[ds.get_element_index("gaussians") ]
+    spect.fit_settings = None , {'params':gauss_params, 'N':len(gauss_params)//3}
+    spect.plot(show_fit=True, show_dendrogram=False)
+
+training_set, validation_set = ds.split(0.9)
+from POLARIScore.networks.Trainer import Trainer
+from POLARIScore.networks.architectures.nn_SpectraNetwork import SpectraNetwork
+trainer = Trainer(network=SpectraNetwork, training_set=training_set, validation_set=validation_set, model_name="Spectral_Fit")
+trainer.network_settings['num_layers']=3
+trainer.network_settings['out_features']=10*3
+trainer.network_settings['base_filters']=16
+trainer.network_settings['environment_dim']=3
+trainer.network_settings['spectra_dim']=128
+
+trainer.norms = { 
+    "channels": (lambda x:x,lambda x:x),
+}
+
+
+import torch
+import torch.nn.functional as F
+def _gaussian(x, A, mu, sigma):
+    return torch.abs(A) * torch.exp(-((x - mu) ** 2) / (2 * sigma ** 2))
+
+
+def _gaussian_sum(x, params, N):
+    y = torch.zeros_like(x)
+
+    for i in range(N):
+        A = params[:,:,3 * i]
+        mu = params[:,:,3 * i + 1]
+        sigma = params[:,:,3 * i + 2]
+
+        gaussian = _gaussian(x, A, mu, sigma)
+        gaussian = torch.nan_to_num(gaussian, nan=0)
+        y = y + gaussian
+
+    return y
+
+
+def _chi_squared(params, x, y_true, N):
+    y_model = _gaussian_sum(x, params, N)
+    return torch.sum((y_true - y_model) ** 2 / (y_model + 1e-8))
+
+def spectrum_loss(output, target):
+    """
+    output: predicted gaussian parameters [A1, mu1, sigma1, ...]
+    target: true gaussian parameters
+    """
+
+
+    channels = output[1]
+
+    mse = F.mse_loss(output[0], target)
+
+    pred_params = torch.exp(output[0])-1
+    true_params = torch.exp(target)-1
+    y_true = _gaussian_sum(channels, true_params, 10)
+    chisq = torch.mean(_chi_squared(pred_params, channels, y_true, 10))
+
+    loss = mse
+
+    return loss
+
+trainer.optimizer_name = "SGD"
+trainer.learning_rate = 1e-3
+trainer.init()
+trainer.loss_method = spectrum_loss
+trainer.validation_loss_method = spectrum_loss
+
+trainer.training_random_transform = False
+trainer.input_names = ["noisy_spectrum","snr","channels"]
+trainer.target_names = ["gaussians"]
+trainer.train(1000, batch_number=128, early_stopping=True)
+
+val_batch = trainer.get_prediction_batch()
+print(val_batch)
+
+#sim = SimulationArray(name="turb_sim_A")
+#sim.plot(
+#    plot_method=Simulation_DC.plot_pdf,
+#    colors="viridis",
+#    offset_method="none",
+#    what="rho",
+#    drawstyle=None, swap_axis=True
+#)
+
 
 
 

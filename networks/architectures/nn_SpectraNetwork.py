@@ -28,50 +28,63 @@ class SpectraNetwork(BaseModule):
 
         filter_sizes = [int(base_filters * 2**(i+1)) for i in range(num_layers)]
         self.encoder = nn.ModuleList()
+        in_channels = base_filters
         for i in range(num_layers):
             out_channels = filter_sizes[i]
             self.encoder.append(
                 nn.Sequential(
-                    nn.Conv1d(in_channels, out_channels)
+                    nn.Conv1d(in_channels, out_channels, kernel_size=3, padding=1),
+                    nn.BatchNorm1d(out_channels),
+                    nn.ReLU(),
+                    nn.Conv1d(out_channels, out_channels, kernel_size=3, padding=1),
+                    nn.BatchNorm1d(out_channels),
+                    nn.ReLU(),
+                    nn.Dropout1d(p=0.01)
                 )
             )
             in_channels = out_channels
         out_channels = filter_sizes[-1]
 
-        self.film_snr = FiLMGenerator(1, filter_sizes[:-1])
+        self.film_snr = FiLMGenerator(1, filter_sizes)
         self.pool = nn.MaxPool1d(2)
 
         self.conv_final = nn.Sequential(
-            nn.Conv1d(filter_sizes[-1]*(spectra_dim//(2**num_layers)), out_features, kernel_size=3, pad=1),
-            #nn.BatchNorm1d(num_components*3),
-            #nn.ReLU,
-            #nn.Conv1d(num_components, num_components,kernel_size=3, padding=1)
+            nn.Conv1d(filter_sizes[-1]*(spectra_dim//(2**(num_layers-1))), out_features, kernel_size=3, padding=1),
+            nn.BatchNorm1d(out_features),
+            nn.ReLU(),
+            nn.Conv1d(out_features, out_features,kernel_size=3, padding=1),
+            nn.Threshold(threshold=0.1, value=0.1)
         )
 
-    def forward(self, *x:List[torch.tensor]):
+    def forward(self, *y:List[torch.tensor]):
         """
         Input shape: Batch,1,Environment_dim,Environment_dim,Spectra_dim ; Batch, 1
         Output shape: Batch, 1, Num_components*3
         """
 
-        snr = x[1]
-        x = x[0]
+        snr = y[1]
+        x = y[0]
         B,C,H,W,D = x.shape
         assert H==W
         assert H==self.environment_dim, LOGGER.error(f"Environment dim(Width and Height) specified in network is {self.environment_dim} but the given tensor has a dim of {H}")
         assert D==self.spectra_dim, LOGGER.error(f"Spectra dim(Depth) specified in network is {self.spectra_dim} but the given tensor has a dim of {D}")
         
-        x = self.first_conv(x)
+        x = self.conv_first(x)
         x=x.squeeze(2).squeeze(2)
 
         film_snr_params = self.film_snr(snr)
 
         for i in range(self.num_layers):
             x = self.encoder[i](x)
-            gamma, beta = film_snr_params[::-1][i]
-            x = gamma*x+beta
+            gamma, beta = film_snr_params[i]
+            x = gamma.squeeze(-1)*x+beta.squeeze(-1)
             if i<self.num_layers-1:
                 x = self.pool(x)
         x = x.reshape(B, x.shape[1]*x.shape[2], 1)
 
-        return self.conv_final(x).reshape(B, 1, x.shape[1])
+        x = self.conv_final(x)
+        x = x.reshape(B, 1, x.shape[1])
+        if len(y) >= 3:
+            return x, y[2]
+        else:
+            return x

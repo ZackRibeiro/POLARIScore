@@ -344,8 +344,40 @@ class Trainer():
             actual_time = time.time()
             epoch_time = actual_time - epoch_time
             time_left = (actual_time-start_time) / (epoch+1) * (epoch_number-(epoch+1))
-            LOGGER.print(f'Epoch {total_epoch}/{l_ep + epoch_number} | Elapsed: {_format_time(actual_time-start_time)} | Time Left: {_format_time(time_left)} | Training Loss: {epoch_loss}, Validation loss: {val_total_loss if val_total_loss else "Not computed"}', type="training", level=1, color="34m")
-            
+
+            if len(self.validation_losses) > 2:
+                if self.validation_losses[-1][1]-self.validation_losses[-2][1] > 0:
+                    v_loss_color = "\033[31m" #red
+                else:
+                    v_loss_color = "\033[32m" #green
+            else:
+                v_loss_color = ""
+
+            if val_total_loss:
+                val_loss_str = f"{v_loss_color}{val_total_loss}\033[0m"
+            else:
+                val_loss_str = f"Not computed"
+
+            if len(self.training_losses) > 2:
+                if self.training_losses[-1][1]-self.training_losses[-2][1] > 0:
+                    e_loss_color = "\033[31m" #red
+                else:
+                    e_loss_color = "\033[32m" #green
+            else:
+                e_loss_color = ""
+            e_loss_str = f"{e_loss_color}{epoch_loss}\033[0m"
+
+
+            LOGGER.print(
+                f"Epoch {total_epoch}/{l_ep + epoch_number} | "
+                f"Elapsed: {_format_time(actual_time-start_time)} | "
+                f"Time Left: {_format_time(time_left)} | "
+                f"Training Loss: {e_loss_str}, Validation loss: {val_loss_str}",
+                type="training",
+                level=1,
+                color="34m"
+            )
+
         self.last_epoch = total_epoch
         self.learning_rate = self.scheduler.get_last_lr()[0] if self.scheduler is not None else self.learning_rate
 

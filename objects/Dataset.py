@@ -144,7 +144,7 @@ class Dataset():
         self.batch.append(imgs_path)
     
     def get(self, indexes:Union[List[int],int,None] = None):
-        """Returns a list of pairs if indexes is not a list of integers, else returns just the pair of images corresponding to the given index."""
+        """Returns a list of pairs if indexes is a list of integers, else returns just the pair of data corresponding to the given index."""
         if len(self.batch) == 0:
             LOGGER.error("Can't load images in dataset because it's empty.")
             return

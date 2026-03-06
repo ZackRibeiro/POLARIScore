@@ -59,7 +59,10 @@ def _worker_get_gaussians_params(job:Dict)->Tuple[int, np.ndarray]:
     if len(props['params']) > max_gaussian_components*3:
         gaussian_params = props['params'][:max_gaussian_components*3]
     else:
-        props['params'] = np.array(props['params'].tolist().extend([0 for _ in range(max_gaussian_components*3-len(props['params']))]))
+        extra = [0 for _ in range(max_gaussian_components*3-len(props['params']))]
+        new_params = props['params'].tolist()
+        new_params.extend(extra)
+        props['params'] = np.array(new_params)
         gaussian_params = props['params']
     return index, gaussian_params
 
@@ -283,7 +286,7 @@ class SpectrumMap():
         Returns:
             dataset: the new dataset.
         """
-        order = ["spectrum", "snr"]
+        order = ["channels", "spectrum", "snr"]
         if "gaussians" in what_to_compute and what_to_compute["gaussians"] is not None and what_to_compute["gaussians"] > 0:
             order.append("gaussians")
         if snr is not None:
@@ -300,7 +303,7 @@ class SpectrumMap():
         iteration = 0
         while spectra_generated < number and iteration < number*100:
             iteration += 1
-            printProgressBar(pos_explored, number, prefix=f"Building dataset ({iteration})")
+            printProgressBar(spectra_generated, number, prefix=f"Building dataset ({iteration})")
             if iteration >= number*100:
                 LOGGER.warn("Failed to generated all the requested random spectras, nbr of spectra generated:"+str(spectra_generated))
                 break
@@ -318,28 +321,28 @@ class SpectrumMap():
             
             
             clean_spectra = []
-            for xi in len(spectra):
+            for xi in range(len(spectra)):
                 clean_spectra.append([])
-                for yi in len(spectra):
+                for yi in range(len(spectra)):
                     clean_spectra[xi].append(spectra[xi][yi].spectrum)
-            b = [np.array(clean_spectra), random_snr]
+            b = [np.array(spectra[0][0].get_X()), np.array(clean_spectra), random_snr]
 
             if "gaussians" in order:
-                _, gaussian_parameters = _worker_get_gaussians_params(job={
+                _, gaussian_parameters = _worker_get_gaussians_params(job=(1,{
                     "data": self.map[x][y],
                     "x": x,
                     "y": y,
                     "output": self.output_settings,
                     'extra_args':{'max_gaussian_components': what_to_compute["gaussians"],
                     'fit_method':'dendrogram'}
-                })
+                }))
                 b.append(gaussian_parameters)
             
             if random_snr > 0:
                 noisy_spectra = []
-                for xi in len(spectra):
+                for xi in range(len(spectra)):
                     noisy_spectra.append([])
-                    for yi in len(spectra):
+                    for yi in range(len(spectra)):
                         noisy_spectra[xi].append(spectra[xi][yi].add_noise(random_snr))
                 b.append(np.array(noisy_spectra))
             

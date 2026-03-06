@@ -85,7 +85,7 @@ class DDPTrainer(Trainer):
 
     def q_sample(self, x_start: torch.Tensor, t: torch.Tensor, noise: Optional[torch.Tensor] = None):
         """
-        Diffuse the data (sample from q(x_t | x_0))
+        Dimse_lossffuse the data (sample from q(x_t | x_0))
         Args:
             x_start: (B, C, H, W)
             t: (B,) timesteps indices in [0, T-1]

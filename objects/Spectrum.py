@@ -82,7 +82,7 @@ class Spectrum():
             fig, ax = plt.subplots()
         else:
             fig = ax.figure
-        channels = np.arange(len(self.spectrum)) if channels is None else channels
+        channels = self.get_X() if channels is None else channels
 
         ax.plot(channels,self.spectrum, color="black", label="data")
         ax.set_xlabel("Velocity [m/s]")
@@ -98,7 +98,10 @@ class Spectrum():
             else:
                 y_fit, props = self.fit_settings
                 gaussian_params = props['params']
-                ax.plot(channels, y_fit, 'r-', label=rf'fit=$\sum^{props["N"]}_i G_i$')
+                if y_fit is None:
+                    y_fit = _gaussian_sum(channels, gaussian_params, props["N"])
+                    self.fit_settings = y_fit, props
+                ax.plot(channels, y_fit, 'r-', label=r'fit=$\sum^{'+str(props["N"])+r'}_i G_i$')
                 if show_fit_gaussians:
                     colormap = plt.get_cmap("viridis")
                     for i in range(props['N']):
@@ -116,11 +119,11 @@ class Spectrum():
             return self.X
         if output_settings is None:
             LOGGER.warn("Can't get x axis of spectrum because there is no output settings")
-            return
+            return range(len(self.spectrum))
         for key in ["v_function","lsr_velocity","velocity_channels","velocity_resolution"]:
             if not(key in output_settings):
                 LOGGER.warn(f"Can't get x axis of spectrum because there is no key {key} in output settings")
-                return
+                return range(len(self.spectrum))
         self.X = output_settings["v_function"](output_settings["lsr_velocity"],output_settings["velocity_channels"],output_settings["velocity_resolution"])
         return self.X
 
