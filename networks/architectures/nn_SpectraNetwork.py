@@ -49,11 +49,9 @@ class SpectraNetwork(BaseModule):
         self.pool = nn.MaxPool1d(2)
 
         self.conv_final = nn.Sequential(
-            nn.Conv1d(filter_sizes[-1]*(spectra_dim//(2**(num_layers-1))), out_features, kernel_size=3, padding=1),
-            nn.BatchNorm1d(out_features),
+            nn.Linear(filter_sizes[-1]*(spectra_dim//(2**(num_layers-1))), 256),
             nn.ReLU(),
-            nn.Conv1d(out_features, out_features,kernel_size=3, padding=1),
-            nn.Threshold(threshold=0.1, value=0.1)
+            nn.Linear(256, out_features)
         )
 
     def forward(self, *y:List[torch.tensor]):
@@ -63,7 +61,7 @@ class SpectraNetwork(BaseModule):
         """
 
         snr = y[1]
-        x = y[0]
+        x = F.relu(y[0])
         B,C,H,W,D = x.shape
         assert H==W
         assert H==self.environment_dim, LOGGER.error(f"Environment dim(Width and Height) specified in network is {self.environment_dim} but the given tensor has a dim of {H}")
@@ -71,6 +69,7 @@ class SpectraNetwork(BaseModule):
         
         x = self.conv_first(x)
         x=x.squeeze(2).squeeze(2)
+
 
         film_snr_params = self.film_snr(snr)
 
@@ -82,9 +81,16 @@ class SpectraNetwork(BaseModule):
                 x = self.pool(x)
         x = x.reshape(B, x.shape[1]*x.shape[2], 1)
 
-        x = self.conv_final(x)
-        x = x.reshape(B, 1, x.shape[1])
-        if len(y) >= 3:
-            return x, y[2]
-        else:
-            return x
+        x = x.flatten(1)
+        params = self.conv_final(x)
+        params = params.unsqueeze(1)
+
+        amp, mu, sigma = torch.chunk(params, 3, dim=-1)
+
+        amp = F.softplus(amp)
+        sigma = F.softplus(sigma) + 1e-4
+
+        params = torch.cat([amp, mu, sigma], dim=-1)
+
+        #x = x.reshape(B, 1, x.shape[1])
+        return params

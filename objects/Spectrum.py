@@ -169,7 +169,7 @@ class Spectrum():
             dy = np.empty_like(y, dtype=float)
             dy[0] = 0.0 
             dy[1:] = (y[1:] - y[:-1])
-            ddy = np.gradient(dy)
+            #ddy = np.gradient(dy)
             roots = find_roots(x, dy, interp=None)
 
             min_y = np.max(y)

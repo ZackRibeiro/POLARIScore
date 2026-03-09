@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 import matplotlib
 from scipy.optimize import curve_fit
+from typing import List
 
 from POLARIScore.objects.Simulation_DC import Simulation_DC
 from POLARIScore.utils.sim_utils import init_idefix,init_ramses
@@ -19,14 +20,32 @@ from torch import nn
 sim = Simulation_DC("turb_sim_C")
 from POLARIScore.objects.SpectrumMap import SpectrumMap, getSimulationSpectra
 from POLARIScore.objects.Spectrum import Spectrum
-maps = getSimulationSpectra(simulation=sim, axes=[0])
-#maps[0].plot(fit='dendrogram')
-#map = maps[0]
-#pca = map.pca(plot=True)
-#sim.plot_pdf(offset_method="none", what="cdens")
 
-#ds = maps[0].generate_dataset(name="spectra_C", number=128*10)
-ds = getDataset("batch_spectra_C")
+sim_names = ["turb_sim_A"]#,"turb_sim_B","turb_sim_C"]
+GENERATE_DATASET = False
+number_per_face = int(128*128*.2)
+if GENERATE_DATASET:
+    datasets_to_merge:List['Dataset'] = []
+    for s in sim_names:
+        sim = Simulation_DC(s)
+        maps = getSimulationSpectra(simulation=sim, axes=[0,1,2])
+        for i, m in enumerate(maps):
+            ds = getDataset("batch_spectra_"+str(s)+"_"+str(i))
+            if ds is not None:
+                datasets_to_merge.append(ds)
+                continue
+            m.generate_dataset(name="spectra_"+str(s)+"_"+str(i), number=number_per_face)
+            datasets_to_merge.append(getDataset("batch_spectra_"+str(s)+"_"+str(i)))
+    datasets_to_merge[0].merge(datasets_to_merge[1:], delete=False, save=True, name="spectra")
+    ds = getDataset("batch_spectra")
+    ds1, ds2 = ds.split(0.8)
+    ds1.save()
+    ds2.save()
+training_set, validation_set = getDataset("batch_spectra_b1"), getDataset("batch_spectra_b2")
+
+#training_set.check_sanity(remove=True)
+#validation_set.check_sanity(remove=True)
+
 def _plot_spectrum(ds:'Dataset',ds_index:int=0):
     data = ds.get(ds_index)
     env_spectra = data[ds.get_element_index("noisy_spectrum")]
@@ -37,13 +56,12 @@ def _plot_spectrum(ds:'Dataset',ds_index:int=0):
     spect.fit_settings = None , {'params':gauss_params, 'N':len(gauss_params)//3}
     spect.plot(show_fit=True, show_dendrogram=False)
 
-training_set, validation_set = ds.split(0.9)
 from POLARIScore.networks.Trainer import Trainer
 from POLARIScore.networks.architectures.nn_SpectraNetwork import SpectraNetwork
 trainer = Trainer(network=SpectraNetwork, training_set=training_set, validation_set=validation_set, model_name="Spectral_Fit")
 trainer.network_settings['num_layers']=3
 trainer.network_settings['out_features']=10*3
-trainer.network_settings['base_filters']=16
+trainer.network_settings['base_filters']=64
 trainer.network_settings['environment_dim']=3
 trainer.network_settings['spectra_dim']=128
 
@@ -84,29 +102,32 @@ def spectrum_loss(output, target):
     """
 
 
-    channels = output[1]
+    #channels = output[1]
 
-    mse = F.mse_loss(output[0], target)
+    
+    print(torch.isnan(target).any(),torch.isnan(output).any())
+    mse = F.mse_loss(output, target)
 
-    pred_params = torch.exp(output[0])-1
-    true_params = torch.exp(target)-1
-    y_true = _gaussian_sum(channels, true_params, 10)
-    chisq = torch.mean(_chi_squared(pred_params, channels, y_true, 10))
+    #pred_params = torch.exp(output[0])-1
+    #true_params = torch.exp(target)-1
+    #y_true = _gaussian_sum(channels, true_params, 10)
+    #chisq = torch.mean(_chi_squared(pred_params, channels, y_true, 10))
 
     loss = mse
 
     return loss
 
-trainer.optimizer_name = "SGD"
-trainer.learning_rate = 1e-3
+torch.autograd.set_detect_anomaly(True)
+trainer.optimizer_name = "Adam"
+trainer.learning_rate = 1e-6
 trainer.init()
 trainer.loss_method = spectrum_loss
 trainer.validation_loss_method = spectrum_loss
 
 trainer.training_random_transform = False
-trainer.input_names = ["noisy_spectrum","snr","channels"]
+trainer.input_names = ["noisy_spectrum","snr"]
 trainer.target_names = ["gaussians"]
-trainer.train(1000, batch_number=128, early_stopping=True)
+trainer.train(1000, batch_number=512, early_stopping=True)
 
 val_batch = trainer.get_prediction_batch()
 print(val_batch)

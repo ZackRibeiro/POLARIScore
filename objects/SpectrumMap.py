@@ -328,14 +328,19 @@ class SpectrumMap():
             b = [np.array(spectra[0][0].get_X()), np.array(clean_spectra), random_snr]
 
             if "gaussians" in order:
-                _, gaussian_parameters = _worker_get_gaussians_params(job=(1,{
-                    "data": self.map[x][y],
-                    "x": x,
-                    "y": y,
-                    "output": self.output_settings,
-                    'extra_args':{'max_gaussian_components': what_to_compute["gaussians"],
-                    'fit_method':'dendrogram'}
-                }))
+                try:
+                    _, gaussian_parameters = _worker_get_gaussians_params(job=(1,{
+                        "data": self.map[x][y],
+                        "x": x,
+                        "y": y,
+                        "output": self.output_settings,
+                        'extra_args':{'max_gaussian_components': what_to_compute["gaussians"],
+                        'fit_method':'dendrogram'}
+                    }))
+                except:
+                    continue
+                if np.isnan(gaussian_parameters).any():
+                    continue
                 b.append(gaussian_parameters)
             
             if random_snr > 0:

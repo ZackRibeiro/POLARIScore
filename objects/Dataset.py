@@ -3,7 +3,7 @@ import os
 import shutil
 import re
 from POLARIScore.config import *
-from POLARIScore.utils.utils import plot_lines
+from POLARIScore.utils.utils import plot_lines, printProgressBar
 import json
 import glob
 import matplotlib.pyplot as plt
@@ -234,6 +234,8 @@ class Dataset():
             dataset: the other dataset(s)
             force: force the merging, like if a dataset have extra elements that others don't have, the extra channel will be removed.
             delete: delete older datasets
+            save: save the new merged dataset
+            name: Name of the new merged dataset
         Returns:
             merged_dataset
         """
@@ -283,16 +285,17 @@ class Dataset():
             result_ds.batch = b1+b2
 
             result_settings = merge_dicts(ds1.settings, ds2.settings)
-            ds1_sname = ds1.settings["SIM_name"]
-            ds2_sname = ds2.settings["SIM_name"]
-            sname = ""
-            if ds1_sname in ds2_sname:
-                sname = ds2_sname
-            elif ds2_sname in ds1_sname:
-                sname = ds1_sname
-            else:
-                sname = ds1_sname+"+"+ds2_sname
-            result_settings["SIM_name"] = sname
+            if "SIM_name" in ds1.settings:
+                ds1_sname = ds1.settings["SIM_name"]
+                ds2_sname = ds2.settings["SIM_name"]
+                sname = ""
+                if ds1_sname in ds2_sname:
+                    sname = ds2_sname
+                elif ds2_sname in ds1_sname:
+                    sname = ds1_sname
+                else:
+                    sname = ds1_sname+"+"+ds2_sname
+                result_settings["SIM_name"] = sname
             result_settings['order'] = merged_order
             result_ds.settings = result_settings
 
@@ -315,6 +318,32 @@ class Dataset():
             self.delete()
 
         return ds
+    
+    def check_sanity(self, what_to_check:Dict={"nan":True}, remove:bool=False)->List[int]:
+        corrupted_indexes = []
+        check_nan = "nan" in what_to_check and what_to_check["nan"]
+
+        for i in range(len(self.batch)):
+            printProgressBar(i, len(self.batch), prefix="Sanity check")
+            datas = self.get(i)
+            flag = False
+            for data in datas:  
+                if check_nan and isinstance(data, np.ndarray):
+                    flag = flag or np.isnan(data).any()
+                    break
+            if flag:
+                corrupted_indexes.append(i)
+
+        if len(corrupted_indexes) > 0:
+            LOGGER.log(f"{len(corrupted_indexes)} elements don't correspond to standards.")
+        else:
+            LOGGER.log("Sanity check done without problems.")
+
+        self.save_diagnostic(channels=None)
+        
+        return corrupted_indexes
+
+
     
     def clone(self, new_name:str)->'Dataset':
         ds = Dataset()
@@ -467,12 +496,16 @@ class Dataset():
             Dict: if more that one channel in channels: dicts will be nested into 'channel_{channel_name}'.
         """
 
+        if channels is None:
+            channels = self.settings['order']
         channels = channels if type(channels) is list else [channels]
 
         batch = self.get()
         map_indexes = self.get_element_index(channels)
         map_indexes = map_indexes if type(map_indexes) is list else [map_indexes]
         result_dicts = {}
+
+        result_dicts["global"] = {}
         for i,b in enumerate(batch):
             temp_dict = {"index": i}
             for j,map_index in enumerate(map_indexes):
@@ -485,10 +518,15 @@ class Dataset():
                     "max": float(np.max(data)),
                     "median": float(np.median(data)),
                 }
-                if len(channels) == 1:
-                    temp_dict.update(stats)
-                else:
-                    temp_dict['channel_'+channels[j]] = stats
+                temp_dict['channel_'+channels[j]] = stats
+                if 'channel_'+channels[j] not in result_dicts["global"]:
+                    result_dicts["global"]['channel_'+channels[j]] = {}
+                if "min" not in result_dicts["global"]['channel_'+channels[j]]:
+                    result_dicts["global"]['channel_'+channels[j]]["min"] = np.inf
+                    result_dicts["global"]['channel_'+channels[j]]["max"] = -np.inf
+                result_dicts["global"]['channel_'+channels[j]]["min"] = min(stats["min"], result_dicts["global"]['channel_'+channels[j]]["min"])
+                result_dicts["global"]['channel_'+channels[j]]["max"] = max(stats["max"], result_dicts["global"]['channel_'+channels[j]]["max"])
+
             result_dicts[i] = temp_dict
 
         if not(os.path.exists(TRAINING_BATCH_FOLDER)):
@@ -500,7 +538,6 @@ class Dataset():
         if os.path.exists(path):
             LOGGER.warn(f"Previous diagnostic file was removed for dataset {self.name}.")
             os.remove(path)
-        print(result_dicts)
         with open(path, "w") as file:
             json.dump(result_dicts, file, indent=4, cls=NumpyEncoder)
         LOGGER.log(f"Diagnostic of {self.name} saved to {path}.")
