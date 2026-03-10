@@ -274,8 +274,14 @@ class SpectrumMap():
         """
         Method to generate a dataset from spectrum map.
 
+        What is computed (and so can be used to denormalize data):
+        - 'x channels': in m/s
+        - 'spectrum': in real intensity unit
+        - 'noisy_spectrum': in real intensity unit
+        - 'amplitude': maximum amplitude of the spectrum without noise
+
         What can be computed:
-        - 'gaussians': fit the spectrum and save gaussian parameters
+        - 'gaussians': fit the spectrum and save gaussian parameters (normalized between -1 and 1)
         - 'noisy_spectrum' if snr is not None
 
         Args:
@@ -286,9 +292,11 @@ class SpectrumMap():
         Returns:
             dataset: the new dataset.
         """
-        order = ["channels", "spectrum", "snr"]
+        order = ["channels", "spectrum", "snr", "amplitude"]
         if "gaussians" in what_to_compute and what_to_compute["gaussians"] is not None and what_to_compute["gaussians"] > 0:
-            order.append("gaussians")
+            order.append("gaussians_amplitudes")
+            order.append("gaussians_means")
+            order.append("gaussians_sigmas")
         if snr is not None:
             order.append("noisy_spectrum")
 
@@ -325,9 +333,14 @@ class SpectrumMap():
                 clean_spectra.append([])
                 for yi in range(len(spectra)):
                     clean_spectra[xi].append(spectra[xi][yi].spectrum)
-            b = [np.array(spectra[0][0].get_X()), np.array(clean_spectra), random_snr]
+            
+            max_amplitude = np.max(clean_spectra)
+            b = [np.array(spectra[0][0].get_X())
+                 , np.array(clean_spectra)/max_amplitude
+                 , random_snr
+                 , max_amplitude]
 
-            if "gaussians" in order:
+            if "gaussians_amplitudes" in order:
                 try:
                     _, gaussian_parameters = _worker_get_gaussians_params(job=(1,{
                         "data": self.map[x][y],
@@ -341,7 +354,14 @@ class SpectrumMap():
                     continue
                 if np.isnan(gaussian_parameters).any():
                     continue
-                b.append(gaussian_parameters)
+                gaussian_parameters = np.array(gaussian_parameters)
+                gaussian_amplitudes = gaussian_parameters[0::3]/max_amplitude
+                gaussian_means = gaussian_parameters[1::3]/np.max(np.abs(b[0]))
+                gaussian_sigmas = gaussian_parameters[2::3]/np.max(np.abs(b[0]))
+                b.append(gaussian_amplitudes)
+                b.append(gaussian_means)
+                b.append(gaussian_sigmas)
+
             
             if random_snr > 0:
                 noisy_spectra = []

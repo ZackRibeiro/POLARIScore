@@ -17,13 +17,16 @@ from POLARIScore.objects.SimulationArray import SimulationArray
 from POLARIScore.objects.Dataset import Dataset, getDataset
 from torch import nn
 
-sim = Simulation_DC("turb_sim_C")
+#sim = SimulationArray(name="turb_sim_A")
+sim = SimulationArray(simulations=[Simulation_DC("turb_sim_A"),Simulation_DC("adastra_512")], indexes=[0,1])
 from POLARIScore.objects.SpectrumMap import SpectrumMap, getSimulationSpectra
 from POLARIScore.objects.Spectrum import Spectrum
+sim.plot(plot_method=Simulation_DC.plot_pdf, what="vel", colors="viridis", drawstyle=None)
 
+"""
 sim_names = ["turb_sim_A"]#,"turb_sim_B","turb_sim_C"]
 GENERATE_DATASET = False
-number_per_face = int(128*128*.2)
+number_per_face = int(128*128*.05)
 if GENERATE_DATASET:
     datasets_to_merge:List['Dataset'] = []
     for s in sim_names:
@@ -61,76 +64,67 @@ from POLARIScore.networks.architectures.nn_SpectraNetwork import SpectraNetwork
 trainer = Trainer(network=SpectraNetwork, training_set=training_set, validation_set=validation_set, model_name="Spectral_Fit")
 trainer.network_settings['num_layers']=3
 trainer.network_settings['out_features']=10*3
-trainer.network_settings['base_filters']=64
+trainer.network_settings['base_filters']=32
 trainer.network_settings['environment_dim']=3
 trainer.network_settings['spectra_dim']=128
 
 trainer.norms = { 
     "channels": (lambda x:x,lambda x:x),
+    "noisy_spectrum": (lambda x:x, lambda x:x),
+    "gaussians_amplitudes": (lambda x:x, lambda x:x),
+    "gaussians_sigmas": (lambda x:x, lambda x:x),
+    "gaussians_means": (lambda x:x, lambda x:x),
+    "snr": (lambda x:x, lambda x:x),
 }
 
 
 import torch
 import torch.nn.functional as F
 def _gaussian(x, A, mu, sigma):
-    return torch.abs(A) * torch.exp(-((x - mu) ** 2) / (2 * sigma ** 2))
+    return A * torch.exp(-.5*((x - mu) / (sigma))**2)
 
-
-def _gaussian_sum(x, params, N):
+def _gaussian_sum(amps, means, sigmas, N):
+    B = means.shape[0]
+    x = torch.linspace(-1, 1, steps=128, device=means.device).view(1, 1, 128).expand(B, 1, 128)
     y = torch.zeros_like(x)
-
     for i in range(N):
-        A = params[:,:,3 * i]
-        mu = params[:,:,3 * i + 1]
-        sigma = params[:,:,3 * i + 2]
+        A = amps[:,:,i]
+        mu = means[:,:,i]
+        sigma = sigmas[:,:,i]
 
         gaussian = _gaussian(x, A, mu, sigma)
-        gaussian = torch.nan_to_num(gaussian, nan=0)
         y = y + gaussian
 
     return y
 
-
-def _chi_squared(params, x, y_true, N):
-    y_model = _gaussian_sum(x, params, N)
-    return torch.sum((y_true - y_model) ** 2 / (y_model + 1e-8))
-
 def spectrum_loss(output, target):
-    """
-    output: predicted gaussian parameters [A1, mu1, sigma1, ...]
-    target: true gaussian parameters
-    """
 
+    means = target[1]
+    amps = target[0]
+    sigmas = target[2]
 
-    #channels = output[1]
-
+    y_true = _gaussian_sum(amps, means, sigmas, 10)
+    y_predict = _gaussian_sum(output[0], output[1], output[2], 10)
     
-    print(torch.isnan(target).any(),torch.isnan(output).any())
-    mse = F.mse_loss(output, target)
-
-    #pred_params = torch.exp(output[0])-1
-    #true_params = torch.exp(target)-1
-    #y_true = _gaussian_sum(channels, true_params, 10)
-    #chisq = torch.mean(_chi_squared(pred_params, channels, y_true, 10))
-
-    loss = mse
+    loss = F.mse_loss(y_predict, y_true)
 
     return loss
 
-torch.autograd.set_detect_anomaly(True)
-trainer.optimizer_name = "Adam"
-trainer.learning_rate = 1e-6
+#torch.autograd.set_detect_anomaly(True)
+trainer.optimizer_name = "SGD"
+trainer.learning_rate = 1e-3
 trainer.init()
 trainer.loss_method = spectrum_loss
 trainer.validation_loss_method = spectrum_loss
 
 trainer.training_random_transform = False
-trainer.input_names = ["noisy_spectrum","snr"]
-trainer.target_names = ["gaussians"]
-trainer.train(1000, batch_number=512, early_stopping=True)
+trainer.input_names = ["noisy_spectrum","snr", "channels"]
+trainer.target_names = ["gaussians_amplitudes","gaussians_means","gaussians_sigmas"]
+trainer.train(1000, compute_validation=1, batch_number=512, early_stopping=False)
 
 val_batch = trainer.get_prediction_batch()
 print(val_batch)
+"""
 
 #sim = SimulationArray(name="turb_sim_A")
 #sim.plot(

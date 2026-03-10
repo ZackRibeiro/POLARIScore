@@ -11,7 +11,7 @@ from matplotlib.colors import LogNorm
 import shutil
 from matplotlib.widgets import Slider
 from typing import Any, Dict, List, Union, Tuple, Literal, Callable
-import ast
+import copy
 import re
 from POLARIScore.utils.utils import NumpyEncoder, numpy_decoder, merge_dicts, split_dict
 
@@ -28,7 +28,7 @@ Example of what a batch can contains:
 def _formate_name(name:str):
     return name
 
-def _open_batch(batch_name:str):
+def _open_batch(batch_name:str)->Tuple[Dict[int, List], List[str]]:
     assert os.path.exists(TRAINING_BATCH_FOLDER), LOGGER.error(f"Can't open batch {batch_name}, no folder exists.")
     batch_path = os.path.join(TRAINING_BATCH_FOLDER,batch_name)
 
@@ -36,7 +36,7 @@ def _open_batch(batch_name:str):
     files = [f.split("/")[-1] for f in files]
     files = sorted(files)
 
-    imgs = [[] for _ in range(len(np.unique([int(f.split("_")[0]) for f in files])))]
+    data_dict = {}
     order = []
 
     batch_contains = []
@@ -52,10 +52,12 @@ def _open_batch(batch_name:str):
 
         ids = [int(f.split("_")[0]) for f in pot_files]
         indexes = np.argsort(ids)
-        for j,i in enumerate(indexes):
-            imgs[j].append(os.path.join(batch_path,pot_files[i]))
+        for i in indexes:
+            if i not in data_dict:
+                data_dict[i] = []
+            data_dict[i].append(os.path.join(batch_path,pot_files[i]))
         order.append(bc)
-    return imgs, order
+    return data_dict, order
 
 def getDataset(name:str)->"Dataset":
     """Get dataset by name"""
@@ -65,13 +67,16 @@ def getDataset(name:str)->"Dataset":
     except AssertionError:
         LOGGER.error(f"Can't load dataset: {name}")
         return None
+    except FileNotFoundError:
+        LOGGER.error(f"Dataset folder was not found. ({name})")
+        return None
     return ds
 
 class Dataset():
     """Datasets contains just the imgs paths for reducing the memory usage"""
     def __init__(self):
-        self.batch:List[Union[str, List[str]]] = []
-        """A batch is a list of file paths or a list of pairs(i.e list of list) of paths. 
+        self.batch:Dict[int,List[str]] = {}
+        """A batch is a dict of file paths list. 
         For example for one element of the list, it can have two paths: one for volume density and another one for column density."""
         self.settings:Dict = {}
         """settings (can) contains:
@@ -127,7 +132,7 @@ class Dataset():
         if change_name:
             self.name = name
         batch, order = _open_batch(name)
-        self.batch.extend(batch)
+        self.batch = {**self.batch, **batch}
 
         settings = {}
         with open(os.path.join( os.path.join(TRAINING_BATCH_FOLDER,name),'settings.json')) as file:
@@ -142,6 +147,22 @@ class Dataset():
 
     def add(self,imgs_path:Union[str,List[str]]):
         self.batch.append(imgs_path)
+
+    def remove(self, indexes:Union[int,List[int]])->List[str]:
+        
+        assert os.path.exists(TRAINING_BATCH_FOLDER)
+        batch_path = os.path.join(TRAINING_BATCH_FOLDER,"batch_"+str(self.name).split("batch_")[-1])
+        assert os.path.exists(batch_path)
+        indexes = [indexes] if isinstance(indexes, int) else indexes
+        for i in indexes:
+            if i not in self.batch:
+                continue
+            element_paths = self.batch[i]
+            for path in element_paths:
+                os.remove(path)
+            del self.batch[i]
+        LOGGER.log(f"{len(indexes)} removed form dataset.")
+        return indexes
     
     def get(self, indexes:Union[List[int],int,None] = None):
         """Returns a list of pairs if indexes is a list of integers, else returns just the pair of data corresponding to the given index."""
@@ -149,14 +170,22 @@ class Dataset():
             LOGGER.error("Can't load images in dataset because it's empty.")
             return
         if not(indexes is None):
-            if not(type(indexes) is list):
-                return self.load(np.array(self.batch)[indexes])
+            if not(isinstance(indexes, (torch.Tensor, np.ndarray, list))):
+                return self.load(self.batch[indexes])
             elif len(indexes) < 2:
-                return self.load(np.array(self.batch)[indexes[0]])
+                return self.load(self.batch[indexes[0]])
             else:
-                return self.load(np.array(self.batch)[np.array(indexes)])
+                to_load = []
+                for i in indexes:
+                    if np.int64(i) in self.batch:
+                        to_load.append(self.batch[np.int64(i)])
+                    elif np.int32(i) in self.batch:
+                            to_load.append(self.batch[np.int32(i)])
+                    else:
+                        to_load.append(self.batch[i])
+                return self.load(to_load)
         else:
-            return self.load(np.array(self.batch))
+            return self.load(self.batch.values())
 
     def load(self, paths:List[Union[List, np.ndarray, str]])->List[Union[List[np.ndarray],np.ndarray]]:
         result = []
@@ -186,7 +215,7 @@ class Dataset():
         channel_indexes = ([self.get_element_index(c) for c in channel_names])
 
         order = self.settings['order']
-        for bi in range(len(self.batch)):
+        for bi in self.batch.keys():
             batch = self.get(bi)
             for ci, channel_index in enumerate(channel_indexes):
                 img = batch[channel_index]
@@ -207,21 +236,27 @@ class Dataset():
         Divide the dataset into two subsets, split at the cutoff parameter.
         """
         LOGGER.log(f"Splitting dataset {self.name} with cutoff at {cutoff}")
-        batch = np.array(self.batch)
-        cut_index = int(cutoff * len(batch))
+        batch_keys = np.array(list(self.batch.keys()))
+        cut_index = int(cutoff * len(batch_keys))
 
         b1_settings, b2_settings = split_dict(self.settings, cut_index)
         b1_settings["order"] = self.settings["order"]
         b2_settings["order"] = self.settings["order"]
         b1_data, b2_data = split_dict(self.data, cut_index)
+
+        def _make_new_dict(data, indexes):
+            new_dict = {}
+            for i in indexes:
+                new_dict[i] = data[i]
+            return new_dict 
                     
         b1 = Dataset()
-        b1.batch = batch[:cut_index]
+        b1.batch = _make_new_dict(self.batch,batch_keys[:cut_index])
         b1.settings = b1_settings
         b1.data = b1_data
         b1.name = self.name + "_b1"
         b2 = Dataset()
-        b2.batch = batch[cut_index:]
+        b2.batch = _make_new_dict(self.batch,batch_keys[cut_index:])
         b2.settings = b2_settings
         b2_data = b2_data
         b2.name = self.name + "_b2"
@@ -262,27 +297,32 @@ class Dataset():
                     merged_order.append(o)
 
             def _arrange_batch(ds:'Dataset'):
-                new_batch = []
+                new_batch = {}
                 sorted_indexes = None
-                for b in ds.batch:
+                for b in ds.batch.keys():
                     new_b = []
                     order = []
-                    for i,img in enumerate(b):
+                    for i,data in enumerate(ds.batch[b]):
                         o = ds.settings['order'][i]
                         if not(o in merged_order):
                             continue
-                        new_b.append(img)
+                        new_b.append(data)
                         order.append(o)
                     if sorted_indexes is None:
                         pos = {v: i for i, v in enumerate(merged_order)}
                         sorted_indexes = sorted(range(len(order)), key=lambda i: pos.get(order[i], float('inf')))
                     new_b = np.array(new_b)[sorted_indexes].tolist()
-                    new_batch.append(new_b)
+                    new_batch[b] = new_b
                 return new_batch
             
             b1 = _arrange_batch(ds1)
             b2 = _arrange_batch(ds2)
-            result_ds.batch = b1+b2
+            result_ds.batch = b1
+            i = len(b1.keys())
+            for j in b2.keys():
+                result_ds.batch[i] = b2[j]
+                i += 1
+            del i
 
             result_settings = merge_dicts(ds1.settings, ds2.settings)
             if "SIM_name" in ds1.settings:
@@ -323,21 +363,29 @@ class Dataset():
         corrupted_indexes = []
         check_nan = "nan" in what_to_check and what_to_check["nan"]
 
-        for i in range(len(self.batch)):
-            printProgressBar(i, len(self.batch), prefix="Sanity check")
+        wrong_channels = []
+        for i in self.batch.keys():
+            printProgressBar(i, len(self.batch.keys()), prefix="Sanity check")
             datas = self.get(i)
             flag = False
-            for data in datas:  
+            for j,data in enumerate(datas):  
                 if check_nan and isinstance(data, np.ndarray):
                     flag = flag or np.isnan(data).any()
-                    break
+                    if flag:
+                        if self.settings['order'][j] not in wrong_channels:
+                            wrong_channels.append(self.settings['order'][j])
+                        break
             if flag:
                 corrupted_indexes.append(i)
 
+        print("")
         if len(corrupted_indexes) > 0:
-            LOGGER.log(f"{len(corrupted_indexes)} elements don't correspond to standards.")
+            LOGGER.log(f"{len(corrupted_indexes)} elements don't correspond to standards. ({str(wrong_channels)})")
         else:
             LOGGER.log("Sanity check done without problems.")
+
+        if remove:
+            self.remove(corrupted_indexes)
 
         self.save_diagnostic(channels=None)
         
@@ -347,9 +395,9 @@ class Dataset():
     
     def clone(self, new_name:str)->'Dataset':
         ds = Dataset()
-        ds.batch = self.batch
-        ds.settings = self.settings
-        ds.data = self.data
+        ds.batch = copy.deepcopy(self.batch)
+        ds.settings = copy.deepcopy(self.settings)
+        ds.data = copy.deepcopy(self.data)
         ds.name = new_name
         return ds
 
@@ -385,7 +433,7 @@ class Dataset():
         methods = methods if isinstance(methods, list) else [methods]
         axes = axis if isinstance(axis, list) else [axis]
 
-        for bi in range(len(ds.batch)):
+        for bi in ds.batch.keys():
             batch = ds.get(bi)
             for ci, channel_index in enumerate(channel_indexes):
                 img = batch[channel_index]
@@ -446,7 +494,7 @@ class Dataset():
         """Apply the 'function' to the dataset on a specific 'channel'"""
         map_index = self.get_element_index(channel)
         result = []
-        for i,_ in enumerate(self.batch):
+        for i in self.batch.keys():
             result.append(function(np.array(self.get(i)[map_index]).flatten()))
         return result
 
@@ -582,7 +630,7 @@ class Dataset():
                     np.save(os.path.join(batch_path,str(i)+"_"+o+".npy"), imgs[j])
         else:
             batch = self.batch
-            for i,_ in enumerate(self.batch):
+            for i in self.batch.keys():
                 imgs = self.get(i)
                 for j,o in enumerate(order):
                     np.save(os.path.join(batch_path,str(i)+"_"+o+".npy"), imgs[j])
@@ -647,7 +695,7 @@ class Dataset():
 
         if enable_slider:
             ax_slider = plt.axes([0.2, 0.05, 0.6, 0.03])
-            slider = Slider(ax_slider, 'Element index', -1, len(self.batch) - 1, valinit=element_index, valfmt='%0i')
+            slider = Slider(ax_slider, 'Element index', -1, len(self.batch.keys()) - 1, valinit=element_index, valfmt='%0i')
             slider.on_changed(update_element_index)  
             plt.show()
 
@@ -669,7 +717,7 @@ class Dataset():
         ax_histo = fig.add_axes([left, bottom+0.1, width, height-0.1])
         histo_bins = 20
 
-        batch = self.get(indexes=element_index if element_index > -1 else None)
+        batch = self.get(indexes=self.batch.keys()[element_index] if element_index > -1 else None)
         if element_index > -1:
             batch = [batch]
 
@@ -718,7 +766,7 @@ class Dataset():
         ax.set_visible(False)
         ax_map = fig.add_axes([left, bottom+0.1, width, height-0.1])
 
-        batch = self.get(indexes=element_index if element_index > -1 else None)
+        batch = self.get(indexes=self.batch.keys()[element_index] if element_index > -1 else None)
         im = ax_map.imshow(batch[map_index] if len(batch[map_index].shape) <= 2 else np.sum(batch[map_index], axis=-1), norm=LogNorm(), cmap="jet",
                            extent=[val for ae in self.settings["areas_explored"][0][map_index] for val in (ae - self.settings["img_size"], ae + self.settings["img_size"])] if "areas_explored" in self.settings else None)
 
@@ -755,7 +803,7 @@ class Dataset():
             fig, ax = plt.subplots()
         else:
             fig = ax.figure
-        batch = self.get(indexes=element_index if element_index > -1 else None)
+        batch = self.get(indexes=self.batch.keys()[element_index] if element_index > -1 else None)
         if element_index > -1:
             batch = [batch]
         c1 = np.array([method(b[X_i]) for b in batch]).flatten()
@@ -829,19 +877,3 @@ class Dataset():
             plt.plot(yx,yx,linestyle="--",color="red",label=r"$y=x$")
 
         return fig, ax
-
-if __name__ == "__main__":
-
-    #from POLARIScore.objects.Simulation_DC import Simulation_DC
-    #sim = Simulation_DC(name="orionMHD_lowB_0.39_512", global_size=66.0948, init=False)
-    #sim.init(loadTemp=True, loadVel=True)
-    #sim.plot(axis=1)
-
-    ds = getDataset("batch_highres_sim1_32px")
-    ds2 = getDataset("batch_highres_sim2_32px")
-    merged_ds = ds.merge(ds2)
-    merged_ds.save()
-    #ds.plot_map(map_index=0, element_index=4, enable_slider=0, show_title=False)
-    #fig, ax = ds.plot_correlation(PDF=True, contour_levels=[0.38,0.69,0.95])
-    #ds.plot_correlation(PDF=True, contour_levels=[0.38,0.69,0.95])
-    plt.show()

@@ -62,6 +62,7 @@ class SpectraNetwork(BaseModule):
 
         snr = y[1]
         x = F.relu(y[0])
+        channels = y[2]
         B,C,H,W,D = x.shape
         assert H==W
         assert H==self.environment_dim, LOGGER.error(f"Environment dim(Width and Height) specified in network is {self.environment_dim} but the given tensor has a dim of {H}")
@@ -88,9 +89,7 @@ class SpectraNetwork(BaseModule):
         amp, mu, sigma = torch.chunk(params, 3, dim=-1)
 
         amp = F.softplus(amp)
-        sigma = F.softplus(sigma) + 1e-4
+        sigma = F.softplus(sigma) + 1e-5
+        mu = torch.tanh(mu)
 
-        params = torch.cat([amp, mu, sigma], dim=-1)
-
-        #x = x.reshape(B, 1, x.shape[1])
-        return params
+        return amp, mu, sigma

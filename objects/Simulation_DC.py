@@ -823,7 +823,7 @@ class Simulation_DC():
 
         return fig, ax
 
-    def plot_pdf(self,ax=None,bins: int = 20,vdens_method=compute_mass_weighted_density,offset_method: Literal["mean", "max", "none"] = "none",what: Literal["both", "cdens", "vdens" "rho"] = "rho",
+    def plot_pdf(self,ax=None,bins: int = 20,vdens_method=compute_mass_weighted_density,offset_method: Literal["mean", "max", "none"] = "none",what: Literal["both", "cdens", "vdens" "rho","vel"] = "rho",
                  color=None, legend=True, scatter=True, swap_axis=False, label:Optional[str]=None,drawstyle:Optional[str]="steps-mid"):
         if ax is None:
             fig, ax = plt.subplots()
@@ -847,6 +847,7 @@ class Simulation_DC():
         elif what == "vdens":
             mask = (~np.isnan(vdens)) & (vdens > 0)
 
+        no_log = False
         def _normalize_x(hist, bin_centers):
             if offset_method == "mean":
                 return (bin_centers - bin_centers[np.argmin(np.abs(hist - np.mean(hist)))]) / \
@@ -860,8 +861,12 @@ class Simulation_DC():
         if what in ("rho","RHO"):            
             pdf = compute_pdf(self.data['RHO']/np.mean(self.data['RHO']), bins=bins)
             ax.plot(pdf[0] if swap_axis else 10**pdf[1][:-1],10**pdf[1][:-1] if swap_axis else pdf[0], marker="+", color=color, drawstyle=drawstyle, label=label)
+        
 
-
+        if what in ("vel","VEL","velocity"):
+            pdf = compute_pdf(np.array([*self.data['VX1'].flatten(),*self.data['VX2'].flatten(),*self.data['VX3'].flatten()]), func=lambda x: x)
+            ax.plot(pdf[0] if swap_axis else pdf[1][:-1],pdf[1][:-1] if swap_axis else pdf[0], marker="+", color=color, drawstyle=drawstyle, label=label+"_"+rf"$M=${np.sqrt(np.mean(np.power(self.data['VX1'],2)+np.power(self.data['VX2'],2)+np.power(self.data['VX3'],2)))/3.2591e+4:.2}")
+            no_log = True
 
         if what in ("both", "cdens"):
             log10_coldens = np.log10(cdens[mask])
@@ -908,8 +913,9 @@ class Simulation_DC():
                 ax.set_xlim(np.min(vdens)*0.75, np.max(vdens)*1.25)
                 ax.set_ylim(np.min(hist_pr)*0.75, np.max(hist_pr)*1.25)
 
-        ax.set_xscale("log")
-        ax.set_yscale("log")
+        if not(no_log):
+            ax.set_xscale("log")
+            ax.set_yscale("log")
         ax.grid(visible=True)
 
         if legend:

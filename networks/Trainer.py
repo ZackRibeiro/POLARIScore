@@ -267,11 +267,11 @@ class Trainer():
                 try:
                     loss = self.loss_method(output, target)
                 except:
-                    for tt in range(len(target)):
-                        if type(output) is list:
-                            loss += self.loss_method(output[tt], target[tt])
-                        else:
-                            loss += self.loss_method(output, target[tt])
+                    try:
+                        loss += self.loss_method(output, target)
+                    except:
+                        for ti in range(len(target)):
+                            loss += self.loss_method(output[ti], target[ti])
                 if training_mode == "accumulation":
                     loss = loss / max(minbatch_nbr, 1)
                 loss.backward()
@@ -345,8 +345,8 @@ class Trainer():
             epoch_time = actual_time - epoch_time
             time_left = (actual_time-start_time) / (epoch+1) * (epoch_number-(epoch+1))
 
-            if len(self.validation_losses) > 2:
-                if self.validation_losses[-1][1]-self.validation_losses[-2][1] > 0:
+            if len(self.validation_losses) > 0:
+                if np.argmin(np.array(self.validation_losses)[:,1]) != len(np.array(self.validation_losses)[:,1])-1:
                     v_loss_color = "\033[31m" #red
                 else:
                     v_loss_color = "\033[32m" #green
@@ -354,18 +354,18 @@ class Trainer():
                 v_loss_color = ""
 
             if val_total_loss:
-                val_loss_str = f"{v_loss_color}{val_total_loss}\033[0m"
+                val_loss_str = f"{v_loss_color}{val_total_loss:.2e}\033[0m"
             else:
                 val_loss_str = f"Not computed"
 
-            if len(self.training_losses) > 2:
-                if self.training_losses[-1][1]-self.training_losses[-2][1] > 0:
+            if len(self.training_losses) > 0:
+                if np.argmin(np.array(self.training_losses)[:,1]) != len(np.array(self.training_losses)[:,1])-1:
                     e_loss_color = "\033[31m" #red
                 else:
                     e_loss_color = "\033[32m" #green
             else:
                 e_loss_color = ""
-            e_loss_str = f"{e_loss_color}{epoch_loss}\033[0m"
+            e_loss_str = f"{e_loss_color}{epoch_loss:.2e}\033[0m"
 
 
             LOGGER.print(
