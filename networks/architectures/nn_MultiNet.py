@@ -17,7 +17,7 @@ from typing import Optional, List
 import matplotlib.pyplot as plt
 
 class MultiNet(BaseModule):
-    def __init__(self, convBlock=DoubleConvBlock, channel_dimensions=[2], channel_modes=[None] , num_layers=3, base_filters=32, branch_filters=0,
+    def __init__(self, convBlock=DoubleConvBlock, channel_dimensions=[2], channel_modes=[None], channel_inchannels=None , num_layers=3, base_filters=32, branch_filters=0,
                   attention = True, is3D=None):
         super(MultiNet, self).__init__()
 
@@ -26,7 +26,7 @@ class MultiNet(BaseModule):
         self.branch_filters = branch_filters
         channel_is3D = []
         self.channel_modes = channel_modes.copy()
-        self.channel_inchannels = [1 for _ in self.channel_dimensions]
+        self.channel_inchannels = [1 for _ in self.channel_dimensions] if channel_inchannels is None else channel_inchannels
         num_channels = 0
         for i,dim in enumerate(self.channel_dimensions):
             channel_is3D.append(True if dim == 3 else False)
@@ -60,8 +60,6 @@ class MultiNet(BaseModule):
         #Channels Encoder
         self.channels_encoder = nn.ModuleList()
         self.channels_merger = nn.ModuleList()
-        #self.channels_merger.append(JustKAN(in_channels=self.num_channels, out_channels=1))
-        self.channels_merger.append(nn.Conv2d(in_channels=self.num_channels, out_channels=1, kernel_size=1))
         for j,is3D in enumerate(channel_is3D): #Loop over channels
             encoders = nn.ModuleList()
             in_channels = self.channel_inchannels[j]
@@ -77,7 +75,10 @@ class MultiNet(BaseModule):
                     #    nn.ReLU(inplace=True),
                     #    nn.Conv2d(filter_sizes[i], filter_sizes[i], 1),
                     #)
-                    k = DoubleConvBlock((self.num_channels)*out_channels+filter_sizes[i], filter_sizes[i])
+                    if i != 0:
+                        k = DoubleConvBlock((self.num_channels)*out_channels+filter_sizes[i], filter_sizes[i])
+                    else:
+                        k = DoubleConvBlock((self.num_channels)*out_channels, filter_sizes[i])
                     self.channels_merger.append(k)
                 
                 in_channels = out_channels
@@ -87,8 +88,8 @@ class MultiNet(BaseModule):
 
         #Main Encoder
         self.encoders = nn.ModuleList()
-        in_channels = 1
-        for i in range(num_layers):
+        in_channels = filter_sizes[0]
+        for i in range(1, num_layers):
             out_channels = filter_sizes[i]
             self.encoders.append(convBlock(in_channels, out_channels, is3D=self.is3D))
             in_channels = out_channels
@@ -114,7 +115,7 @@ class MultiNet(BaseModule):
 
             if self.attention:
                 self.attentions.append(GatedAttentionBlock(F_g=out_channels, F_l=out_channels, F_int=out_channels//2, is3D=self.is3D))
-            self.decoders.append(convBlock(2*out_channels, out_channels, is3D=self.is3D))
+            self.decoders.append(convBlock(2*out_channels if i != num_layers-1 else out_channels, out_channels, is3D=self.is3D))
             in_channels = out_channels
 
         # Output layer
@@ -135,6 +136,10 @@ class MultiNet(BaseModule):
 
         C = len(x)
         channels = x
+        #while channels[1].shape[-1] != channels[1].shape[-2]:
+        #    channels = (channels[0],torch.moveaxis(channels[1], 4, 2))
+        #channels = (channels[0],torch.moveaxis(channels[1], 2, 4))
+
         assert C == self.num_channels, LOGGER.error(f"Model trained with {self.num_channels} inputs but received {C} inputs")
 
         def _is3D(t):
@@ -150,7 +155,7 @@ class MultiNet(BaseModule):
                         return torch.split(t, dim=-1)
                     if "proj" in channel_mode[0]:
                         assert cV == channel_mode[1].in_channels, LOGGER.error(f"Model can't work because you defined a channel projection on {channel_mode[1].in_channels} but the input tensor has a {cV} depth")
-                        return channel_mode[1](t.view(cB, cC*cV, cH, cW))
+                        return channel_mode[1](t.reshape(cB, cC*cV, cH, cW))
                     if "moments" in channel_mode[0]:
                         if not(return_only_one_channel):
                             channel_momments = self._compute_moments(t,v_axis=torch.linspace(-12.8, 12.8, cV, device=self.device).view(1, 1, 1, 1, cV),moments=channel_mode[1])
@@ -180,16 +185,17 @@ class MultiNet(BaseModule):
         #Multi Encoder
         enc_features = []
 
-        x = torch.cat([_convertToModelDimension(c,channel_index=ci,return_only_one_channel=True) for ci,c in enumerate(channels)], dim=1)
+        x = torch.cat([_convertToModelDimension(c) for c in channels_features[0]], dim=1)
         x = self.channels_merger[0](x)
+        x = self.pool3D(x) if self.is3D else self.pool2D(x)
 
-        for i in range(self.num_layers):
-            x = self.encoders[i](x)
+        for i in range(1,self.num_layers):
+            x = self.encoders[i-1](x)
             x = _convertToModelDimension(x)
             l = [x]
             l.extend([_convertToModelDimension(c) for c in channels_features[i]])
             x = torch.cat(l, dim=1)
-            x = self.channels_merger[i+1](x)
+            x = self.channels_merger[i](x)
             enc_features.append(x)
             x = self.pool3D(x) if self.is3D else self.pool2D(x)
         
@@ -199,9 +205,10 @@ class MultiNet(BaseModule):
         # Main Decoder
         for i in range(self.num_layers):
             x = self.upconvs[i](x)
-            if self.attention:
-                enc_features[-(i+1)] = self.attentions[i](x, enc_features[-(i+1)])
-            x = torch.cat([x, enc_features[-(i+1)]], dim=1)
+            if i < self.num_layers-1:
+                if self.attention:
+                    enc_features[-(i+1)] = self.attentions[i](x, enc_features[-(i+1)])
+                x = torch.cat([x, enc_features[-(i+1)]], dim=1)
             x = self.decoders[i](x)
         
         # Output
@@ -234,10 +241,11 @@ class MultiNet(BaseModule):
             #importance = weight.abs().mean(dim=0).view(-1)
 
             if layer_idx == 0:
-                importance = importance[:num_channels]
+                branch_out = int(self.channels_encoder[0][0].out_channels)
+                importance = importance.view(num_channels, branch_out).mean(dim=1)
             else:
                 base_out = int(self.encoders[layer_idx-1].out_channels)
-                branch_out = int(self.channels_encoder[0][layer_idx-1].out_channels)
+                branch_out = int(self.channels_encoder[0][layer_idx].out_channels)
 
                 start = base_out
                 branch_weights = importance[start:]

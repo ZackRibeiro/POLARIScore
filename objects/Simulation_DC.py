@@ -536,7 +536,7 @@ class Simulation_DC():
 
                 fig._slice_slider.on_changed(update_slice)
 
-    def plot(self,method:Callable=compute_column_density,fig=None,axis:Union[List[int],int]=[0,1,2],plot_pdf:bool=False,color_bar:bool=True,derivate:int=0):
+    def plot(self,method:Callable=compute_column_density,fig=None,axis:Union[List[int],int]=[0,1,2],plot_pdf:bool=False,color_bar:bool=True,derivate:int=0,norm=None,label=None):
         """
         Plot simulations faces with probabiliy density function
 
@@ -583,7 +583,7 @@ class Simulation_DC():
             axes = [axes]
 
         def _plot(column, data):
-            cd = axes[0][column].imshow(data, extent=[self.axis[0][0], self.axis[0][1], self.axis[1][0],self.axis[1][1]], cmap="jet", norm=LogNorm())
+            cd = axes[0][column].imshow(data, extent=[self.axis[0][0], self.axis[0][1], self.axis[1][0],self.axis[1][1]], cmap="jet", norm=LogNorm() if norm is None else norm)
             if plot_pdf:
                 pdf = compute_pdf(data/np.mean(data))
                 pdf[1] = pdf[1]/np.sum(pdf[1])
@@ -612,7 +612,7 @@ class Simulation_DC():
 
         if color_bar:
             cbar = plt.colorbar(cd, ax=axes[0], orientation="vertical", fraction=0.02, pad=0.02)
-            cbar.set_label(r"$N_H$ ($cm^{-2}$)")
+            cbar.set_label(r"$N_H$ ($cm^{-2}$)" if label is None else label)
 
         return fig, axes
 
@@ -859,7 +859,7 @@ class Simulation_DC():
                 return bin_centers
 
         if what in ("rho","RHO"):            
-            pdf = compute_pdf(self.data['RHO']/np.mean(self.data['RHO']), bins=bins)
+            pdf = compute_pdf(self.data['RHO'], bins=bins)
             ax.plot(pdf[0] if swap_axis else 10**pdf[1][:-1],10**pdf[1][:-1] if swap_axis else pdf[0], marker="+", color=color, drawstyle=drawstyle, label=label)
         
 

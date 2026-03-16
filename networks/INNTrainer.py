@@ -29,10 +29,6 @@ class INNTrainer(Trainer):
         return loss
 
     def _train_model(self, model, input, target):
-        if(type(input) is list):
-            input = input[0]
-        if(type(target) is list):
-            target = target[0]
 
         #To test if the model is indeed invertible
         #with torch.no_grad():
@@ -45,13 +41,11 @@ class INNTrainer(Trainer):
         return output
     
     def _infer_model(self, model, input):
-        if(type(input) is list):
-            input = input[0]
-        B,_,_,_ = input.shape
+        B,_,_,_ = input[0].shape if isinstance(input, (list, tuple)) else input.shape
         C, H, W = model.z_shape
         
         with torch.no_grad(): 
-            z = torch.randn((B, C, H, W), device=input.device)
+            z = torch.randn((B, C, H, W), device=model.device)
             output = model.inverse(z, input)
 
             return output
@@ -65,14 +59,15 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
     from POLARIScore.objects.Dataset import getDataset
     from POLARIScore.config import DATA_NORMALIZATION_CDENS, DATA_NORMALIZATION_VDENS, DATA_NORMALIZATION_CDENS_TORCH, DATA_NORMALIZATION_VDENS_TORCH
-    #ds1 = getDataset("batch_training")
-    #ds2 = getDataset("batch_validation")
-    #ds = getDataset("batch_highres_2")
-    ds1 = getDataset("batch_highres_2_b1")
-    ds2 = getDataset("batch_highres_2_b2")
+    ds1 = getDataset("batch_idefix_training_15")
+    ds2 = getDataset("batch_idefix_validation_15")
     #ds1, ds2 = ds.split(0.7)
 
+    spectra_dim = 5
+
     def classic_log_mse(output, target):
+        output = output[0]
+        target = target[0]
         output_phys = DATA_NORMALIZATION_VDENS_TORCH[1](output)
         target_phys = DATA_NORMALIZATION_VDENS_TORCH[1](target)
         output_log = torch.log(output_phys)
@@ -80,44 +75,39 @@ if __name__ == "__main__":
         mse = torch.mean((output_log - target_log) ** 2)
         return mse
 
-
-    trainer = INNTrainer(cINN, ds1, ds2, model_name="cINN_Attention")
-    #trainer = load_trainer("cINN", trainer_class=INNTrainer)
+    trainer = INNTrainer(cINN, ds1, ds2, model_name="cINN_PCA")
+    #trainer = load_trainer("cached_model", trainer_class=INNTrainer)
     trainer.norms = {
         "cdens": DATA_NORMALIZATION_CDENS,
         "vdens": DATA_NORMALIZATION_VDENS,
     }
-    #ds = getDataset("batch_highres_2")
-    #ds1, ds2 = ds.split(0.7)
-    #trainer.validation_set = ds2
-    #trainer.get_validation_error()
-
     trainer.ema = True
     trainer.validation_loss_method = classic_log_mse
-    trainer.ema_warmup = 100
+    trainer.ema_warmup = 50
     trainer.learning_rate = 1e-3
     trainer.training_set = ds1
     trainer.validation_set = ds2
     trainer.network_settings["img_dim"] = 128
     trainer.network_settings["base_filters"] = 32
     trainer.network_settings["num_layers"] = 3
-    trainer.network_settings["coupling_block_per_layer"] = 3
-    #trainer.network_settings["attention_layers"] = [2,3,4]
+    trainer.network_settings["coupling_block_per_layer"] = 2
+    #trainer.network_settings["attention_layers"] = [3,4]
+    trainer.network_settings["num_encoders"] = spectra_dim+1
     trainer.training_random_transform = True
     trainer.optimizer_name = "Adam"
     trainer.target_names = ["vdens"]
-    trainer.input_names = ["cdens"]
+    trainer.input_names = ["cdens",*["cospectra"+str(i) for i in range(spectra_dim)]]
     trainer.auto_save = 500
-    trainer.scheduler = None#StepLR(trainer.optimizer, 250, 0.1)
+    #trainer.scheduler = None#StepLR(trainer.optimizer, 250, 0.1)
     trainer.init()
 
     #unet_encoder = load_trainer("UNet").model.encoders
     #trainer.model.encoder.encoders = unet_encoder
 
-    trainer.train(1500,batch_number=8,compute_validation=10,early_stopping=False)
+    trainer.train(1500,batch_number=8,compute_validation=5,early_stopping=False)
     trainer.save()
-    trainer.plot(save=True)
-    trainer.plot_validation(save=True, number=8, number_per_row=4)
+    trainer.plot(save=False)
+    trainer.plot_validation(save=False, number=8, number_per_row=4)
     trainer.get_validation_error()
 
     plt.show()

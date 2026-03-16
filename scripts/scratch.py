@@ -18,12 +18,14 @@ from POLARIScore.objects.Dataset import Dataset, getDataset
 from torch import nn
 
 #sim = SimulationArray(name="turb_sim_A")
-sim = SimulationArray(simulations=[Simulation_DC("turb_sim_A"),Simulation_DC("adastra_512")], indexes=[0,1])
+#sim = SimulationArray(simulations=[Simulation_DC("turb_sim_A"),Simulation_DC("adastra_512")], indexes=[192,512])
+#sim = SimulationArray(simulations=[Simulation_DC("adastra_512_old"),Simulation_DC("adastra_512")], indexes=[0,1])
+
 from POLARIScore.objects.SpectrumMap import SpectrumMap, getSimulationSpectra
 from POLARIScore.objects.Spectrum import Spectrum
-sim.plot(plot_method=Simulation_DC.plot_pdf, what="vel", colors="viridis", drawstyle=None)
+#sim.plot(plot_method=Simulation_DC.plot_pdf, what="cdens", colors="viridis", drawstyle=None)
+#sim.plot(plot_method=Simulation_DC.plot, mode="slider", norm=LogNorm(vmin=1e3, vmax=1e6), method=compute_mass_weighted_density, label=r"$<n_H>_m$")
 
-"""
 sim_names = ["turb_sim_A"]#,"turb_sim_B","turb_sim_C"]
 GENERATE_DATASET = False
 number_per_face = int(128*128*.05)
@@ -59,9 +61,11 @@ def _plot_spectrum(ds:'Dataset',ds_index:int=0):
     spect.fit_settings = None , {'params':gauss_params, 'N':len(gauss_params)//3}
     spect.plot(show_fit=True, show_dendrogram=False)
 
-from POLARIScore.networks.Trainer import Trainer
+from POLARIScore.networks.Trainer import Trainer, load_trainer
 from POLARIScore.networks.architectures.nn_SpectraNetwork import SpectraNetwork
 trainer = Trainer(network=SpectraNetwork, training_set=training_set, validation_set=validation_set, model_name="Spectral_Fit")
+#trainer = load_trainer("cached_model")
+trainer.model_name = "Spectral_Fit"
 trainer.network_settings['num_layers']=3
 trainer.network_settings['out_features']=10*3
 trainer.network_settings['base_filters']=32
@@ -97,34 +101,80 @@ def _gaussian_sum(amps, means, sigmas, N):
 
     return y
 
+from scipy.optimize import linear_sum_assignment
 def spectrum_loss(output, target):
 
-    means = target[1]
-    amps = target[0]
-    sigmas = target[2]
+    means = target[1].clone().squeeze(1)
+    amps = target[0].clone().squeeze(1)
+    sigmas = target[2].clone().squeeze(1)
+    #sorted_indexes = torch.argsort(means, dim=-1)
+    #means = torch.gather(means, -1, sorted_indexes)
+    #amps = torch.gather(amps, -1, sorted_indexes)
+    #sigmas = torch.gather(sigmas, -1, sorted_indexes)
 
-    y_true = _gaussian_sum(amps, means, sigmas, 10)
-    y_predict = _gaussian_sum(output[0], output[1], output[2], 10)
-    
-    loss = F.mse_loss(y_predict, y_true)
+    predicted_means = output[1].clone().squeeze(1)
+    predicted_amps = output[0].clone().squeeze(1)
+    predicted_sigmas = output[2].clone().squeeze(1)
+    #predicted_sorted_indexes = torch.argsort(predicted_means, dim=-1)
+    #predicted_means = torch.gather(predicted_means, -1, predicted_sorted_indexes)
+    #predicted_amps = torch.gather(predicted_amps, -1, predicted_sorted_indexes)
+    #predicted_sigmas = torch.gather(predicted_sigmas, -1, predicted_sorted_indexes)
+
+    cost_mu = (predicted_means[:,:,None] - means[:,None,:])**2
+    cost_sigma = (predicted_sigmas[:,:,None] - sigmas[:,None,:])**2
+    cost_amp   = (predicted_amps[:,:,None] - amps[:,None,:])**2
+    cost = cost_mu + cost_sigma + cost_amp
+
+    reordered_pred_amp = []
+    reordered_pred_mu = []
+    reordered_pred_sigma = []
+
+    B = predicted_means.shape[0]
+    for b in range(B):
+
+        row, col = linear_sum_assignment(cost[b].detach().cpu().numpy())
+
+        reordered_pred_amp.append(predicted_amps[b, row])
+        reordered_pred_mu.append(predicted_means[b, row])
+        reordered_pred_sigma.append(predicted_sigmas[b, row])
+
+        amps[b] = amps[b, col]
+        means[b] = means[b, col]
+        sigmas[b] = sigmas[b, col]
+
+    predicted_amps = torch.stack(reordered_pred_amp)
+    predicted_means = torch.stack(reordered_pred_mu)
+    predicted_sigmas = torch.stack(reordered_pred_sigma)
+
+
+    #y_true = _gaussian_sum(amps, means, sigmas, 10)
+    #y_predict = _gaussian_sum(output[0], output[1], output[2], 10)
+    l_amps = F.mse_loss(predicted_amps,amps)
+    l_means = F.mse_loss(predicted_amps*predicted_means,amps*means)
+    l_sigmas = F.mse_loss(predicted_sigmas,sigmas)
+
+    loss = l_amps+l_means+10*l_sigmas
 
     return loss
 
 #torch.autograd.set_detect_anomaly(True)
-trainer.optimizer_name = "SGD"
-trainer.learning_rate = 1e-3
-trainer.init()
+trainer.optimizer_name = "Adam"
+trainer.learning_rate = 1e-6
+#trainer.init()
 trainer.loss_method = spectrum_loss
 trainer.validation_loss_method = spectrum_loss
 
 trainer.training_random_transform = False
 trainer.input_names = ["noisy_spectrum","snr", "channels"]
 trainer.target_names = ["gaussians_amplitudes","gaussians_means","gaussians_sigmas"]
-trainer.train(1000, compute_validation=1, batch_number=512, early_stopping=False)
-
+trainer.train(1000, compute_validation=1, batch_number=256, early_stopping=False)
+#trainer.save()
+trainer.plot_losses()
 val_batch = trainer.get_prediction_batch()
-print(val_batch)
-"""
+print(val_batch[3*10+0])
+print(val_batch[3*10+1])
+print(val_batch[3*10+2])
+
 
 #sim = SimulationArray(name="turb_sim_A")
 #sim.plot(

@@ -52,9 +52,6 @@ class RandomPermutation(nn.Module):
         else:
             return x[:, self.perm]
 
-
-# maybe add multihead self attention
-# use residuals blocks?
 class Encoder(nn.Module):
     """Encoder which returns 'num_layers' features in a list"""
     def __init__(self, num_layers:int=3, base_filters:int=48, attention_layers:Optional[list]=[3,4]):
@@ -64,7 +61,8 @@ class Encoder(nn.Module):
         self.base_filters = base_filters
 
         filter_sizes = [int(base_filters*2**i) for i in range(num_layers)]
-        
+        self.filter_sizes = filter_sizes
+
         self.pool = nn.MaxPool2d(2,2)
         self.encoders = nn.ModuleList()
         self.enc_attn = nn.ModuleList()
@@ -211,7 +209,7 @@ class ConditionalCouplingLayer(nn.Module):
 class cINN(BaseModule):
     """Conditional Invertible Neural Network (cINN)"""
 
-    def __init__(self, img_dim=128, num_layers=2, attention_layers:Optional[List[int]]=None, coupling_block_per_layer=3, base_filters=64):
+    def __init__(self, img_dim=128, num_layers=2, num_encoders=1, attention_layers:Optional[List[int]]=None, coupling_block_per_layer=3, base_filters=64):
         super().__init__()
         self.img_dim = img_dim
         self.num_layers = num_layers
@@ -219,7 +217,19 @@ class cINN(BaseModule):
         self.attention_layers = attention_layers
         self.base_filters = base_filters
         
-        self.encoder = Encoder(num_layers=self.num_layers+1, base_filters=self.base_filters, attention_layers=self.attention_layers)
+        self.num_encoders = num_encoders
+        self.encoders = nn.ModuleList()
+        self.encoder_mergers = nn.ModuleList()
+
+        filter_sizes = None
+        for i in range(num_encoders):
+            self.encoders.append(Encoder(num_layers=self.num_layers+1, base_filters=self.base_filters, attention_layers=self.attention_layers))
+            if filter_sizes is None:
+                filter_sizes = self.encoders[-1].filter_sizes
+            else:
+                filter_sizes = [filter_sizes[j]+self.encoders[-1].filter_sizes[j] for j in range(len(filter_sizes))]
+        for f_size in filter_sizes:
+            self.encoder_mergers.append(DoubleConvBlock(in_channels=f_size, out_channels=f_size//num_encoders)) 
         self.coupling_blocks = nn.ModuleList()  # list of ModuleList
 
         self.downsample = HaarDownsampling()
@@ -236,6 +246,19 @@ class cINN(BaseModule):
             z, _ = self.forward(dummy_y, dummy_c)
             self.z_shape = z.shape[1:]
 
+    def encode(self, c):
+        if isinstance(c, (list, tuple)):
+            assert len(c) == self.num_encoders, LOGGER.error(f"Model was initialized with {self.num_encoders} conditionnal channels.")
+            enc_feats = self.encoders[0](c[0])
+            for i in range(self.num_encoders-1):
+                new_enc_feats = self.encoders[i](c[i])
+                enc_feats = [torch.cat([enc_feats[j], new_enc_feats[j]], dim=1) for j in range(len(enc_feats))]
+            for i,feature in enumerate(enc_feats):
+                enc_feats[i] = self.encoder_mergers[i](feature)
+        else:
+            enc_feats = self.encoders[0](c)
+        return enc_feats
+
     def forward(self, y, c):
         """
         Args:
@@ -246,11 +269,12 @@ class cINN(BaseModule):
             log_det: tensor (B,) aggregated log determinant
             tent_y: reconstructed y
         """
+        y = y[0] if isinstance(y, (list, tuple)) else y
         B, C, H, W = y.shape
         assert C == 1, LOGGER.error("cINN: currently expects single-channel inputs")
         assert H == self.img_dim and W == self.img_dim, LOGGER.error("cINN: image size mismatch")
 
-        enc_feats = self.encoder(c)
+        enc_feats = self.encode(c)
         total_log_det = torch.zeros(B, device=y.device)
         x = y
 
@@ -277,9 +301,10 @@ class cINN(BaseModule):
         Returns:
             reconstructed y
         """
-        enc_feats = self.encoder(c)
-        x = z
 
+        enc_feats = self.encode(c)
+
+        x = z
         for i in reversed(range(self.num_layers)):
             if i < self.num_layers - 1:
                 x = self.downsample(x, reverse=True)

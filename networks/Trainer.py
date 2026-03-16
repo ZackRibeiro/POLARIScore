@@ -16,6 +16,7 @@ import uuid
 from POLARIScore.networks.architectures.nn_UNet import *
 from POLARIScore.networks.architectures.nn_CAUNet import ContextAwareUNet
 from POLARIScore.networks.architectures.nn_MultiNet import MultiNet
+from POLARIScore.networks.architectures.nn_SpectraNetwork import SpectraNetwork
 from POLARIScore.networks.architectures.nn_PPV import PPV, Test
 from POLARIScore.networks.architectures.nn_KNet import *
 from POLARIScore.networks.architectures.nn_SC_1 import *
@@ -40,6 +41,7 @@ NETWORK_OPTIONS = {
     "cINN": cINN,
     "DDPMUnet": DDPMUnet,
     "SC_1": SC_1,
+    "SpectraNetwork": SpectraNetwork,
     "None": None
 }
 
@@ -247,12 +249,12 @@ class Trainer():
                 printProgressBar(b, minbatch_nbr, length=10, prefix=f"{b}/{minbatch_nbr}")
                 if training_mode == "normal":
                     self.optimizer.zero_grad()
-                used_batch = self.training_set.get(indexes=shuffled_indices[b*batch_number:(b+1)*batch_number if minbatch_nbr > 1 else -1])
+                used_batch = self.training_set.get(indexes=shuffled_indices[b*batch_number:(b+1)*batch_number if minbatch_nbr >= 1 else -1])
                 if batch_number == 1:
                     used_batch = [used_batch]
                 t_input, t_target = self.model.shape_batch(used_batch, self.training_set.get_element_index(self.target_names), self.training_set.get_element_index(self.input_names),
                                                           target_names=self.target_names, input_names=self.input_names, norms=self.norms, segmentation=self.segmentation)
-                if not(type(t_input) is list):
+                if not(isinstance(t_input, (list, tuple))):
                     t_input = [t_input]
 
                 if self.training_random_transform:
@@ -267,11 +269,7 @@ class Trainer():
                 try:
                     loss = self.loss_method(output, target)
                 except:
-                    try:
-                        loss += self.loss_method(output, target)
-                    except:
-                        for ti in range(len(target)):
-                            loss += self.loss_method(output[ti], target[ti])
+                    loss = self.loss_method(output[0] if isinstance(output, (list, tuple)) else output, target[0] if isinstance(target, (list, tuple)) else target)
                 if training_mode == "accumulation":
                     loss = loss / max(minbatch_nbr, 1)
                 loss.backward()
@@ -306,23 +304,19 @@ class Trainer():
                     eval_model = self._get_eval_model(epoch=total_epoch)
                     for b in range(minbatch_nbr if minbatch_nbr > 1 else 1):
                         printProgressBar(b, minbatch_nbr, length=10, prefix=f"{b}/{minbatch_nbr}")
-                        used_batch = self.validation_set.get(indexes=list(range(len(self.validation_set.batch)))[b*batch_number:(b+1)*batch_number if minbatch_nbr > 1 else -1])
+                        used_batch = self.validation_set.get(indexes=list(range(len(self.validation_set.batch)))[b*batch_number:(b+1)*batch_number if minbatch_nbr >= 1 else -1])
                         if batch_number == 1:
                             used_batch = [used_batch]
                         v_input_tensor, v_target_tensor = self.model.shape_batch(used_batch, self.validation_set.get_element_index(self.target_names), self.validation_set.get_element_index(self.input_names),
                                                                                 target_names=self.target_names, input_names=self.input_names, norms=self.norms, segmentation=self.segmentation)
-                        if not(type(v_input_tensor) is list):
+                        if not(isinstance(v_input_tensor, (tuple, list))):
                             v_input_tensor = [v_input_tensor]
                         validation_output = self._infer_model(eval_model, v_input_tensor)
                         v_loss = 0
                         try:
                             v_loss = self.validation_loss_method(validation_output,v_target_tensor).item()
                         except:
-                            for tt in range(len(v_target_tensor)):
-                                if type(validation_output) is list:
-                                    v_loss += self.validation_loss_method(validation_output[tt],v_target_tensor[tt]).item()
-                                else:
-                                    v_loss += self.validation_loss_method(validation_output,v_target_tensor[tt]).item()
+                            v_loss = self.validation_loss_method(validation_output[0] if isinstance(validation_output, (list, tuple)) else validation_output,v_target_tensor[0] if isinstance(v_target_tensor, (list, tuple)) else v_target_tensor).item()
                         val_total_loss += v_loss
                 val_total_loss /= minbatch_nbr if minbatch_nbr > 0 else 1
                 self.validation_losses.append((total_epoch,val_total_loss))
@@ -522,13 +516,13 @@ class Trainer():
                 used_batch = [used_batch]
             input_tensor, target_tensor = self.model.shape_batch(used_batch, dataset.get_element_index(self.target_names), dataset.get_element_index(self.input_names),
                                                                 target_names=self.target_names, input_names=self.input_names, norms=self.norms, segmentation=self.segmentation)
-            if not(type(input_tensor) is list):
+            if not(isinstance(input_tensor, (list, tuple))):
                 input_tensor = [input_tensor]
-            if not(type(target_tensor) is list):
+            if not(isinstance(target_tensor, (list, tuple))):
                 target_tensor = [target_tensor]
             output = self._infer_model(self._get_eval_model(), input_tensor)
             target_tensor = [self.model.shape_tensor(t, reverse=True, name=self.target_names[ti], norms=self.norms, segmentation=self.segmentation) for ti,t in enumerate(target_tensor)] 
-            output = output if type(output) is list else [output]
+            output = output if isinstance(output, (list, tuple)) else [output]
             output = [self.model.shape_tensor(o, reverse=True, name=self.target_names[oi], norms=self.norms, segmentation=self.segmentation) for oi,o in enumerate(output)]
             for i in range(len(target_tensor)):
                 l1 = target_tensor[i]

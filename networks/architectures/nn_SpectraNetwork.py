@@ -7,6 +7,32 @@ from POLARIScore.networks.architectures.nn_BaseModule import BaseModule
 from typing import List, Tuple, Dict, Optional, Literal
 from POLARIScore.networks.addons.FiLM import FiLMGenerator
 
+class ResConvBlock1D(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(ResConvBlock1D, self).__init__()
+        self.in_channels=in_channels
+        self.out_channels=out_channels
+        c = nn.Conv1d
+        b = nn.BatchNorm1d
+        self.conv = nn.Sequential(
+            c(in_channels, out_channels, kernel_size=3, padding=1),
+            nn.ReLU(inplace=False),
+            b(out_channels),
+            c(out_channels, out_channels, kernel_size=3, padding=1),
+            b(out_channels),
+        )
+        self.match_dim = c(in_channels, out_channels, kernel_size=1, stride=1, padding=0) if in_channels != out_channels else None
+    
+    def forward(self, x):
+        res = x.clone()
+        x = self.conv(x)
+        if self.match_dim:
+            res = self.match_dim(res)
+        x = x+res
+        return F.relu(x)
+    
+
+
 class SpectraNetwork(BaseModule):
     def __init__(self, num_layers=3, out_features=10*3, base_filters=32, environment_dim=3, spectra_dim=128 ):
         super(SpectraNetwork, self).__init__()
@@ -17,13 +43,15 @@ class SpectraNetwork(BaseModule):
         self.spectra_dim = spectra_dim
 
         self.conv_first = nn.Sequential(
-            nn.Conv3d(1, base_filters, kernel_size=(environment_dim,environment_dim,3), padding=(0,0,1)),
+            nn.Conv3d(1, base_filters, kernel_size=(environment_dim,environment_dim,3), padding=(environment_dim//2,environment_dim//2,1)),
+            nn.ReLU(),
+            nn.Conv3d(base_filters, base_filters, kernel_size=(environment_dim,environment_dim,3), padding=(0,0,1)),
             nn.BatchNorm3d(base_filters),
             nn.ReLU(),
             nn.Conv3d(base_filters, base_filters, kernel_size=(1,1,3), padding=(0,0,1)),
             nn.BatchNorm3d(base_filters),
             nn.ReLU(),
-            nn.Dropout3d(p=0.01)
+            nn.Dropout3d(p=0.1)
         )
 
         filter_sizes = [int(base_filters * 2**(i+1)) for i in range(num_layers)]
@@ -31,17 +59,7 @@ class SpectraNetwork(BaseModule):
         in_channels = base_filters
         for i in range(num_layers):
             out_channels = filter_sizes[i]
-            self.encoder.append(
-                nn.Sequential(
-                    nn.Conv1d(in_channels, out_channels, kernel_size=3, padding=1),
-                    nn.BatchNorm1d(out_channels),
-                    nn.ReLU(),
-                    nn.Conv1d(out_channels, out_channels, kernel_size=3, padding=1),
-                    nn.BatchNorm1d(out_channels),
-                    nn.ReLU(),
-                    nn.Dropout1d(p=0.01)
-                )
-            )
+            self.encoder.append(ResConvBlock1D(in_channels, out_channels))
             in_channels = out_channels
         out_channels = filter_sizes[-1]
 
