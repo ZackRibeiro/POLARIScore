@@ -68,17 +68,12 @@ class MultiNet(BaseModule):
                 encoders.append(convBlock(in_channels, out_channels, is3D=is3D))
                 
                 if j == 0: #Need just one list of mergers
-                    #k = JustKAN(in_channels=(self.num_channels+1)*out_channels, out_channels=out_channels)
-                    #k = nn.Conv2d(in_channels=(self.num_channels)*out_channels+filter_sizes[i], out_channels=filter_sizes[i], kernel_size=1)
-                    #k = nn.Sequential(
-                    #    nn.Conv2d((self.num_channels)*out_channels+filter_sizes[i], filter_sizes[i], 1),
-                    #    nn.ReLU(inplace=True),
-                    #    nn.Conv2d(filter_sizes[i], filter_sizes[i], 1),
-                    #)
                     if i != 0:
-                        k = DoubleConvBlock((self.num_channels)*out_channels+filter_sizes[i], filter_sizes[i])
+                        #k = DoubleConvBlock((self.num_channels)*out_channels+filter_sizes[i], filter_sizes[i])
+                        k = GatedAttentionBlock((self.num_channels)*out_channels, filter_sizes[i], filter_sizes[i])
                     else:
                         k = DoubleConvBlock((self.num_channels)*out_channels, filter_sizes[i])
+
                     self.channels_merger.append(k)
                 
                 in_channels = out_channels
@@ -133,12 +128,12 @@ class MultiNet(BaseModule):
         return moments_list
         
     def forward(self, *x):
-
+        
         C = len(x)
         channels = x
-        #while channels[1].shape[-1] != channels[1].shape[-2]:
-        #    channels = (channels[0],torch.moveaxis(channels[1], 4, 2))
-        #channels = (channels[0],torch.moveaxis(channels[1], 2, 4))
+        channels = (channels[0],channels[1].squeeze(1))
+        while channels[1].shape[-1] != channels[1].shape[-2]:
+            channels = (channels[0],torch.moveaxis(channels[1], 3, 1))
 
         assert C == self.num_channels, LOGGER.error(f"Model trained with {self.num_channels} inputs but received {C} inputs")
 
@@ -192,10 +187,10 @@ class MultiNet(BaseModule):
         for i in range(1,self.num_layers):
             x = self.encoders[i-1](x)
             x = _convertToModelDimension(x)
-            l = [x]
-            l.extend([_convertToModelDimension(c) for c in channels_features[i]])
-            x = torch.cat(l, dim=1)
-            x = self.channels_merger[i](x)
+            #l = [x]
+            #l.extend([_convertToModelDimension(c) for c in channels_features[i]])
+            #x = torch.cat(l, dim=1)
+            x = self.channels_merger[i](torch.cat([_convertToModelDimension(c) for c in channels_features[i]], dim=1), x)
             enc_features.append(x)
             x = self.pool3D(x) if self.is3D else self.pool2D(x)
         

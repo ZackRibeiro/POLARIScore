@@ -55,23 +55,26 @@ trainer.validation_set = validation_ds
 trainer.training_set = training_ds
 trainer.validation_loss_method = nn.MSELoss()
 trainer.learning_rate = 1e-3
-trainer.network_settings["base_filters"] = 32
+trainer.network_settings["base_filters"] = 64
 trainer.network_settings["branch_filters"] = 32
-trainer.network_settings["num_layers"] = 3
-trainer.network_settings["channel_dimensions"]=[2 for _ in range(spectra_dim+1)]
-#trainer.network_settings["channel_dimensions"] = [2,2]
-trainer.input_names = ["cdens",*["cospectra"+str(i) for i in range(spectra_dim)]]
-#trainer.input_names = ["cdens","cospectra"]
+trainer.network_settings["num_layers"] = 4
+#trainer.network_settings["channel_dimensions"]=[2 for _ in range(spectra_dim+1)]
+trainer.network_settings["channel_dimensions"] = [2,2]
+#trainer.input_names = ["cdens",*["cospectra"+str(i) for i in range(spectra_dim)]]
+trainer.input_names = ["cdens","cospectra"]
 trainer.target_names = ["vdens"]
-#trainer.network_settings["channel_modes"] = [None, ("proj", 15)]
-trainer.network_settings["channel_modes"] = [None for _ in range(spectra_dim+1)]
+trainer.network_settings["channel_inchannels"] = [1, 15]
+trainer.network_settings["channel_modes"] = [None, None]
+trainer.ema = True
+trainer.ema_warmup = 2000
+#trainer.network_settings["channel_modes"] = [None for _ in range(spectra_dim+1)]
 trainer.training_random_transform = True
 trainer.init()
 #trainer.scheduler = torch.optim.lr_scheduler.StepLR(trainer.optimizer, 50, 0.1)
-trainer.train(750, batch_number=8, compute_validation=10,early_stopping=False)
+trainer.train(1000, batch_number=8, compute_validation=10,early_stopping=False)
 trainer.save()
 trainer.plot(save=False)
 trainer.plot_validation(save=False)
-trainer.model.plot_channel_weights(channel_names=trainer.input_names, cmap='viridis')
+#trainer.model.plot_channel_weights(channel_names=trainer.input_names, cmap='viridis')
 
 plt.show()
