@@ -15,12 +15,19 @@ And also DDPM_UNet, a UNet made for diffusion, i.e predicting the noise added at
 
 class ResConvBlock(nn.Module):
     """Residuals convolution block with time embedding"""
-    def __init__(self, in_channels, out_channels, group_over=32, activation_function=nn.SiLU, time_emb_dim=None):
+    def __init__(self, in_channels, out_channels, group_over=32, activation_function=nn.SiLU, time_emb_dim=None, dim=2):
         super().__init__()
         self.norm1 = nn.GroupNorm(min(group_over, in_channels), in_channels)
-        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
+        self.dim = dim
 
-        self.dropout = nn.Dropout2d(p=0.05)
+        CONV = nn.Conv2d
+        DROPOUT = nn.Dropout2d
+        if dim==1:
+            CONV = nn.Conv1d
+            DROPOUT = nn.Dropout1d
+            
+        self.conv1 = CONV(in_channels, out_channels, kernel_size=3, padding=1)
+        self.dropout = DROPOUT(p=0.05)
 
         self.time_mlp = None
         if time_emb_dim is not None:
@@ -30,11 +37,11 @@ class ResConvBlock(nn.Module):
             )
 
         self.norm2 = nn.GroupNorm(min(group_over, out_channels), out_channels)
-        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1)
+        self.conv2 = CONV(out_channels, out_channels, kernel_size=3, padding=1)
         self.activation = activation_function()
 
         if in_channels != out_channels:
-            self.match_dim = nn.Conv2d(in_channels, out_channels, kernel_size=1)
+            self.match_dim = CONV(in_channels, out_channels, kernel_size=1)
         else:
             self.match_dim = nn.Identity()
 
@@ -47,7 +54,11 @@ class ResConvBlock(nn.Module):
 
         if self.time_mlp is not None and t_emb is not None:
             time_encoding = self.time_mlp(t_emb)
-            time_encoding = time_encoding.view(h.shape[0], h.shape[1] * 2, 1, 1)
+            if self.dim == 2:
+                time_encoding = time_encoding.view(h.shape[0], h.shape[1] * 2, 1, 1)
+            elif self.dim == 1:
+                time_encoding = time_encoding.view(h.shape[0], h.shape[1] * 2, 1)
+
             scale, shift = torch.chunk(time_encoding, 2, dim=1)
             h = self.norm2(h) * (1 + scale) + shift # Modulate features
         else:
@@ -64,28 +75,43 @@ class MHSAttentionBlock(nn.Module):
     """
     Multi Head Self Attention
     """
-    def __init__(self, channels, num_heads=8):
+    def __init__(self, channels, num_heads=8, dim=2):
         super().__init__()
         assert channels % num_heads == 0, LOGGER.error(f"Channels ({channels}) must be divisible by num_heads ({num_heads})")
+        self.dim = dim
         self.num_heads = num_heads
         self.head_dim = channels // num_heads
         self.scale = 1 / math.sqrt(self.head_dim)
 
+        CONV = nn.Conv2d
+        if dim==1:
+            CONV = nn.Conv1d
+
         self.norm = nn.GroupNorm(min(32,channels), channels)
-        self.to_qkv = nn.Conv2d(channels, channels * 3, kernel_size=1)
-        self.to_out = nn.Conv2d(channels, channels, kernel_size=1)
+        self.to_qkv = CONV(channels, channels * 3, kernel_size=1)
+        self.to_out = CONV(channels, channels, kernel_size=1)
 
     def forward(self, x):
-        b, c, h, w = x.shape
+        if self.dim == 2:
+            b, c, h, w = x.shape
+        elif self.dim == 1:
+            b, c, h = x.shape
+
         residual = x
 
         qkv = self.to_qkv(self.norm(x))
         # Reshape for attention: (b, c, h, w) -> (b, c, h*w) -> (b, num_heads, head_dim, h*w) -> (b*num_heads, head_dim, h*w)
         q, k, v = qkv.chunk(3, dim=1)
 
-        q = q.reshape(b * self.num_heads, self.head_dim, h * w)
-        k = k.reshape(b * self.num_heads, self.head_dim, h * w)
-        v = v.reshape(b * self.num_heads, self.head_dim, h * w)
+        if self.dim == 2:
+            q = q.reshape(b * self.num_heads, self.head_dim, h * w)
+            k = k.reshape(b * self.num_heads, self.head_dim, h * w)
+            v = v.reshape(b * self.num_heads, self.head_dim, h * w)
+        elif self.dim == 1:
+            q = q.reshape(b * self.num_heads, self.head_dim, h)
+            k = k.reshape(b * self.num_heads, self.head_dim, h)
+            v = v.reshape(b * self.num_heads, self.head_dim, h)
+
 
         # Scaled dot-product attention
         # (b*num_heads, head_dim, h*w) @ (b*num_heads, h*w, head_dim) -> (b*num_heads, h*w, h*w)
@@ -96,7 +122,10 @@ class MHSAttentionBlock(nn.Module):
         out = torch.bmm(attention_probs, v.transpose(1, 2))
 
         # Reshape back: (b*num_heads, h*w, head_dim) -> (b, num_heads, h*w, head_dim) -> (b, c, h, w)
-        out = out.transpose(1, 2).reshape(b, c, h, w)
+        if self.dim == 2:
+            out = out.transpose(1, 2).reshape(b, c, h, w)
+        elif self.dim == 1:
+            out = out.transpose(1, 2).reshape(b, c, h)
 
         out = self.to_out(out)
 
@@ -125,10 +154,17 @@ class SinusoidalTimeEmbedding(nn.Module):
 
 class DDPMUnet(BaseModule):
     """"""
-    def __init__(self, num_layers:int=4, base_filters:int=64, attention_layers:Optional[List[int]]=[3,4], attention_heads:Optional[List[int]]=None,time_emb_dim: int=256, filter_function="constant", init_method=nn.init.kaiming_uniform_):
+    def __init__(self, num_layers:int=4, base_filters:int=64, attention_layers:Optional[List[int]]=[3,4], attention_heads:Optional[List[int]]=None,time_emb_dim: int=256, filter_function="constant", init_method=nn.init.kaiming_uniform_, dim=2):
         super(DDPMUnet, self).__init__()
 
+        CONV = nn.Conv2d
+        POOL = nn.MaxPool2d
+        if dim == 1:
+            CONV = nn.Conv1d
+            POOL = nn.MaxPool1d
+
         self.num_layers = num_layers
+        self.dim = dim
         self.in_channels = 2
         self.out_channels = 1
         self.init_method = init_method
@@ -146,7 +182,7 @@ class DDPMUnet(BaseModule):
             nn.Linear(time_emb_dim, time_emb_dim)
         )
 
-        self.init_conv = nn.Conv2d(self.in_channels, base_filters, kernel_size=3, padding=1)
+        self.init_conv = CONV(self.in_channels, base_filters, kernel_size=3, padding=1)
         if filter_function == "constant":
             filters = [base_filters * (2 ** i) for i in range(num_layers + 1)]
         elif filter_function == "linear":
@@ -161,17 +197,17 @@ class DDPMUnet(BaseModule):
             in_ch = filters[i]
             out_ch = filters[i+1]
             block = nn.Sequential(
-                ResConvBlock(in_ch, out_ch, time_emb_dim=time_emb_dim),
-                ResConvBlock(out_ch, out_ch, time_emb_dim=time_emb_dim),
+                ResConvBlock(in_ch, out_ch, time_emb_dim=time_emb_dim, dim=self.dim),
+                ResConvBlock(out_ch, out_ch, time_emb_dim=time_emb_dim, dim=self.dim),
             )
             self.enc_blocks.append(block)
-            self.enc_attn.append(MHSAttentionBlock(out_ch) if (attention_layers and i in attention_layers) else nn.Identity())
+            self.enc_attn.append(MHSAttentionBlock(out_ch, dim=self.dim) if (attention_layers and i in attention_layers) else nn.Identity())
         
         bottleneck_ch = filters[-1]
         self.bottleneck = nn.Sequential(
-            ResConvBlock(bottleneck_ch, bottleneck_ch, time_emb_dim=time_emb_dim),
-            MHSAttentionBlock(bottleneck_ch),
-            ResConvBlock(bottleneck_ch, bottleneck_ch, time_emb_dim=time_emb_dim),
+            ResConvBlock(bottleneck_ch, bottleneck_ch, time_emb_dim=time_emb_dim, dim=self.dim),
+            MHSAttentionBlock(bottleneck_ch, dim=self.dim),
+            ResConvBlock(bottleneck_ch, bottleneck_ch, time_emb_dim=time_emb_dim, dim=self.dim),
         )
 
         self.up_blocks = nn.ModuleList()
@@ -180,20 +216,25 @@ class DDPMUnet(BaseModule):
             in_ch = filters[i+1]*2
             out_ch = filters[i]
             block = nn.Sequential(
-                ResConvBlock(in_ch, out_ch, time_emb_dim=time_emb_dim),
-                ResConvBlock(out_ch, out_ch, time_emb_dim=time_emb_dim),
+                ResConvBlock(in_ch, out_ch, time_emb_dim=time_emb_dim, dim=self.dim),
+                ResConvBlock(out_ch, out_ch, time_emb_dim=time_emb_dim, dim=self.dim),
             )
             self.up_blocks.append(block)
-            self.up_attn.append(MHSAttentionBlock(out_ch, num_heads=self.attention_heads[self.attention_layers.index(i)-1] if self.attention_heads else 8) if (attention_layers and i in attention_layers) else nn.Identity())
+            self.up_attn.append(MHSAttentionBlock(out_ch, num_heads=self.attention_heads[self.attention_layers.index(i)-1] if self.attention_heads else 8, dim=self.dim) if (attention_layers and i in attention_layers) else nn.Identity())
     
         self.final_norm = nn.GroupNorm(8, filters[0]) if filters[0] % 8 == 0 else nn.GroupNorm(1, filters[0])
         self.final_act = nn.SiLU()
-        self.final_conv = nn.Conv2d(filters[0], self.out_channels, kernel_size=3, padding=1)
+        self.final_conv = CONV(filters[0], self.out_channels, kernel_size=3, padding=1)
 
-        self.pool = nn.MaxPool2d(2)
+        self.pool = POOL(2)
         self.upsample = nn.Upsample(scale_factor=2, mode='nearest')
 
     def forward(self, x, t):
+
+        if self.dim == 1 and len(x.shape) > 3:
+            while len(x.shape) > 3:
+                x = x[:,:,x.shape[2]//2, :]
+            print(x.shape)
 
         t_emb = self.time_embed(t) #(B, time_emb_dim)
         h = self.init_conv(x)
@@ -214,12 +255,17 @@ class DDPMUnet(BaseModule):
         for up_block, attn in zip(self.up_blocks, self.up_attn):
             h = self.upsample(h)
             skip = skips.pop()
-            if skip.shape[-2:] != h.shape[-2:]:
+            if self.dim == 2 and skip.shape[-2:] != h.shape[-2:]:
                 sh, sw = skip.shape[-2:]
                 th, tw = h.shape[-2:]
                 dh = (sh - th) // 2
                 dw = (sw - tw) // 2
                 skip = skip[:, :, dh:dh + th, dw:dw + tw]
+            elif self.dim == 1 and skip.shape[-1] != h.shape[-1]:
+                sh = skip.shape[-1]
+                th = h.shape[-1]
+                dh = (sh - th) // 2
+                skip = skip[:, :, dh:dh + th]
             h = torch.cat([h, skip], dim=1)
             h = up_block[0](h, t_emb)
             h = up_block[1](h, t_emb)

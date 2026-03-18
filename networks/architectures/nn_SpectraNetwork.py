@@ -110,4 +110,8 @@ class SpectraNetwork(BaseModule):
         sigma = F.softplus(sigma) + 1e-5
         mu = torch.tanh(mu)
 
+        amp= torch.nan_to_num(amp, 0)
+        sigma = torch.nan_to_num(sigma, 1e-5)
+        mu = torch.nan_to_num(mu, 0)
+
         return amp, mu, sigma

@@ -40,8 +40,14 @@ def plot_batch(batch, b_name:str="",same_limits:bool=True, number_per_row:int=8,
         #axes[2*(i//8)][i%8].set_title(str(np.round(score[0],3)))
         min_dat1 = np.min(data1)
         max_dat1 = np.max(data1) 
-        d1 = axes[2*(i//number_per_row)][i%number_per_row].imshow(data1, cmap="jet", norm=LogNorm(vmin=np.min(data1), vmax=np.max(data1)))
-        d2 = axes[2*(i//number_per_row)+1][i%number_per_row].imshow(data2, cmap="jet", norm=(LogNorm(vmin=np.min(data2), vmax=np.max(data2)) if not(same_limits) else LogNorm(min_dat1, max_dat1)))
+        if len(data1.shape) == 2:
+            d1 = axes[2*(i//number_per_row)][i%number_per_row].imshow(data1, cmap="jet", norm=LogNorm(vmin=np.min(data1), vmax=np.max(data1)))
+            d2 = axes[2*(i//number_per_row)+1][i%number_per_row].imshow(data2, cmap="jet", norm=(LogNorm(vmin=np.min(data2), vmax=np.max(data2)) if not(same_limits) else LogNorm(min_dat1, max_dat1)))
+        elif len(data1.shape) == 1:
+            d1 = axes[2*(i//number_per_row)][i%number_per_row].plot(data1, color="black")
+            d2 = axes[2*(i//number_per_row)][i%number_per_row].plot(data2, color="red")
+            d3 = axes[2*(i//number_per_row)+1][i%number_per_row].plot(data2-data1, color="black")
+
     fig.subplots_adjust( left=None, bottom=None,  right=None, top=None, wspace=None, hspace=None)
 
     return fig, axes

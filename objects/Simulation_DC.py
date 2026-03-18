@@ -457,7 +457,7 @@ class Simulation_DC():
     
         return ds
     
-    def plot_slice(self, axis:int=0, slice:int=256, N_arrows:int=20, show_velocity:bool=True, enable_slider:bool=True):
+    def plot_slice(self, axis:int=0, slice:int=0, N_arrows:int=20, show_velocity:bool=True, enable_slider:bool=True):
 
             assert 'RHO' in self.data, LOGGER.error(f"There is no density stored in data. Keys actually stored in data: {self.data.keys()}")
             data_rho = self.data['RHO']

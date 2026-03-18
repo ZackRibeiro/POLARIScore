@@ -49,8 +49,8 @@ from POLARIScore.networks.Trainer import Trainer, load_trainer
 from POLARIScore.networks.architectures.nn_MultiNet import MultiNet
 from POLARIScore.networks.architectures.nn_UNet import UNet
 from torch import nn
-trainer = Trainer(MultiNet, training_set=training_ds, validation_set=validation_ds, model_name="MultiNet_ID_13CO_PCA"+str(spectra_dim))
-#trainer = load_trainer("cached_model")
+#trainer = Trainer(MultiNet, training_set=training_ds, validation_set=validation_ds, model_name="MultiNet_ID_13CO_PCA"+str(spectra_dim))
+trainer = load_trainer("cached_model")
 trainer.validation_set = validation_ds
 trainer.training_set = training_ds
 trainer.validation_loss_method = nn.MSELoss()
@@ -69,10 +69,10 @@ trainer.ema = True
 trainer.ema_warmup = 2000
 #trainer.network_settings["channel_modes"] = [None for _ in range(spectra_dim+1)]
 trainer.training_random_transform = True
-trainer.init()
+#trainer.init()
 #trainer.scheduler = torch.optim.lr_scheduler.StepLR(trainer.optimizer, 50, 0.1)
-trainer.train(1000, batch_number=8, compute_validation=10,early_stopping=False)
-trainer.save()
+#trainer.train(1000, batch_number=8, compute_validation=10,early_stopping=False)
+#trainer.save()
 trainer.plot(save=False)
 trainer.plot_validation(save=False)
 #trainer.model.plot_channel_weights(channel_names=trainer.input_names, cmap='viridis')

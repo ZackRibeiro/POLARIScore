@@ -77,19 +77,13 @@ class BaseModule(nn.Module):
         if reverse:
             tensor = tensor.squeeze(0).squeeze(0).cpu().detach().numpy()
 
-        is_segmentation = False
-        if 'segmentation' in args and type(args['segmentation']) is bool:
-            is_segmentation = args['segmentation']
-
         if name is not None and 'norms' in args and name in args['norms']:
             tensor = args['norms'][name][0 if not(reverse) else 1](tensor)
         else:
-            tensor = np.log(1.+np.clip(tensor, a_min=0, a_max=None)) if not(reverse) else (tensor if is_segmentation else np.exp(tensor)-1.)
+            tensor = np.log(1.+np.clip(tensor, a_min=0, a_max=None)) if not(reverse) else (np.exp(tensor)-1.)
         
-        if(reverse and not(is_segmentation)):
-            np.clip(tensor,a_min=1.,a_max=None)
-        if(np.isinf(tensor).any()):
-            tensor = np.zeros_like(tensor)+1
+        #if(np.isinf(tensor).any()):
+        #    tensor = np.zeros_like(tensor)+1
             
         if reverse:
             return tensor

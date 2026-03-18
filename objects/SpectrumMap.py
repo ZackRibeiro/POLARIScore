@@ -322,6 +322,7 @@ class SpectrumMap():
                 continue
 
             spectra:List[List[Spectrum]] = self.get_spectra(map=self.map[x-environment:x+environment+1,y-environment:y+environment+1:])
+            
             if snr is not None:
                 random_snr = np.random.random()*(snr[1]-snr[0])+snr[0]
             else:
@@ -333,10 +334,14 @@ class SpectrumMap():
                 clean_spectra.append([])
                 for yi in range(len(spectra)):
                     clean_spectra[xi].append(spectra[xi][yi].spectrum)
+            clean_spectra = np.array(clean_spectra)
+
+            if len(clean_spectra) == 1 and len(clean_spectra[0]) == 1:
+                clean_spectra = clean_spectra[0][0]
             
             max_amplitude = np.max(clean_spectra)
             b = [np.array(spectra[0][0].get_X())
-                 , np.array(clean_spectra)/max_amplitude
+                 , clean_spectra/max_amplitude
                  , random_snr
                  , max_amplitude]
 
@@ -369,7 +374,10 @@ class SpectrumMap():
                     noisy_spectra.append([])
                     for yi in range(len(spectra)):
                         noisy_spectra[xi].append(spectra[xi][yi].add_noise(random_snr))
-                b.append(np.array(noisy_spectra))
+                noisy_spectra = np.array(noisy_spectra)
+                if len(noisy_spectra) == 1 and len(noisy_spectra[0]) == 1:
+                    noisy_spectra = noisy_spectra[0][0]
+                b.append(noisy_spectra)
             
             ds.save_batch(b, spectra_generated)
             del b

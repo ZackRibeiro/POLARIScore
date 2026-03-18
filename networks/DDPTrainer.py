@@ -23,6 +23,7 @@ class DDPTrainer(Trainer):
 
         self.timesteps = timesteps
         self.pred_type = pred_type
+        self.dimension = 2
 
         self.set_scheduler(timesteps=timesteps, beta_schedule=beta_schedule,
                            beta_start=beta_start, beta_end=beta_end)        
@@ -97,8 +98,13 @@ class DDPTrainer(Trainer):
             noise = torch.randn_like(x_start)
 
         device = x_start.device
-        sqrt_ac = self.sqrt_alphas_cumprod.to(device)[t].view(-1, 1, 1, 1)
-        sqrt_omac = self.sqrt_one_minus_alphas_cumprod.to(device)[t].view(-1, 1, 1, 1)
+        if self.dimension == 2:
+            sqrt_ac = self.sqrt_alphas_cumprod.to(device)[t].view(-1, 1, 1, 1)
+            sqrt_omac = self.sqrt_one_minus_alphas_cumprod.to(device)[t].view(-1, 1, 1, 1)
+        elif self.dimension == 1:
+            sqrt_ac = self.sqrt_alphas_cumprod.to(device)[t].view(-1, 1, 1)
+            sqrt_omac = self.sqrt_one_minus_alphas_cumprod.to(device)[t].view(-1, 1, 1)
+
         return sqrt_ac * x_start + sqrt_omac * noise
 
     def _train_model(self, model, input, target):
@@ -122,8 +128,13 @@ class DDPTrainer(Trainer):
         if(self.pred_type == "epsilon"):
             return model(torch.cat([xt, input], dim=1), t), noise
         elif(self.pred_type == "v"):
-            sqrt_alpha_bar = self.sqrt_alphas_cumprod.to(self.device)[t].view(B, 1, 1, 1)
-            sqrt_one_minus_alpha_bar = self.sqrt_one_minus_alphas_cumprod.to(self.device)[t].view(B, 1, 1, 1)
+            if self.dimension == 2:
+                sqrt_alpha_bar = self.sqrt_alphas_cumprod.to(self.device)[t].view(B, 1, 1, 1)
+                sqrt_one_minus_alpha_bar = self.sqrt_one_minus_alphas_cumprod.to(self.device)[t].view(B, 1, 1, 1)
+            elif self.dimension == 1:
+                sqrt_alpha_bar = self.sqrt_alphas_cumprod.to(self.device)[t].view(B, 1, 1)
+                sqrt_one_minus_alpha_bar = self.sqrt_one_minus_alphas_cumprod.to(self.device)[t].view(B, 1, 1)
+           
 
             v_target = sqrt_alpha_bar * noise - sqrt_one_minus_alpha_bar * x0
             v_pred = model(torch.cat([xt, input], dim=1), t)
@@ -138,8 +149,9 @@ class DDPTrainer(Trainer):
         # input: (B, C, H, W)
         if isinstance(input, list):
             input = input[0]
-                
-        B, C, H, W = input.shape
+
+        B, *C = input.shape
+            
         eta = .5
         seq = range(0, self.timesteps, 20)
 
@@ -149,18 +161,26 @@ class DDPTrainer(Trainer):
         seq_next = [-1] + list(seq[:-1])
 
         with torch.no_grad():
-            x_t = torch.randn((B, C, H, W), device=self.device)
+            x_t = torch.randn((B, *C), device=self.device)
 
             for i, j in zip(reversed(seq), reversed(seq_next)):
                 t = torch.full((B,), i, device=self.device, dtype=torch.long)
                 next_t = torch.full((B,), j, device=self.device, dtype=torch.long)
 
-                at = self.alphas_cumprod[t].view(B, 1, 1, 1)
+                if self.dimension == 2:
+                    at = self.alphas_cumprod[t].view(B, 1, 1, 1)
+                elif self.dimension == 1:
+                    at = self.alphas_cumprod[t].view(B, 1, 1)
+
 
                 if j == -1:
                     at_next = torch.ones_like(at)
                 else:
-                    at_next = self.alphas_cumprod[next_t].view(B, 1, 1, 1)
+                    if self.dimension == 2:
+                        at_next = self.alphas_cumprod[next_t].view(B, 1, 1, 1)
+                    elif self.dimension == 1:
+                        at_next = self.alphas_cumprod[next_t].view(B, 1, 1)
+
 
                 sqrt_at = torch.sqrt(at)
                 sqrt_one_minus_at = torch.sqrt(1.0 - at)
