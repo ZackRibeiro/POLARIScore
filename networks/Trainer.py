@@ -475,7 +475,7 @@ class Trainer():
 
         return d_prediction
 
-    def get_prediction_batch(self,force_compute=False):
+    def get_prediction_batch(self,force_compute=False,batch_number:int=1):
         """
         Args:
             force_compute(bool): If trainer has already a prediction batch computed then if this is True, this will be computed again.
@@ -487,7 +487,7 @@ class Trainer():
             return self.prediction_batch
         
         start_time = time.time()
-        self.prediction_batch = self.predict(self.validation_set)
+        self.prediction_batch = self.predict(self.validation_set,batch_number=batch_number)
         end_time = time.time()
 
         self.inference_time = (end_time - start_time)/len(self.prediction_batch[0])
@@ -877,7 +877,7 @@ class Trainer():
     def load(model_name, load_model=True):
         return load_trainer(model_name, load_model)
 
-def load_trainer(model_name, load_model=True, trainer_class=Trainer)->Trainer:
+def load_trainer(model_name, load_model=True, trainer_class=Trainer, model_class=None)->Trainer:
 
     folder_model_name = model_name
 
@@ -915,7 +915,13 @@ def load_trainer(model_name, load_model=True, trainer_class=Trainer)->Trainer:
 
     trainer.network_type = settings["network"]
     trainer.network_settings = network_settings
-    trainer.network = network_options[settings["network"]]
+    if model_class is None:
+        try:
+            trainer.network = network_options[settings["network"]]
+        except e:
+            LOGGER.error(f"Automatic loading of network class failed : {e}")
+    else:
+        trainer.network = model_class
     trainer.learning_rate = float(settings["learning_rate"])
     trainer.last_epoch = int(settings["total_epoch"])
     trainer.training_losses = settings["training_losses"]

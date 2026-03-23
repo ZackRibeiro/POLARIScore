@@ -374,7 +374,7 @@ class SpectrumMap():
                     noisy_spectra.append([])
                     for yi in range(len(spectra)):
                         noisy_spectra[xi].append(spectra[xi][yi].add_noise(random_snr))
-                noisy_spectra = np.array(noisy_spectra)
+                noisy_spectra = np.array(noisy_spectra)/max_amplitude
                 if len(noisy_spectra) == 1 and len(noisy_spectra[0]) == 1:
                     noisy_spectra = noisy_spectra[0][0]
                 b.append(noisy_spectra)

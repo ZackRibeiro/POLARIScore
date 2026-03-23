@@ -9,23 +9,88 @@ import matplotlib
 from scipy.optimize import curve_fit
 from typing import List
 
-from POLARIScore.objects.Simulation_DC import Simulation_DC
+from POLARIScore.objects.Simulation_DC import Simulation_DC, openSimulation
 from POLARIScore.utils.sim_utils import init_idefix,init_ramses
 from POLARIScore.utils.utils import compute_mass_weighted_density
 
 from POLARIScore.objects.SimulationArray import SimulationArray
 from POLARIScore.objects.Dataset import Dataset, getDataset
 from torch import nn
+from POLARIScore.networks.DDPTrainer import DDPTrainer, DDPMUnet
+from POLARIScore.networks.Trainer import Trainer, load_trainer
+from POLARIScore.networks.architectures.nn_SpectraNetwork import SpectraNetwork
+from POLARIScore.networks.architectures.nn_UNet import UNet
 
-sim = SimulationArray(name="sim_512_A_3")
-#sim = SimulationArray(simulations=[Simulation_DC("turb_sim_A"),Simulation_DC("adastra_512")], indexes=[192,512])
+#sim = SimulationArray(name="sim_512_A_3")
+#sim = Simulation_DC(name="sim_512_A_3")
+#sim = openSimulation("orionMHD_lowB_multi_", global_size=66.06)
+#sim = SimulationArray(simulations=[Simulation_DC("sim_256_A_5"),Simulation_DC("sim_512_A_3")], indexes=[256,512])
 #sim = SimulationArray(simulations=[Simulation_DC("adastra_512_old"),Simulation_DC("adastra_512")], indexes=[0,1])
 
 from POLARIScore.objects.SpectrumMap import SpectrumMap, getSimulationSpectra
 from POLARIScore.objects.Spectrum import Spectrum
-#sim.plot(plot_method=Simulation_DC.plot_pdf, what="rho", colors="viridis", drawstyle=None)
-sim.plot(plot_method=Simulation_DC.plot, mode="slider", norm=LogNorm(vmin=1e3, vmax=1e6), method=compute_mass_weighted_density, label=r"$<n_H>_m$")
-#sim.simulations[-1].plot_slice()
+from POLARIScore.config import DATA_NORMALIZATION_CDENS, DATA_NORMALIZATION_VDENS, DATA_NORMALIZATION_CDENS_TORCH, DATA_NORMALIZATION_VDENS_TORCH
+
+#sim.plot(plot_method=Simulation_DC.plot_pdf, what="cdens", colors="viridis", drawstyle=None)
+#sim.plot(plot_method=Simulation_DC.plot, mode="slider", norm=LogNorm(vmin=1e3, vmax=1e6), method=compute_mass_weighted_density, label=r"$<n_H>_m$")
+
+
+#sim.generate_dataset("idefix_512_A_training", number=100, axes=[0,2])
+#sim.generate_dataset("idefix_512_A_validation", number=100, axes=[1])
+"""
+training_ds = getDataset("batch_idefix_512_A_training")
+validation_ds = getDataset("batch_idefix_512_A_validation")
+
+trainer = DDPTrainer(network=DDPMUnet, training_set=training_ds, validation_set=validation_ds, model_name="idefix_512_ddpm")
+trainer.pred_type = "v"
+import torch
+def classic_log_mse(output, target):
+        output_phys = DATA_NORMALIZATION_VDENS_TORCH[1](output)
+        target_phys = DATA_NORMALIZATION_VDENS_TORCH[1](target)
+        output_log = torch.log(output_phys)
+        target_log = torch.log(target_phys)
+        mse = torch.mean((output_log - target_log) ** 2)
+        return mse
+
+
+trainer.norms = { 
+    "cdens": DATA_NORMALIZATION_CDENS,
+    "vdens": DATA_NORMALIZATION_VDENS,
+}
+trainer.network_settings['num_layers']=4
+trainer.network_settings['base_filters']=64
+trainer.optimizer_name = "Adam"
+trainer.learning_rate = 1e-4
+trainer.ema = True
+trainer.ema_warmup = 50
+trainer.network_settings["attention_layers"] = [3]
+trainer.network_settings["attention_heads"] = [8]    
+trainer.validation_loss_method = classic_log_mse
+trainer.training_random_transform = True
+trainer.input_names = ["cdens"]
+trainer.target_names = ["vdens"]
+trainer.init()
+trainer.train(1000, batch_number=8, compute_validation=10, early_stopping=False)
+trainer.save()
+trainer.plot()
+trainer.plot_validation()
+"""
+
+from POLARIScore.objects.Observation import Observation
+trainer = load_trainer("idefix_512_ddpm", trainer_class=DDPTrainer)
+trainer.get_validation_error()
+trainer.norms = {
+    "cdens": DATA_NORMALIZATION_CDENS,
+    "vdens": DATA_NORMALIZATION_VDENS,
+}
+
+obs = Observation("OrionB","column_density_map")
+obs.distance = 400
+obs.predict(trainer,patch_size=(128,128), overlap=0.5, downsample_factor=obs.find_scale(1.25,128,obs.distance), nan_value=1e20, apply_baseline=True)
+obs.save(suffix=f"_ddpm_idefix")
+obs.plot(data=obs.prediction, norm=LogNorm(vmin=1e2, vmax=3e5), plot_skeleton=False)
+obs.plot_dcmf(monte_carlo=20, correction=False)
+
 
 """
 sim_names = ["turb_sim_A"]#,"turb_sim_B","turb_sim_C"]
@@ -63,8 +128,6 @@ def _plot_spectrum(ds:'Dataset',ds_index:int=0):
     spect.fit_settings = None , {'params':gauss_params, 'N':len(gauss_params)//3}
     spect.plot(show_fit=True, show_dendrogram=False)
 
-from POLARIScore.networks.Trainer import Trainer, load_trainer
-from POLARIScore.networks.architectures.nn_SpectraNetwork import SpectraNetwork
 trainer = Trainer(network=SpectraNetwork, training_set=training_set, validation_set=validation_set, model_name="Spectral_Fit")
 #trainer = load_trainer("cached_model")
 trainer.model_name = "Spectral_Fit"

@@ -131,9 +131,10 @@ class MultiNet(BaseModule):
         
         C = len(x)
         channels = x
-        channels = (channels[0],channels[1].squeeze(1))
-        while channels[1].shape[-1] != channels[1].shape[-2]:
-            channels = (channels[0],torch.moveaxis(channels[1], 3, 1))
+        if len(channels) > 1:
+            channels = (channels[0],channels[1].squeeze(1))
+            while channels[1].shape[-1] != channels[1].shape[-2]:
+                channels = (channels[0],torch.moveaxis(channels[1], 3, 1))
 
         assert C == self.num_channels, LOGGER.error(f"Model trained with {self.num_channels} inputs but received {C} inputs")
 

@@ -823,31 +823,34 @@ class Simulation_DC():
 
         return fig, ax
 
-    def plot_pdf(self,ax=None,bins: int = 20,vdens_method=compute_mass_weighted_density,offset_method: Literal["mean", "max", "none"] = "none",what: Literal["both", "cdens", "vdens" "rho","vel"] = "rho",
-                 color=None, legend=True, scatter=True, swap_axis=False, label:Optional[str]=None,drawstyle:Optional[str]="steps-mid"):
+    def plot_pdf(self,ax=None,bins: int = 20,offset_method: Literal["mean", "max", "none"] = "none",what: Literal["cdens", "vdens" "rho","vel"] = "rho",
+                 color=None, legend=True, scatter=True, label:Optional[str]=None,drawstyle:Optional[str]="steps-mid",
+                 vdens_method:Optional[Callable]=compute_mass_weighted_density):
         if ax is None:
             fig, ax = plt.subplots()
         else:
             fig = ax.figure
 
-        if what in ("both", "cdens"):
-            cdens = np.array([compute_column_density(self.data['RHO'], self.cell_size, axis=i) for i in range(3)]).flatten()
-        else:
-            cdens = None
+        is_log = True
+        if what.lower() in ("cdens", "column_density"):
+            data = np.array([compute_column_density(self.data['RHO'], self.cell_size, axis=i) for i in range(3)]).flatten()
+            label = r"$<N_H>$" if label is None else label
+        elif what.lower() in ("vdens", "average_density"):
+            data = np.array([self._compute_v_density(method=vdens_method, axis=i, force=True) for i in range(3)]).flatten()
+            label = r"$<n_H>_m$" if label is None else label
+        elif what.lower() in ("vel","velocity"):
+            data = np.array([*self.data['VX1'].flatten(),*self.data['VX2'].flatten(),*self.data['VX3'].flatten()])
+            label = r"$v$" if label is None else label
+            is_log = False
+        elif what.lower() in ("rho", "density"):
+            data = self.data['RHO']
+            label = r"$n_H$" if label is None else label
 
-        if what in ("both", "vdens"):
-            vdens = np.array([self._compute_v_density(method=vdens_method, axis=i, force=True) for i in range(3)]).flatten()
-        else:
-            vdens = None
+        mask = (~np.isnan(data))
+        if is_log:
+            mask = mask & (data > 0)
 
-        if what == "both":
-            mask = (~np.isnan(vdens)) & (vdens > 0) & (~np.isnan(cdens)) & (cdens > 0)
-        elif what == "cdens":
-            mask = (~np.isnan(cdens)) & (cdens > 0)
-        elif what == "vdens":
-            mask = (~np.isnan(vdens)) & (vdens > 0)
 
-        no_log = False
         def _normalize_x(hist, bin_centers):
             if offset_method == "mean":
                 return (bin_centers - bin_centers[np.argmin(np.abs(hist - np.mean(hist)))]) / \
@@ -857,63 +860,31 @@ class Simulation_DC():
                     (np.max(bin_centers) - np.min(bin_centers))
             else:
                 return bin_centers
-
-        if what in ("rho","RHO"):            
-            pdf = compute_pdf(self.data['RHO'], bins=bins)
-            ax.plot(pdf[0] if swap_axis else 10**pdf[1][:-1],10**pdf[1][:-1] if swap_axis else pdf[0], marker="+", color=color, drawstyle=drawstyle, label=label)
-        
-
-        if what in ("vel","VEL","velocity"):
-            pdf = compute_pdf(np.array([*self.data['VX1'].flatten(),*self.data['VX2'].flatten(),*self.data['VX3'].flatten()]), func=lambda x: x)
-            ax.plot(pdf[0] if swap_axis else pdf[1][:-1],pdf[1][:-1] if swap_axis else pdf[0], marker="+", color=color, drawstyle=drawstyle, label=label+"_"+rf"$M=${np.sqrt(np.mean(np.power(self.data['VX1'],2)+np.power(self.data['VX2'],2)+np.power(self.data['VX3'],2)))/3.2591e+4:.2}")
-            no_log = True
-
-        if what in ("both", "cdens"):
-            log10_coldens = np.log10(cdens[mask])
-            hist_cd_raw, _ = np.histogram(log10_coldens, bins=bins+1, density=False)
-            hist_cd_stats_error = np.sqrt(hist_cd_raw) / hist_cd_raw
-            hist_cd, bin_edges_cd = np.histogram(log10_coldens, bins=bins+1, density=True)
-            bin_centers_cd = 0.5 * (bin_edges_cd[1:] + bin_edges_cd[:-1])
-            bin_centers_cd = _normalize_x(hist_cd, bin_centers_cd)
-            ax.plot(hist_cd if swap_axis else 10**bin_centers_cd, 10**bin_centers_cd if swap_axis else hist_cd, drawstyle=drawstyle, marker="o" if scatter else None, color=color, label=r"$N_H$ [$cm^{-2}$]" if label is None else label)
-            if not(swap_axis):
-                ax.errorbar(10**bin_centers_cd, hist_cd, yerr=hist_cd_stats_error * hist_cd, fmt='none', color="black")
-
-        if what in ("both", "vdens"):
-            log10_voldens = np.log10(vdens[mask])
-            bin_edges_pr = np.linspace(np.min(log10_voldens), np.max(log10_voldens), bins + 1)
-            hist_pr_raw, _ = np.histogram(log10_voldens, bins=bin_edges_pr, density=False)
-            hist_pred_stats_error = np.sqrt(hist_pr_raw) / hist_pr_raw
-            hist_pr, bin_edges_pr = np.histogram(log10_voldens, bins=bin_edges_pr, density=True)
-            bin_centers_pr = 0.5 * (bin_edges_pr[1:] + bin_edges_pr[:-1])
-            bin_centers_pr = _normalize_x(hist_pr, bin_centers_pr)
-            ax.plot(hist_pr if swap_axis else 10**bin_centers_pr, 10**bin_centers_pr if swap_axis else hist_pr, drawstyle=drawstyle, marker="o" if scatter else None, color=color, label=r"$<n_H>_m$ [$cm^{-3}$]" if label is None else label)
-            if not(swap_axis):
-                ax.errorbar(10**bin_centers_pr, hist_pr, yerr=hist_pred_stats_error * hist_pr, fmt='none', color="black")
+        data = data[mask]
+        data = np.log10(data) if is_log else data
+        bin_edges = np.linspace(np.min(data), np.max(data), bins + 1)
+        hist, _ = np.histogram(data, bins=bin_edges, density=False)
+        hist_stats_error = np.sqrt(hist) / hist
+        hist, bin_edges = np.histogram(data, bins=bin_edges, density=True)
+        bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
+        bin_centers = _normalize_x(hist, bin_centers)
+        if is_log:
+            bin_centers = 10**bin_centers
+        ax.plot(bin_centers, hist, drawstyle=drawstyle, marker="+" if scatter else None, color=color, label=label)
+        ax.errorbar(bin_centers, hist, yerr=hist_stats_error * hist, fmt='none', color="black")
 
         if offset_method == "mean":
             ax.set_xlabel(r"($x-\mu) / (max(x)-min(x))$")
         elif offset_method == "max":
             ax.set_xlabel(r"($x-max(x)) / (max(x)-min(x))$")
-        
-        if swap_axis:
-            ax.set_xlabel("pdf")
-            if what == "cdens":
-                ax.set_ylim(np.min(cdens)*0.75, np.max(cdens)*1.25)
-                ax.set_xlim(np.min(hist_cd)*0.75, np.max(hist_cd)*1.25)
-            elif what == "vdens":
-                ax.set_ylim(np.min(vdens)*0.75, np.max(vdens)*1.25)
-                ax.set_xlim(np.min(hist_pr)*0.75, np.max(hist_pr)*1.25)
         else:
-            ax.set_ylabel("pdf")
-            if what == "cdens":
-                ax.set_xlim(np.min(cdens)*0.75, np.max(cdens)*1.25)
-                ax.set_ylim(np.min(hist_cd)*0.75, np.max(hist_cd)*1.25)
-            elif what == "vdens":
-                ax.set_xlim(np.min(vdens)*0.75, np.max(vdens)*1.25)
-                ax.set_ylim(np.min(hist_pr)*0.75, np.max(hist_pr)*1.25)
+            ax.set_xlabel(label)
+        
+        ax.set_ylabel("pdf")
+        ax.set_xlim(np.min(data)*0.75, np.max(hist)*1.25)
+        ax.set_ylim(np.min(hist)*0.75, np.max(hist)*1.25)
 
-        if not(no_log):
+        if is_log:
             ax.set_xscale("log")
             ax.set_yscale("log")
         ax.grid(visible=True)
@@ -990,7 +961,7 @@ def openSimulation(name_root:str, global_size:float, use_cache:bool=True,cache_n
         LOGGER.log("Merged using cached data")
         sim = Simulation_DC(names[0], global_size, init=True)
         sim_len = int(len(names)**(1/3))
-        sim.data['RHO'] = np.memmap(CACHES_FOLDER+cache_name, dtype='float32', mode='r', shape=(sim.data.shape[0]*sim_len,sim.data.shape[1]*sim_len,sim.data.shape[2]*sim_len))
+        sim.data['RHO'] = np.memmap(CACHES_FOLDER+cache_name, dtype='float32', mode='r', shape=(sim.data['RHO'].shape[0]*sim_len,sim.data['RHO'].shape[1]*sim_len,sim.data['RHO'].shape[2]*sim_len))
         sim.nres = sim.nres*sim_len
         sim.relative_size = sim.relative_size*sim_len
         sim.center = np.array([0.5,0.5,0.5])
@@ -1004,7 +975,7 @@ def openSimulation(name_root:str, global_size:float, use_cache:bool=True,cache_n
         sims.append(Simulation_DC(n, global_size, init=True))
     sim = mergeSimu(sims)
     del sims
-    fp = np.memmap(CACHES_FOLDER+cache_name, dtype='float32', mode='w+', shape=sim.data.shape)
-    fp[:] = sim.data[:]
-    sim.data = fp
+    fp = np.memmap(CACHES_FOLDER+cache_name, dtype='float32', mode='w+', shape=sim.data['RHO'].shape)
+    fp[:] = sim.data['RHO'][:]
+    sim.data['RHO'] = fp
     return sim
