@@ -186,6 +186,7 @@ class DDPTrainer(Trainer):
                 sqrt_one_minus_at = torch.sqrt(1.0 - at)
 
                 model_in = torch.cat([x_t, input], dim=1)
+            
 
                 if self.pred_type == "epsilon":
                     eps = model(model_in, t)

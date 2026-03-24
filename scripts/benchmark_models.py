@@ -18,7 +18,7 @@ from POLARIScore.objects.SimulationArray import SimulationArray
 Generate full benchmark of trained models with plots.
 
 Usage example:
-#python -m POLARIScore.scripts.benchmark_models --models UNet cINN DDPM --obs_name OrionB --obs_suffixes unet cinn ddpm  --name Benchmark_OrionB
+#python -m POLARIScore.scripts.benchmark_models --models UNet cINN DDPM --obs_name OrionB --obs_suffixes unet cinn ddpm  --name Benchmark_OrionB --toplot distribution
 
 """
 
@@ -28,7 +28,7 @@ REGIONS = [
 #[Angle("5h50m").deg, Angle("5h45").deg, Angle("-0d19m").deg, Angle("0d53m").deg],[Angle("5h48m").deg, Angle("5h39m").deg, Angle("-3d10m").deg, Angle("-0d58m").deg]
 ]
 
-MONTE_CARLO = 50
+MONTE_CARLO = 20
 
 start_time = time.process_time()
 def _format_time(seconds:float)->str:
@@ -117,6 +117,7 @@ global_axes = {
     "core_hists": None,
     "core_relations": None,
     "density_dists": None,
+    "density_dists_wout_ncol": None,
     "core_diffs": None,
     "power_spectra":None,
     "power_spectra_normalized":None,
@@ -176,12 +177,19 @@ def make_obs_benchmark(suffix,model_name=None,i=0):
             global_axes["core_hists"] = ax
 
         if ("c_relation" in args.toplot or "all" in args.toplot) and not("-c_relation" in args.toplot):
+            if global_axes["core_relations"] is None:
+                _, global_axes["core_relations"] = observation.plot_cores_baseline(ax=global_axes["core_relations"], suffixes=[], derived_cores=True, density_correction=args.density_correction, invert_xy=True, x_coldens=True, mov_average=1, fit=True, forced_label=m)
             _, ax = observation.plot_cores_baseline(ax=global_axes["core_relations"], derived_cores=False, density_correction=args.density_correction, invert_xy=True, x_coldens=True, mov_average=1, fit=True, cmap_color=False, forced_label=m)
             global_axes["core_relations"] = ax
 
         if ("distribution" in args.toplot or "all" in args.toplot) and not("-distribution" in args.toplot):
-            _, ax = observation.plot_density_distributions(ax=global_axes["density_dists"], monte_carlo=0, offset_method="wout_ncol", color=None, label=m)
+            if global_axes["density_dists"] is None:
+                _, ax = observation.plot_density_distributions(ax=global_axes["density_dists"], monte_carlo=0, color="black", label="$N_H$", offset_method="max", what="data")
+                global_axes["density_dists"] = ax
+            _, ax = observation.plot_density_distributions(ax=global_axes["density_dists"], monte_carlo=MONTE_CARLO, color=colors[i], label=m+r" $<n_H>_m$", offset_method="max")
+            _, ax2 = observation.plot_density_distributions(ax=global_axes["density_dists_wout_ncol"], monte_carlo=MONTE_CARLO, color=colors[i], label=m+r" $<n_H>_m$")
             global_axes["density_dists"] = ax
+            global_axes["density_dists_wout_ncol"] = ax2
 
         if ("c_diff" in args.toplot or "all" in args.toplot) and not("-c_diff" in args.toplot):
             _, ax = observation.plot_cores_mass(ax=global_axes["core_diffs"], bins_mean=20, label=m, show_errors=False, linestyle=linestyles[i])
@@ -213,11 +221,6 @@ def make_obs_benchmark(suffix,model_name=None,i=0):
         if ("c_relation" in args.toplot or "all" in args.toplot) and not("-c_relation" in args.toplot):
             fig, _ = observation.plot_cores_baseline(derived_cores=True, density_correction=args.density_correction, invert_xy=True, x_coldens=True, mov_average=1, fit=True, forced_label=m)
             fig.savefig(os.path.join(F_CORE_RELATIONS,"core_relations_"+m+"."+args.format))
-            plt.close(fig)
-
-        if ("distribution" in args.toplot or "all" in args.toplot) and not("-distribution" in args.toplot):
-            fig, _ = observation.plot_density_distributions(monte_carlo=0, offset_method="max", color=colors[i], label=m, marker="+")
-            fig.savefig(os.path.join(F_DENSITY_DISTS,"density_dists_"+m+"."+args.format))
             plt.close(fig)
 
         if ("voldens" in args.toplot or "all" in args.toplot) and not("-voldens" in args.toplot):
@@ -262,6 +265,7 @@ for i,t,m in zip(range(len(trainers)),trainers, args.models):
             "vdens": DATA_NORMALIZATION_VDENS,
         }
 
+    has_no_val_set = False
     if validation_set is None:
         if args.ds is None:
             validation_set = trainer.validation_set
@@ -280,68 +284,71 @@ for i,t,m in zip(range(len(trainers)),trainers, args.models):
                 validation_set = getDataset(args.ds if "batch_" in args.ds else "batch_"+args.ds)
             trainer.validation_set = validation_set
 
-        assert validation_set is not None, LOGGER.error("Validation set need to exists, check previous warnings.")
-    if args.ds is not None:
-        trainer.validation_set = validation_set
-    if validation_set.name != trainer.validation_set.name:
-        LOGGER.warn("Two models don't use the same validation dataset, be careful if you plot predictions on validation set.")
-    
-    validation_batch = [p[1] for p in trainer.get_prediction_batch()]
-    for j,img in enumerate(args.ds_imgs):
-        img = int(img)
-        validation_pair = validation_set.get(img)
-        if i == 0:
-            ds_ax_coldens = plt.subplot2grid((2, 1+len(args.models)),(1, 0), fig=ds_figs[j])
-            ds_ax_voldens = plt.subplot2grid((2, 1+len(args.models)),(0, 0), fig=ds_figs[j])
-
-            ds_axes_sim[j] = [ds_ax_coldens,ds_ax_voldens]
-
-            vmin = np.min(validation_pair[validation_set.get_element_index('vdens')])
-            vmax = np.max(validation_pair[validation_set.get_element_index('vdens')])
-            ds_lims.append((vmin, vmax))
-
-            im_coldens = plot_map(validation_pair[validation_set.get_element_index('cdens')], ax=ds_ax_coldens, norm=LogNorm(), cmap="rainbow", show_ax_labels=False)
-            im_voldens = plot_map(validation_pair[validation_set.get_element_index('vdens')], ax=ds_ax_voldens, norm=LogNorm(vmin=vmin,vmax=vmax), cmap="rainbow", show_ax_labels=False, toplabel="Sim")
-            
-            ds_figs[j].colorbar(im_coldens,ax=[ds_ax_coldens],orientation="vertical",
-                location="left",fraction=0.03, pad=0.02, label=r"$N_H(cm^{-2})$"
-            )
-        vmin, vmax = ds_lims[j]
-
-        ds_ax = plt.subplot2grid((2, 1+len(args.models)),(0, i+1), fig=ds_figs[j])
-        im = plot_map(validation_batch[img], ax=ds_ax, cmap="rainbow", norm=LogNorm(vmin=vmin,vmax=vmax), show_ax_labels=False, toplabel=m)
-
-
-        ds_ax_error = plt.subplot2grid((2, 1+len(args.models)),(1, i+1), fig=ds_figs[j])
-        im_error = plot_map(np.clip(np.log10(validation_batch[img])-np.log10(validation_pair[validation_set.get_element_index('vdens')]),-.5,.5)
-                            ,ax=ds_ax_error, cmap="coolwarm", norm=CenteredNorm(), show_ax_labels=False, toplabel=m+"-sim")
-        ds_axes_error[j][i] = ds_ax_error
-        ds_axes[j][i] = ds_ax
-
-        if i == len(args.models)-1:
-            ds_figs[j].colorbar(im,ax=[ds_ax],orientation="vertical",
-                location="right",fraction=0.03, pad=0.02, label=r"$<n_H>_m(cm^{-3})$"
-            )
-            ds_figs[j].colorbar(im_error,ax=[ds_ax_error],orientation="vertical",
-                location="right",fraction=0.03, pad=0.02, label=r"clipped diff in log10"
-            )
-
+        if validation_set is None:
+            LOGGER.warn("No validation set loaded, can make errors if plots need it.")
+            has_no_val_set = True
+    if not(has_no_val_set):
+        if args.ds is not None:
+            trainer.validation_set = validation_set
+        if validation_set.name != trainer.validation_set.name:
+            LOGGER.warn("Two models don't use the same validation dataset, be careful if you plot predictions on validation set.")
         
+        validation_batch = [p[1] for p in trainer.get_prediction_batch()]
+        for j,img in enumerate(args.ds_imgs):
+            img = int(img)
+            validation_pair = validation_set.get(img)
+            if i == 0:
+                ds_ax_coldens = plt.subplot2grid((2, 1+len(args.models)),(1, 0), fig=ds_figs[j])
+                ds_ax_voldens = plt.subplot2grid((2, 1+len(args.models)),(0, 0), fig=ds_figs[j])
+
+                ds_axes_sim[j] = [ds_ax_coldens,ds_ax_voldens]
+
+                vmin = np.min(validation_pair[validation_set.get_element_index('vdens')])
+                vmax = np.max(validation_pair[validation_set.get_element_index('vdens')])
+                ds_lims.append((vmin, vmax))
+
+                im_coldens = plot_map(validation_pair[validation_set.get_element_index('cdens')], ax=ds_ax_coldens, norm=LogNorm(), cmap="rainbow", show_ax_labels=False)
+                im_voldens = plot_map(validation_pair[validation_set.get_element_index('vdens')], ax=ds_ax_voldens, norm=LogNorm(vmin=vmin,vmax=vmax), cmap="rainbow", show_ax_labels=False, toplabel="Sim")
+                
+                ds_figs[j].colorbar(im_coldens,ax=[ds_ax_coldens],orientation="vertical",
+                    location="left",fraction=0.03, pad=0.02, label=r"$N_H(cm^{-2})$"
+                )
+            vmin, vmax = ds_lims[j]
+
+            ds_ax = plt.subplot2grid((2, 1+len(args.models)),(0, i+1), fig=ds_figs[j])
+            im = plot_map(validation_batch[img], ax=ds_ax, cmap="rainbow", norm=LogNorm(vmin=vmin,vmax=vmax), show_ax_labels=False, toplabel=m)
 
 
-    if ("accuracy" in args.toplot or "all" in args.toplot) and not("-accuracy" in args.toplot):
-        Trainer.plot_accuracy([trainer], ax=accuracy_ax_total, linestyle=linestyles[i], color=colors[i], xlabel="")
-        acc_ax = plt.subplot2grid((3, len(trainers)), (2, i), rowspan=1, colspan=1, fig=accuracy_fig)
-        Trainer.plot_accuracy([trainer], ax=acc_ax, bins=[0,2.3,4,7], use_linestyles=True, color=colors[i], legend=False, xlabel="Error allowed (in log10)" if i == int(len(trainers)/2) else "", ylabel="Accuracy" if i==0 else "")
+            ds_ax_error = plt.subplot2grid((2, 1+len(args.models)),(1, i+1), fig=ds_figs[j])
+            im_error = plot_map(np.clip(np.log10(validation_batch[img])-np.log10(validation_pair[validation_set.get_element_index('vdens')]),-.5,.5)
+                                ,ax=ds_ax_error, cmap="coolwarm", norm=CenteredNorm(), show_ax_labels=False, toplabel=m+"-sim")
+            ds_axes_error[j][i] = ds_ax_error
+            ds_axes[j][i] = ds_ax
 
-    in_files.append({
-        "model_name": m,
-        "inference_time(s/img)": str(trainer.inference_time),
-        "inference_speed(img/s)": str(1/trainer.inference_time),
-        "parameters":  sum(p.numel() for p in trainer.model.parameters()),
-        "MSE": trainer.validation_losses[-1],
-        "Error(Acc=80%)": find_error_for_batch_accuracy(trainer.get_prediction_batch(), accuracy=0.8) ,
-    })
+            if i == len(args.models)-1:
+                ds_figs[j].colorbar(im,ax=[ds_ax],orientation="vertical",
+                    location="right",fraction=0.03, pad=0.02, label=r"$<n_H>_m(cm^{-3})$"
+                )
+                ds_figs[j].colorbar(im_error,ax=[ds_ax_error],orientation="vertical",
+                    location="right",fraction=0.03, pad=0.02, label=r"clipped diff in log10"
+                )
+
+            
+
+
+        if ("accuracy" in args.toplot or "all" in args.toplot) and not("-accuracy" in args.toplot):
+            Trainer.plot_accuracy([trainer], ax=accuracy_ax_total, linestyle=linestyles[i], color=colors[i], xlabel="")
+            acc_ax = plt.subplot2grid((3, len(trainers)), (2, i), rowspan=1, colspan=1, fig=accuracy_fig)
+            Trainer.plot_accuracy([trainer], ax=acc_ax, bins=[0,2.3,4,7], use_linestyles=True, color=colors[i], legend=False, xlabel="Error allowed (in log10)" if i == int(len(trainers)/2) else "", ylabel="Accuracy" if i==0 else "")
+
+        in_files.append({
+            "model_name": m,
+            "inference_time(s/img)": str(trainer.inference_time),
+            "inference_speed(img/s)": str(1/trainer.inference_time),
+            "parameters":  sum(p.numel() for p in trainer.model.parameters()),
+            "MSE": trainer.validation_losses[-1],
+            "Error(Acc=80%)": find_error_for_batch_accuracy(trainer.get_prediction_batch(), accuracy=0.8) ,
+        })
 
     if observation is not None :
         make_obs_benchmark(suffix=args.obs_suffixes[i], model_name=m, i=i)

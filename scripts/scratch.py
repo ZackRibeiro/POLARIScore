@@ -37,12 +37,15 @@ from POLARIScore.config import DATA_NORMALIZATION_CDENS, DATA_NORMALIZATION_VDEN
 
 #sim.generate_dataset("idefix_512_A_training", number=100, axes=[0,2])
 #sim.generate_dataset("idefix_512_A_validation", number=100, axes=[1])
-"""
+
 training_ds = getDataset("batch_idefix_512_A_training")
 validation_ds = getDataset("batch_idefix_512_A_validation")
 
-trainer = DDPTrainer(network=DDPMUnet, training_set=training_ds, validation_set=validation_ds, model_name="idefix_512_ddpm")
-trainer.pred_type = "v"
+"""
+#trainer = DDPTrainer(network=DDPMUnet, training_set=training_ds, validation_set=validation_ds, model_name="idefix_512_ddpm")
+trainer = Trainer(network=UNet, training_set=training_ds, validation_set=validation_ds, model_name="idefix_512_unet")
+
+#trainer.pred_type = "v"
 import torch
 def classic_log_mse(output, target):
         output_phys = DATA_NORMALIZATION_VDENS_TORCH[1](output)
@@ -61,10 +64,10 @@ trainer.network_settings['num_layers']=4
 trainer.network_settings['base_filters']=64
 trainer.optimizer_name = "Adam"
 trainer.learning_rate = 1e-4
-trainer.ema = True
-trainer.ema_warmup = 50
-trainer.network_settings["attention_layers"] = [3]
-trainer.network_settings["attention_heads"] = [8]    
+#trainer.ema = True
+#trainer.ema_warmup = 50
+#trainer.network_settings["attention_layers"] = [3]
+#trainer.network_settings["attention_heads"] = [8]    
 trainer.validation_loss_method = classic_log_mse
 trainer.training_random_transform = True
 trainer.input_names = ["cdens"]
@@ -75,10 +78,9 @@ trainer.save()
 trainer.plot()
 trainer.plot_validation()
 """
-
 from POLARIScore.objects.Observation import Observation
-trainer = load_trainer("idefix_512_ddpm", trainer_class=DDPTrainer)
-trainer.get_validation_error()
+trainer = load_trainer("idefix_512_unet", trainer_class=Trainer)
+#trainer.get_validation_error()
 trainer.norms = {
     "cdens": DATA_NORMALIZATION_CDENS,
     "vdens": DATA_NORMALIZATION_VDENS,
@@ -86,9 +88,10 @@ trainer.norms = {
 
 obs = Observation("OrionB","column_density_map")
 obs.distance = 400
-obs.predict(trainer,patch_size=(128,128), overlap=0.5, downsample_factor=obs.find_scale(1.25,128,obs.distance), nan_value=1e20, apply_baseline=True)
-obs.save(suffix=f"_ddpm_idefix")
-obs.plot(data=obs.prediction, norm=LogNorm(vmin=1e2, vmax=3e5), plot_skeleton=False)
+#obs.predict(trainer,patch_size=(128,128), overlap=0.5, downsample_factor=obs.find_scale(1.25,128,obs.distance), nan_value=1e20, apply_baseline=True)
+#obs.save(suffix=f"_unet_idefix")
+obs.load(suffix=f"_unet_idefix")
+obs.plot(data=obs.prediction, norm=LogNorm(), plot_skeleton=False)
 obs.plot_dcmf(monte_carlo=20, correction=False)
 
 

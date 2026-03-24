@@ -97,6 +97,7 @@ class Observation():
 
     def predict(self, model_trainer:'Trainer', patch_size:Tuple[int,int]=(128, 128), nan_value:float=-1.0, overlap:float=0.5, downsample_factor:float=1., apply_baseline:bool=True)->np.ndarray:
         prediction = predict_map(self.data ,model_trainer, patch_size, nan_value, overlap, downsample_factor, apply_baseline)
+        self.prediction = prediction
         return prediction
     
     def apply_filter(self, method:Literal["gaussian"]="gaussian", factor=1., original_beam=18.2, replace=True):
@@ -506,15 +507,14 @@ class Observation():
 
             return fig, ax
 
-    def plot_density_distributions(self, ax:Optional["axes.Axes"]=None, bins:int=20, monte_carlo:int=10, offset_method:Literal["mean","max","wout_ncol"]="mean", 
+    def plot_density_distributions(self, ax:Optional["axes.Axes"]=None, bins:int=20, monte_carlo:int=10, offset_method:Literal["mean","max","none"]="none", what:Literal["prediction","data"]="prediction", 
                                    color:Optional[str]="red", label:Optional[str]=None, marker:Optional[str]=None, draw_style:Optional[str]="steps-mid"):
         """
-        Plot PDF (histogram) of column density and predicted volume density.
+        Plot PDF (histogram) of column density or predicted volume density.
         Args:
             ax: matplotlib axis
             bins: number of bins in the PDFs
             monte_carlo (int): if prediction error available, will compute histogram error by sampling N times from error assuming it's gaussian
-            offset_method (str): Method used to 'normalize' x, i.e to align column density and volume density. If offset_method='wout_ncol' then no normalization is made because column density will not be shown.
             color (str): Color for the volume density PDF.
             label (str): Label for the volume density PDF.
         """
@@ -523,70 +523,68 @@ class Observation():
         else:
             fig = ax.figure
 
-        mask = (~np.isnan(self.prediction)) & (self.prediction > 0) & (~np.isnan(self.data)) & (self.data > 0)
 
-        log10_coldens = np.log10(self.data[mask])
-        log10_pred = np.log10(self.prediction[mask]).flatten()
+        data = self.data
+        xlabel = r"$N_H$ [$cm^{-2}$]"
+        if what.lower() in ("prediction","vdens","pred"):
+            assert self.prediction is not None, LOGGER.error("No predicted data loaded to plot.")
+            data = self.prediction
+            xlabel=r"$<n_H>_m$ [$cm^{-3}$]"
+        label = xlabel if label is None else label
 
-        hist_cd, _ = np.histogram(log10_coldens, bins=bins+1, density=False)
-        hist_cd_stats_error = np.sqrt(hist_cd)/hist_cd
-        hist_cd, bin_edges_cd = np.histogram(log10_coldens, bins=bins+1, density=True)
-        bin_centers_cd = 0.5 * (bin_edges_cd[1:] + bin_edges_cd[:-1])
 
-        bin_edges_pr = np.linspace(np.min(log10_pred), np.max(log10_pred), bins + 1)
-        hist_pr, _ = np.histogram(log10_pred, bins=bin_edges_pr, density=False)
-        hist_pred_stats_error = np.sqrt(hist_pr)/hist_pr
-        hist_pr, bin_edges_pr = np.histogram(log10_pred, bins=bin_edges_pr, density=True)
-        bin_centers_pr = 0.5 * (bin_edges_pr[1:] + bin_edges_pr[:-1])
+        mask = (~np.isnan(data)) & (data > 0) & (~np.isnan(self.data)) & (self.data > 0)
+
+        log10= np.log10(data[mask]).flatten()
+
+        bin_edges = np.linspace(np.min(log10), np.max(log10), bins + 1)
+        hist, _ = np.histogram(log10, bins=bin_edges, density=False)
+        hist_stats_error = np.sqrt(hist)/hist
+        hist, bin_edges = np.histogram(log10, bins=bin_edges, density=True)
+        bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
 
         def _normalize_x(hist, bin_centers):
             if offset_method == "mean":
                 return (bin_centers - bin_centers[np.argmin(np.abs(hist-np.mean(hist)))]) / (np.max(bin_centers) - np.min(bin_centers))
-            elif offset_method == "wout_ncol":
+            elif offset_method == "none":
                 return bin_centers
             else:
                 return (bin_centers - bin_centers[np.argmax(hist)]) / (np.max(bin_centers) - np.min(bin_centers))
         
-        bin_centers_cd = _normalize_x(hist_cd, bin_centers_cd)
-        bin_centers_pr = _normalize_x(hist_pr, bin_centers_pr)
+        bin_centers = _normalize_x(hist, bin_centers)
 
-        if offset_method != "wout_ncol":
-            ax.plot(10**bin_centers_cd, hist_cd, drawstyle=draw_style, marker=marker, color="black", label=r"$N_H$ [$cm^{-2}$]")
-            ax.errorbar(10**bin_centers_cd, hist_cd, yerr=hist_cd_stats_error*hist_cd, fmt='none', color="black")
-        ax.plot(10**bin_centers_pr, hist_pr, drawstyle=draw_style, marker=marker, color=color, label=r"$<n_H>_m$ [$cm^{-3}$]" if label is None else label)
-        ax.errorbar(10**bin_centers_pr, hist_pr, yerr=hist_pred_stats_error*hist_pr, fmt='none', color=color)
-
+        ax.plot(10**bin_centers, hist, drawstyle=draw_style, marker=marker, color=color, label=label)
+        ax.errorbar(10**bin_centers, hist, yerr=hist_stats_error*hist, fmt='none', color=color)
+        
         if self.prediction_error is not None and monte_carlo > 0:
             try:
-                bin_centers, q1, q2, _ = self.prediction_error
+                bin_centers_pred, q1, q2, _ = self.prediction_error
             except:
                 LOGGER.error("Density error is not in the good format in DenseCore -> Can't sample a random density given the error.")
-            q1_interp = np.interp(log10_pred, bin_centers, q1)
-            q2_interp = np.interp(log10_pred, bin_centers, q2)
+            q1_interp = np.interp(log10, bin_centers_pred, q1)
+            q2_interp = np.interp(log10, bin_centers_pred, q2)
             gauss_sigma = (q2_interp-q1_interp)/(2*1.64485)
 
             all_pred_hists = []
             for mc in range(monte_carlo):
                 printProgressBar(mc, monte_carlo, prefix="MC-Dist", length=20)
-                random_predicted_densities = np.random.normal(loc=log10_pred, scale=gauss_sigma)
-                rd_hist, _ = np.histogram(random_predicted_densities, bins=bin_edges_pr, density=True)
+                random_predicted_densities = np.random.normal(loc=log10, scale=gauss_sigma)
+                rd_hist, _ = np.histogram(random_predicted_densities, bins=bin_edges, density=True)
                 all_pred_hists.append(rd_hist)
             print("")
             all_pred_hists = np.array(all_pred_hists)
             hist_std = np.std(all_pred_hists, axis=0)
-            x_step, y_lower_step, y_upper_step = step_fill(10**bin_centers_pr, hist_pr - 2*hist_std,
-                hist_pr + 2*hist_std, log_bins=True, offset=1.0)
+            x_step, y_lower_step, y_upper_step = step_fill(10**bin_centers, hist - 2*hist_std,
+                hist+ 2*hist_std, log_bins=True, offset=1.0)
             ax.fill_between(x_step, y_lower_step, y_upper_step, color=color, alpha=0.3)
             
         if offset_method == "mean":
             ax.set_xlabel(r"($x-\mu) / (max(x)-min(x))$")
-        elif offset_method == "wout_ncol":
-            ax.set_xlabel(r"$<n>_m$ [$cm^{-3}$]")
+        elif offset_method == "none":
+            ax.set_xlabel(xlabel)
         else:
             ax.set_xlabel(r"($x-max(x)) / (max(x)-min(x))$")
-        ax.set_ylabel("density")
-
-        plot_lines(ax=ax, lines= [0, -1, -2], logspace=False)
+        ax.set_ylabel("pdf")
 
         ax.set_xscale("log")
         ax.set_yscale("log")
@@ -876,7 +874,8 @@ class Observation():
             densities = np.array([c.get_center_density(correction=density_correction) for c in cores])
             _make_baseline(densities, s.replace("_","") if forced_label is None else forced_label, colors[i] if cmap_color else None)
         if derived_cores:
-            _make_baseline(np.array([c.data['average_n'] for c in cores]), self.catalog_name, "red")
+            cores = self.get_cores()
+            _make_baseline(np.array([c.data['average_n'] for c in cores]), self.catalog_name, "black")
 
 
         ax.set_yscale("log")
@@ -892,7 +891,6 @@ class Observation():
                 ax.set_ylabel("$N_H$ [cm^-2]")
         
         ax.grid(which='both', axis='x')
-
 
         ax.legend()
 

@@ -142,6 +142,7 @@ def predict_map(data, model_trainer:'Trainer', patch_size:Tuple[int,int]=(128, 1
         for j0,j in enumerate(j_range):
             printProgressBar(i0*len(j_range)+j0,len(i_range)*len(j_range),prefix="Obs Pred")
             patch = downsampled_tensor[i:i+patch_height, j:j+patch_width].cpu().detach().numpy()
+            patch = np.expand_dims(patch, axis=0)
             valid_patch_mask = downsampled_nan_mask[i:i + patch_height, j:j + patch_width]
 
             if np.any(valid_patch_mask):
