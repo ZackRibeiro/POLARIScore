@@ -21,8 +21,9 @@ from POLARIScore.networks.Trainer import Trainer, load_trainer
 from POLARIScore.networks.architectures.nn_SpectraNetwork import SpectraNetwork
 from POLARIScore.networks.architectures.nn_UNet import UNet
 
-#sim = SimulationArray(name="sim_512_A_3")
-#sim = Simulation_DC(name="sim_512_A_3")
+
+sim = SimulationArray(name="sim_512_F_1")
+#sim = Simulation_DC(name="sim_512_D_2")
 #sim = openSimulation("orionMHD_lowB_multi_", global_size=66.06)
 #sim = SimulationArray(simulations=[Simulation_DC("sim_256_A_5"),Simulation_DC("sim_512_A_3")], indexes=[256,512])
 #sim = SimulationArray(simulations=[Simulation_DC("adastra_512_old"),Simulation_DC("adastra_512")], indexes=[0,1])
@@ -31,9 +32,17 @@ from POLARIScore.objects.SpectrumMap import SpectrumMap, getSimulationSpectra
 from POLARIScore.objects.Spectrum import Spectrum
 from POLARIScore.config import DATA_NORMALIZATION_CDENS, DATA_NORMALIZATION_VDENS, DATA_NORMALIZATION_CDENS_TORCH, DATA_NORMALIZATION_VDENS_TORCH
 
-#sim.plot(plot_method=Simulation_DC.plot_pdf, what="cdens", colors="viridis", drawstyle=None)
-#sim.plot(plot_method=Simulation_DC.plot, mode="slider", norm=LogNorm(vmin=1e3, vmax=1e6), method=compute_mass_weighted_density, label=r"$<n_H>_m$")
+summed_densities = []
+for s in sim.simulations:
+    summed_densities.append(np.sum(s.data['RHO']))
+print(summed_densities)
 
+
+sim.plot(plot_method=Simulation_DC.plot_pdf, what="cdens", colors="viridis", drawstyle=None)
+sim.plot(plot_method=Simulation_DC.plot, mode="slider")#, norm=LogNorm(vmin=1e3, vmax=1e6), method=compute_mass_weighted_density, label=r"$<n_H>_m$")
+
+#sim.plot()
+#sim.plot_pdf(what="cdens")
 
 #sim.generate_dataset("idefix_512_A_training", number=100, axes=[0,2])
 #sim.generate_dataset("idefix_512_A_validation", number=100, axes=[1])
@@ -79,20 +88,24 @@ trainer.plot()
 trainer.plot_validation()
 """
 from POLARIScore.objects.Observation import Observation
-trainer = load_trainer("idefix_512_unet", trainer_class=Trainer)
+#trainer = load_trainer("idefix_512_unet", trainer_class=Trainer)
 #trainer.get_validation_error()
-trainer.norms = {
-    "cdens": DATA_NORMALIZATION_CDENS,
-    "vdens": DATA_NORMALIZATION_VDENS,
-}
+#trainer.norms = {
+#    "cdens": DATA_NORMALIZATION_CDENS,
+#    "vdens": DATA_NORMALIZATION_VDENS,
+#}
+
 
 obs = Observation("OrionB","column_density_map")
-obs.distance = 400
+#obs.plot_density_distributions(what="data", monte_carlo=0)
+#obs.plot_validity_with_model("batch_idefix_512_A_training")
+#obs.plot_validity_with_model("batch_idefix_512_A_training", patch_size=(512,512), c_x=lambda x: np.std(np.log10(x)), c_y=lambda x: np.log10(np.mean(x)), logspace=False)
+
 #obs.predict(trainer,patch_size=(128,128), overlap=0.5, downsample_factor=obs.find_scale(1.25,128,obs.distance), nan_value=1e20, apply_baseline=True)
 #obs.save(suffix=f"_unet_idefix")
-obs.load(suffix=f"_unet_idefix")
-obs.plot(data=obs.prediction, norm=LogNorm(), plot_skeleton=False)
-obs.plot_dcmf(monte_carlo=20, correction=False)
+#obs.load(suffix=f"_unet_idefix")
+#obs.plot(data=obs.prediction, norm=LogNorm(vmin=2e2), plot_skeleton=False)
+#obs.plot_dcmf(monte_carlo=20, correction=False)
 
 
 """

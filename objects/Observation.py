@@ -985,7 +985,7 @@ class Observation():
 
     def plot_dcmf(self, ax:Optional["axes.Axes"]=None, bins:int=10, ext_lims:Tuple[Union[float,None],Union[float,None]]=[None,None],
                    logM:bool=True, fit=True, method:Literal['constant','gaussian']="constant",
-                    monte_carlo:int=100 , correction:bool=True 
+                    monte_carlo:int=100 , correction:bool=True , color:Optional[str]="red"
                 ):
         """
         Plot the dense core mass function
@@ -1066,15 +1066,15 @@ class Observation():
         derived_dcmf, derived_bin_centers = _get_dcmf(derived_masses)
         derived_bin_centers = 10**derived_bin_centers
 
-        ax.plot(derived_bin_centers, derived_dcmf, drawstyle="steps-mid", color="blue", label=f"{self.name} ({self.catalog_name})")
-        ax.scatter(derived_bin_centers, derived_dcmf, marker="^", color="blue")
+        ax.plot(derived_bin_centers, derived_dcmf, drawstyle="steps-mid", color="black", label=f"{self.name} ({self.catalog_name})")
+        ax.scatter(derived_bin_centers, derived_dcmf, marker="^", color="black")
         if fit:
             popt, _ = curve_fit(_dcmf_function, derived_bin_centers, derived_dcmf,
                             p0=[np.max(derived_dcmf), 1.5, np.std(np.log(derived_masses)), 2.3, 1.6])
             amp_fit, mu_fit, sigma_fit, alpha_fit ,cutoff_fit = popt
             LOGGER.log(f"Best DCMF fit for estimated cores: amp={amp_fit:.2e}, mu={mu_fit:.3f}, sigma={sigma_fit:.3f}, alpha={alpha_fit}, cutoff={cutoff_fit}")
             func = lambda X: _dcmf_function(X, popt[0], popt[1], popt[2], popt[3], popt[4])
-            plot_function(func, ax=ax, scatter=False, logspace=True, lims= (0.01, 100), color="blue", linestyle="--")
+            plot_function(func, ax=ax, scatter=False, logspace=True, lims= (0.01, 100), color="black", linestyle="--")
 
         LOGGER.log(f"DCMF with {len(derived_radius[global_mask])} cores.")
 
@@ -1096,9 +1096,9 @@ class Observation():
                 x_step, y_lower_step, y_upper_step = step_fill(predicted_bin_centers,predicted_dcmf - 2*dcmf_std,
                     predicted_dcmf + 2*dcmf_std, log_bins=True, offset=1.03)
                 #ax.errorbar(predicted_bin_centers, predicted_dcmf, yerr=dcmf_std, fmt='none', color="black")
-                ax.fill_between(x_step, y_lower_step, y_upper_step, color="red", alpha=0.2)
-            ax.plot(predicted_bin_centers, predicted_dcmf, drawstyle="steps-mid", color="red", label=f"{self.name} (Neural Network)")
-            ax.scatter(predicted_bin_centers, predicted_dcmf, color="red")
+                ax.fill_between(x_step, y_lower_step, y_upper_step, color=color, alpha=0.2)
+            ax.plot(predicted_bin_centers, predicted_dcmf, drawstyle="steps-mid", color=color, label=f"{self.name} (Neural Network)")
+            ax.scatter(predicted_bin_centers, predicted_dcmf, color=color)
 
             if fit:
                 popt, _ = curve_fit(_dcmf_function, predicted_bin_centers[predicted_bin_centers>0.], predicted_dcmf[predicted_bin_centers>0.],
@@ -1106,7 +1106,7 @@ class Observation():
                 amp_fit, mu_fit, sigma_fit, alpha_fit ,cutoff_fit = popt
                 LOGGER.log(f"Best DCMF fit for predicted cores: amp={amp_fit:.2e}, mu={mu_fit:.3f}, sigma={sigma_fit:.3f}, alpha={alpha_fit}, cutoff={cutoff_fit}")
                 func = lambda X: _dcmf_function(X, popt[0], popt[1], popt[2], popt[3], popt[4])
-                plot_function(func, ax=ax, scatter=False, logspace=True, lims= (0.01, 100), color="red", linestyle="--")
+                plot_function(func, ax=ax, scatter=False, logspace=True, lims= (0.01, 100), color=color, linestyle="--")
 
         #plot_sim_dcmf(ax, factor=0.035, logM=logM)
         ax.axvline(0.4, 0., 1., color='black', ls='--')

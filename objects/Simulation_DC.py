@@ -865,7 +865,6 @@ class Simulation_DC():
         bin_edges = np.linspace(np.min(data), np.max(data), bins + 1)
         hist, _ = np.histogram(data, bins=bin_edges, density=False)
         hist_stats_error = np.sqrt(hist) / hist
-        hist, bin_edges = np.histogram(data, bins=bin_edges, density=True)
         bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
         bin_centers = _normalize_x(hist, bin_centers)
         if is_log:
@@ -881,8 +880,6 @@ class Simulation_DC():
             ax.set_xlabel(label)
         
         ax.set_ylabel("pdf")
-        ax.set_xlim(np.min(data)*0.75, np.max(hist)*1.25)
-        ax.set_ylim(np.min(hist)*0.75, np.max(hist)*1.25)
 
         if is_log:
             ax.set_xscale("log")

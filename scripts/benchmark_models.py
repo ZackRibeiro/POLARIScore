@@ -190,6 +190,10 @@ def make_obs_benchmark(suffix,model_name=None,i=0):
             _, ax2 = observation.plot_density_distributions(ax=global_axes["density_dists_wout_ncol"], monte_carlo=MONTE_CARLO, color=colors[i], label=m+r" $<n_H>_m$")
             global_axes["density_dists"] = ax
             global_axes["density_dists_wout_ncol"] = ax2
+            global_axes["density_dists"].set_xlim([5e-1, 8])
+            global_axes["density_dists"].set_ylim([1e-5, 4])
+            global_axes["density_dists_wout_ncol"].set_xlim([1, 1e7])
+            global_axes["density_dists_wout_ncol"].set_ylim([1e-5, 4])
 
         if ("c_diff" in args.toplot or "all" in args.toplot) and not("-c_diff" in args.toplot):
             _, ax = observation.plot_cores_mass(ax=global_axes["core_diffs"], bins_mean=20, label=m, show_errors=False, linestyle=linestyles[i])
@@ -209,7 +213,7 @@ def make_obs_benchmark(suffix,model_name=None,i=0):
             plt.close(fig)
 
         if ("dcmf" in args.toplot or "all" in args.toplot) and not("-dcmf" in args.toplot):
-            fig, _ = observation.plot_dcmf(method="constant", monte_carlo=MONTE_CARLO, fit=False, bins=15, correction=args.density_correction)
+            fig, _ = observation.plot_dcmf(method="constant", monte_carlo=MONTE_CARLO, fit=False, bins=15, correction=args.density_correction, color=colors[i])
             fig.savefig(os.path.join(F_DCMF_PATH,"dcmf_"+m+"."+args.format))
             plt.close(fig)
 
