@@ -41,7 +41,7 @@ def init_ramses(simulation, load_temp=True, load_vel=True):
     LOGGER.log(f"Simulation {simulation.name} loaded.")
 
 from POLARIScore.utils.vtk_io import readVTK
-def init_idefix(simulation, blacklist=["BX1","BX2","BX3", "VX1","VX2","VX3"], vtk_path:Optional[str]=None, invert_axes=False):
+def init_idefix(simulation, blacklist=["BX1","BX2","BX3"], vtk_path:Optional[str]=None, invert_axes=False):
     """
     Init a simulation made with idefix
     """

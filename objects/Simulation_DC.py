@@ -264,6 +264,8 @@ class Simulation_DC():
                     co_spectra = [smap.pca(return_cube=True) for smap in co_spectra]
                 elif what_to_compute["cospectra"] == "gaussians":
                     co_spectra = [smap.gaussians() for smap in co_spectra]
+            else:
+                co_spectra = [smap.map for smap in co_spectra]
         flag_number_density = what_to_compute["density"] if "density" in what_to_compute else False
         flag_context = (what_to_compute["context"] is not None and what_to_compute["context"]) if "context" in what_to_compute else False
         flag_physize = True

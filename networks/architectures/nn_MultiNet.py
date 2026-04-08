@@ -70,7 +70,8 @@ class MultiNet(BaseModule):
                 if j == 0: #Need just one list of mergers
                     if i != 0:
                         #k = DoubleConvBlock((self.num_channels)*out_channels+filter_sizes[i], filter_sizes[i])
-                        k = GatedAttentionBlock((self.num_channels)*out_channels, filter_sizes[i], filter_sizes[i])
+                        k = FastKANConvLayer((self.num_channels)*out_channels+filter_sizes[i], filter_sizes[i], kernel_size=5, padding=2, num_grids=4)
+                        #k = GatedAttentionBlock((self.num_channels)*out_channels, filter_sizes[i], filter_sizes[i])
                     else:
                         k = DoubleConvBlock((self.num_channels)*out_channels, filter_sizes[i])
 
@@ -130,11 +131,12 @@ class MultiNet(BaseModule):
     def forward(self, *x):
         
         C = len(x)
-        channels = x
+        channels = (None,x[0])
         if len(channels) > 1:
             channels = (channels[0],channels[1].squeeze(1))
             while channels[1].shape[-1] != channels[1].shape[-2]:
                 channels = (channels[0],torch.moveaxis(channels[1], 3, 1))
+        channels = [channels[1]]
 
         assert C == self.num_channels, LOGGER.error(f"Model trained with {self.num_channels} inputs but received {C} inputs")
 
@@ -188,10 +190,11 @@ class MultiNet(BaseModule):
         for i in range(1,self.num_layers):
             x = self.encoders[i-1](x)
             x = _convertToModelDimension(x)
-            #l = [x]
-            #l.extend([_convertToModelDimension(c) for c in channels_features[i]])
-            #x = torch.cat(l, dim=1)
-            x = self.channels_merger[i](torch.cat([_convertToModelDimension(c) for c in channels_features[i]], dim=1), x)
+            l = [x]
+            l.extend([_convertToModelDimension(c) for c in channels_features[i]])
+            x = torch.cat(l, dim=1)
+            x = self.channels_merger[i](x)
+            #x = self.channels_merger[i](torch.cat([_convertToModelDimension(c) for c in channels_features[i]], dim=1), x)
             enc_features.append(x)
             x = self.pool3D(x) if self.is3D else self.pool2D(x)
         
