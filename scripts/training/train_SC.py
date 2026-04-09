@@ -8,17 +8,15 @@ import torch
 sim_names=[
     "turb_sim_A","turb_sim_B","turb_sim_C","turb_sim_E"
 ]
-enable_dataset_gen = True
+enable_dataset_gen = False
 
 if enable_dataset_gen:
     for name in sim_names:
         sims = SimulationArray(simulations=[] ,name=name)
 
         sims.generate_dataset(name=name,what_to_compute={"cospectra":True, "vdens":compute_mass_weighted_density}, number=100, axes=[0,2])
-        ds = getDataset("batch_"+name)
         #validation dataset
         sims.generate_dataset(name=name+"_v",what_to_compute={"cospectra":True, "vdens":compute_mass_weighted_density}, number=100, axes=[1])
-        ds = getDataset("batch_"+name+"_v")
         
     training_datasets = [getDataset("batch_"+name) for name in sim_names]
     validation_datasets = [getDataset("batch_"+name+"_v") for name in sim_names]
@@ -31,13 +29,13 @@ from POLARIScore.networks.Trainer import Trainer, load_trainer, plot_models_resi
 from POLARIScore.networks.architectures.nn_SC_2 import SC_2
 from torch import nn
 
-trainer = Trainer(SC_2, training_set=training_ds, validation_set=validation_ds, model_name="SC_2")
-#trainer = load_trainer("cached_model")
+#trainer = Trainer(SC_2, training_set=training_ds, validation_set=validation_ds, model_name="SC_2")
+trainer = load_trainer("cached_model")
 trainer.validation_set = validation_ds
 trainer.training_set = training_ds
 trainer.validation_loss_method = nn.MSELoss()
-trainer.learning_rate = 1e-3
-trainer.network_settings["encoder_filters"] = 32
+trainer.learning_rate = 1e-4
+trainer.network_settings["encoder_filters"] = 16
 trainer.network_settings["latent_features"] = 16
 trainer.network_settings["encoder_layers"] = 3
 trainer.network_settings["hidden_features"] = 64
@@ -48,9 +46,9 @@ trainer.target_names = ["vdens"]
 #trainer.ema = True
 #trainer.ema_warmup = 2000
 trainer.training_random_transform = True
-trainer.init()
+#trainer.init()
 #trainer.scheduler = torch.optim.lr_scheduler.StepLR(trainer.optimizer, 100, 0.1)
-trainer.train(500, batch_number=4, compute_validation=10,early_stopping=False)
+trainer.train(100, batch_number=2, compute_validation=10,early_stopping=False)
 trainer.save()
 trainer.plot_validation()
 trainer.plot()

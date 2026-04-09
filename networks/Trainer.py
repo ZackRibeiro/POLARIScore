@@ -19,7 +19,7 @@ from POLARIScore.networks.architectures.nn_MultiNet import MultiNet
 from POLARIScore.networks.architectures.nn_SpectraNetwork import SpectraNetwork
 from POLARIScore.networks.architectures.nn_PPV import PPV, Test
 from POLARIScore.networks.architectures.nn_KNet import *
-from POLARIScore.networks.architectures.nn_SC_1 import *
+from POLARIScore.networks.architectures.nn_SC_2 import *
 from POLARIScore.networks.utils.nn_utils import compute_batch_accuracy
 from POLARIScore.utils.utils import moving_average, applyBaseline
 from POLARIScore.networks.addons.ExpMA import ExponentialMovingAverage
@@ -40,7 +40,7 @@ NETWORK_OPTIONS = {
     "JustKAN": JustKAN,
     "cINN": cINN,
     "DDPMUnet": DDPMUnet,
-    "SC_1": SC_1,
+    "SC_2": SC_2,
     "SpectraNetwork": SpectraNetwork,
     "None": None
 }

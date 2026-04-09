@@ -173,7 +173,7 @@ class Dataset():
             if not(isinstance(indexes, (torch.Tensor, np.ndarray, list))):
                 return self.load(self.batch[indexes])
             elif len(indexes) < 2:
-                return self.load(self.batch[indexes[0]])
+                return self.load(self.batch[int(indexes[0])])
             else:
                 to_load = []
                 for i in indexes:
