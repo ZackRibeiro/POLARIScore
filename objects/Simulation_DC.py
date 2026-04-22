@@ -23,6 +23,7 @@ import matplotlib.axes
 import glob
 from POLARIScore.utils.sim_utils import init_idefix, init_ramses
 from POLARIScore.objects.SpectrumMap import SpectrumMap
+import json
 
 class Simulation_DC():
     """
@@ -47,6 +48,9 @@ class Simulation_DC():
         """Path to the folder where the simulation is stored"""
         self.data:Dict[str,np.ndarray] = {}
         """Data, example: density is stored in RHO"""
+
+        self.cores:List[Dict] = None
+        """List of dense cores in simulation"""
 
 
         self.header:Dict = {}
@@ -148,6 +152,162 @@ class Simulation_DC():
         smap.line_settings = {}
         return smap
         
+    def load_cores(self, path:str='catalog_search_results.json', alpha_vir_max:Optional[float]=2.)->List[Dict]:
+        if self.cores is not None:
+            return self.cores
+        with open(os.path.join(self.folder, path)) as file:
+            data = json.load(file)
+            file.close()
+            cores = []
+            for index in data[list(data.keys())[0]].keys():
+                c = {'index':index}
+                for key in data.keys():
+                    key_name:str = key
+                    if 'pos_n_max_' in key_name:
+                        key_name = key_name.replace('pos_n_max','pos')
+                    c[key_name] = data[key][index]
+
+                keys_to_invert = [('pos_x','pos_z')]
+                for key in keys_to_invert:
+                    temp = c[key[0]]
+                    c[key[0]] = c[key[1]]
+                    c[key[1]] = temp
+
+                keys_to_flip = []#['pos_y','pos_z']
+                for key in keys_to_flip:
+                    c[key] = self.global_size - c[key]
+
+                if alpha_vir_max is not None and 'alpha_vir' in data.keys():
+                    if c['alpha_vir'] > alpha_vir_max:
+                        continue
+
+                cores.append(c)
+
+            self.cores = cores
+            LOGGER.log(f"{len(self.cores)} cores loaded in simulation {self.name}")
+            return self.cores
+        
+    def get_cores(self, axis: int, box: Tuple[float, float, float, float]) -> Tuple[List[Dict], List[Tuple[float, float]]]:
+        """box is x_min, x_max, y_min, y_max or can add z_min, z_max"""
+        self.cores = self.load_cores()
+
+        key_1 = 'pos_'
+        key_2 = 'pos_'
+        key_3 = 'pos_'
+        invert_x = False
+        invert_y = False
+        invert_z = False
+
+        if axis == 0:
+            key_1 += "z"
+            key_2 += "y"
+            key_3 += "x"
+            invert_y = True
+            invert_z = False
+        elif axis == 1:
+            key_1 += "z"
+            key_2 += "x"
+            key_3 += "y"
+            invert_y = True
+        elif axis == 2:
+            key_1 += "y"
+            key_2 += "x"
+            key_3 += "z"
+            invert_y = True
+
+        x_c = np.array([c[key_1] for c in self.cores])
+        y_c = np.array([c[key_2] for c in self.cores])
+        z_c = np.array([c[key_3] for c in self.cores])
+        sizes = np.array([c["size"] for c in self.cores])
+
+        if invert_x:
+            x_c = self.global_size - x_c
+        if invert_y:
+            y_c = self.global_size - y_c
+        if invert_z:
+            z_c = self.global_size - z_c
+
+        x_min_core = x_c - sizes
+        x_max_core = x_c + sizes
+        y_min_core = y_c - sizes
+        y_max_core = y_c + sizes
+        z_min_core = z_c - sizes
+        z_max_core = z_c + sizes
+
+        flags = (
+            (x_max_core >= box[0]) &
+            (x_min_core <= box[1]) &
+            (y_max_core >= box[2]) &
+            (y_min_core <= box[3])
+        )
+        if len(box) > 4:
+            flags = flags & (z_max_core >= box[4]) & (z_min_core <= box[5])
+
+        indexes = np.where(flags)[0]
+
+        cores_in_area = [self.cores[i] for i in indexes]
+        return cores_in_area, (x_c[indexes], y_c[indexes])
+    def get_cores_multiplicity(self, include_resolution:bool=False)->Tuple[float, float, float]:
+        "Gives core multiplicity per line of sight (value between 0 and 1.), if 1. then all line of sight showing dense cores have at least 2 dense cores"
+        cores = self.load_cores()
+        len_cores = len(self.cores)
+
+        multiplicities = np.array([0,0,0])
+        for i in range(len_cores):
+            c = cores[i]
+            x,y,z = c['pos_x'], c['pos_y'], c['pos_z']
+            s = c['size']
+            flags_m = [False, False, False]
+            for j in range(i + 1, len_cores):
+                c2 = cores[j]
+                x2, y2, z2 = c2['pos_x'], c2['pos_y'], c2['pos_z']
+                if x2 == x and y == y2 and z2 == z:
+                    continue
+                s2 = c2['size']
+                dists = np.array([np.sqrt((y-y2)**2 + (z-z2)**2), np.sqrt((x-x2)**2 + (z-z2)**2), np.sqrt((y-y2)**2 + (x-x2)**2)])
+                flags = dists < s/2+s2/2
+                if include_resolution:
+                    flags = flags or dists <= self.relative_size*self.global_size/self.nres
+
+                for k, f in enumerate(flags):
+                    if f and not(flags_m[k]):
+                        multiplicities[k] += 1
+                        flags_m[k] = True
+                if all(flags_m):
+                    break
+        return multiplicities/len_cores
+
+    def get_core_volumes(self, indexes:Union[int, List[int]],plot:bool=False, density_threshold=4e5):
+
+        indexes = indexes if isinstance(indexes, (np.ndarray, list, tuple)) else [indexes]
+
+        cores = []
+        for i,c in enumerate(self.load_cores()):
+            if i in indexes:
+                print(c['n_max'])
+                cores.append(c)
+        
+        volumes = []
+        for c in cores:
+            pos = np.array([c['pos_x'],c['pos_y'],c['pos_z']])
+            pos = np.astype(np.floor(((pos-self.axis[0][0]) / (self.relative_size*self.global_size))*self.nres),int)
+            volumes.append(contour_3d(self.data['RHO'], pos=pos,threshold=density_threshold))
+
+        if plot:
+            coords = np.array(volumes[0])
+            min_coords = coords.min(axis=0)
+            coords = coords - min_coords
+            max_coords = coords.max(axis=0) + 1
+            voxels = np.zeros(max_coords, dtype=bool)
+            voxels[coords[:, 0], coords[:, 1], coords[:, 2]] = True
+            fig = plt.figure()
+            ax = fig.add_subplot(projection='3d')
+
+            ax.voxels(voxels, edgecolor='k')
+
+        return volumes
+            
+
 
     def load_fit(self, key:str, path:str, unit:float=1.)->bool:
         """
@@ -202,7 +362,7 @@ class Simulation_DC():
         return self.volumic_density[axis]
 
     def generate_dataset(self,name:str=None,
-                         what_to_compute:Dict={"cospectra":False,"density":False,"context":None,"vdens":compute_mass_weighted_density}
+                         what_to_compute:Dict={"cospectra":False,"density":False,"context":None,"vdens":compute_mass_weighted_density,"cores":None}
                        ,number:int=8,size:Union[float,Tuple[float,float]]=0.,img_size:int=128,random_rotate:bool=True,limit_area:Tuple=(None,None,None),
                        nearest_size_factor:float=0.75,axes:Union[int,List[int]]=[0,1,2],
                        beam:Optional[Tuple[float,float]]=None)->bool:
@@ -214,7 +374,7 @@ class Simulation_DC():
         - 'co_spectra': compute the co spectra
         - 'density': keep the density cube in the dataset
         - 'context': generate a downsampled global region (default is all the sim face) with a channel for a crop mask: 1 if the random region contains the pos else 0.
-        
+        - 'cores': generate a catalog of dense cores contained in the region
 
         Args:
             number(int, default: 8): How many pairs of images do we want.
@@ -475,7 +635,7 @@ class Simulation_DC():
             if show_velocity and "VX1" in self.data:
                 velocity = [self.data["VX1"]/1e4, self.data["VX2"]/1e4, self.data["VX3"]/1e4]
 
-            artists = {'im': None, 'qui': None}
+            artists = {'im': None, 'qui': None, 'cores': None}
 
             Nx, Ny = data_rho.shape[1], data_rho.shape[2]
             x = np.arange(Ny)
@@ -486,34 +646,41 @@ class Simulation_DC():
 
                 global im, qui
 
-                density = data_rho[slice,:,:]
+                density = data_rho[slice,::-1,:]
                 if axis == 1:
-                    density = data_rho[:,slice,:]
+                    density = data_rho[::-1,slice,:]
                 elif axis == 2:
-                    density = data_rho[:,:,slice]
+                    density = data_rho[::-1,:,slice]
 
                 if not(any([val is None for val in velocity])):
-                    Ux = velocity[0][slice,:,:]
-                    Uy = velocity[1][slice,:,:]
+                    Ux = velocity[0][slice,::-1,:]
+                    Uy = velocity[1][slice,::-1,:]
                     if axis == 1:
-                        Ux = velocity[0][:,slice,:]
-                        Uy = velocity[2][:,slice,:]
+                        Ux = velocity[0][::-1,slice,:]
+                        Uy = velocity[2][::-1,slice,:]
                     elif axis == 2:
-                        Ux = velocity[1][:,:,slice]
-                        Uy = velocity[2][:,:,slice]
+                        Ux = velocity[1][::-1,:,slice]
+                        Uy = velocity[2][::-1,:,slice]
 
                     step_x = max(Ny // N_arrows, 1)
                     step_y = max(Nx // N_arrows, 1)
 
-                    X_sub = X[::step_y, ::step_x]
-                    Y_sub = Y[::step_y, ::step_x]
+                    X_sub = X[::step_y, ::step_x]/self.nres*(self.axis[0][1]-self.axis[0][1])+self.axis[0][1]
+                    Y_sub = Y[::step_y, ::step_x]/self.nres*(self.axis[0][1]-self.axis[0][1])+self.axis[0][1]
                     Ux_sub = Ux[::step_y, ::step_x]
                     Uy_sub = Uy[::step_y, ::step_x]
 
                 if artists["im"] is None:
-                    artists["im"] = ax.imshow(density, origin="lower", cmap="jet", extent=[0, Ny, 0, Nx], norm=LogNorm())
+                    artists["im"] = ax.imshow(density, origin="lower", cmap="jet", extent=[self.axis[0][0], self.axis[0][1], self.axis[1][0],self.axis[1][1]], norm=LogNorm(vmin=np.min(self.data['RHO']),vmax=np.max(self.data['RHO'])))
                 else:
                     artists["im"].set_data(density)
+
+                if self.cores is not None:
+                    cores_in, cores_in_pos = self.get_cores(axis=axis, box=[self.axis[0][0], self.axis[0][1], self.axis[1][0],self.axis[1][1], (slice-1)/self.nres*self.global_size*self.relative_size+self.axis[0][0],(slice+1)/self.nres*self.global_size*self.relative_size+self.axis[0][0]])
+                    if artists["cores"] is None:
+                        artists["cores"] = ax.scatter(cores_in_pos[0], cores_in_pos[1], marker="+", color="white")
+                    else:
+                        artists["cores"].set_offsets(np.c_[cores_in_pos[0], cores_in_pos[1]])
 
                 if not(velocity[0] is None):
                     if artists["qui"] is None:
@@ -584,21 +751,28 @@ class Simulation_DC():
         if not plot_pdf:
             axes = [axes]
 
-        def _plot(column, data):
-            cd = axes[0][column].imshow(data, extent=[self.axis[0][0], self.axis[0][1], self.axis[1][0],self.axis[1][1]], cmap="jet", norm=LogNorm() if norm is None else norm)
+        def _plot(column, data, ax):
+            plt_ax:matplotlib.axes.Axes = axes[0][column]
+            cd = plt_ax.imshow(data, extent=[self.axis[0][0], self.axis[0][1], self.axis[1][0],self.axis[1][1]], cmap="jet", norm=LogNorm() if norm is None else norm)
+            
+            if self.cores is not None:
+                cores_in, cores_in_pos = self.get_cores(axis=ax, box=[self.axis[0][0], self.axis[0][1], self.axis[1][0],self.axis[1][1]])
+                plt_ax.scatter(cores_in_pos[0], cores_in_pos[1], marker="+", color="white")
+            
             if plot_pdf:
                 pdf = compute_pdf(data/np.mean(data))
                 pdf[1] = pdf[1]/np.sum(pdf[1])
-                axes[1][column].plot([(pdf[1][i+1]+pdf[1][i])/2 for i in range(len(pdf[1])-1)],pdf[0],color='black')
-                axes[1][column].set_xlabel("s")
-                axes[1][column].set_ylabel("p")
-                axes[1][column].set_title("PDF")
-                axes[1][column].set_yscale("log")
-                axes[1][column].grid()
+                plt_ax_2:matplotlib.axes.Axes = axes[1][column]
+                plt_ax_2.plot([(pdf[1][i+1]+pdf[1][i])/2 for i in range(len(pdf[1])-1)],pdf[0],color='black')
+                plt_ax_2.set_xlabel("s")
+                plt_ax_2.set_ylabel("p")
+                plt_ax_2.set_title("PDF")
+                plt_ax_2.set_yscale("log")
+                plt_ax_2.grid()
             return cd
 
         for i, ai in enumerate(axis):
-            cd = _plot(i,densities[i])
+            cd = _plot(i,densities[i], ai)
             if ai == 0:
                 axes[0][i].set_title("Top-Down View (XY Projection)")
                 axes[0][i].set_xlabel("X (pc)")
@@ -825,7 +999,7 @@ class Simulation_DC():
 
         return fig, ax
 
-    def plot_pdf(self,ax=None,bins: int = 20,offset_method: Literal["mean", "max", "none"] = "none",what: Literal["cdens", "vdens" "rho","vel"] = "rho",
+    def plot_pdf(self,ax=None,bins: int = 20,offset_method: Literal["mean", "max", "none"] = "none",what: Literal["cdens", "vdens", "rho", "vel"] = "rho",
                  color=None, legend=True, scatter=True, label:Optional[str]=None,drawstyle:Optional[str]="steps-mid",
                  vdens_method:Optional[Callable]=compute_mass_weighted_density):
         if ax is None:

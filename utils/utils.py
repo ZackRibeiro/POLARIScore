@@ -273,28 +273,37 @@ def applyBaseline(t,y,T,Y):
         Y[i] = Y[i] - (coefs[j] * (T[i] - tl) + last_y[j])
 
     return Y
+def dictsToString(dicts: List[Dict]) -> str:
+    """Combine a list of dicts into an aligned table string."""
+    if not dicts:
+        return ""
 
-def dictsToString(dicts:List[Dict])->str:
-    """Combine a list of dicts to a string with first line of keys and one line per dict."""
-    string = ""
     keys = []
     for d in dicts:
-        for k in d.keys():
+        for k in d:
             if k not in keys:
                 keys.append(k)
-    for k in keys:
-        string = string + k + " "
-    string = string + "\n"
-    for d in dicts:
-        for k in keys:
-            if k in d:
-                string = string + str(d[k])
-            else:
-                string = string + " "
-            string = string + " "
-        string = string + "\n"
-    return string
 
+    col_widths = {}
+    for k in keys:
+        max_len = len(str(k))
+        for d in dicts:
+            if k in d:
+                max_len = max(max_len, len(str(d[k])))
+        col_widths[k] = max_len
+
+    lines = []
+    header = " ".join(f"{k:<{col_widths[k]}}" for k in keys)
+    lines.append(header)
+
+    for d in dicts:
+        row = " ".join(
+            f"{str(d[k]) if k in d else '':<{col_widths[k]}}"
+            for k in keys
+        )
+        lines.append(row)
+
+    return "\n".join(lines)
 def plot_function(function:Callable, ax=None, res:int=100, lims:Tuple[float]=[0,1,0,1], logspace=False, scatter=False, contour=False, **args):
     if ax is None:
         fig, ax = plt.subplots()
@@ -614,3 +623,48 @@ def find_roots(X, Y, interp="linear"):
         xr = x0 - y0 * (x1 - x0) / (y1 - y0)
         roots.append(xr)
     return np.array(roots)
+
+def contour_3d(data_cube: np.ndarray, pos: Tuple[int, int, int], threshold: float) -> List[np.ndarray]:
+    pos = tuple(pos)
+    init_value = data_cube[*pos]
+    print(init_value)
+
+    shape = data_cube.shape
+    stack = [pos]
+    visited = set([pos])
+    volume = []
+
+    neighbors = [
+        (0, 0, 1), (0, 0, -1),
+        (1, 0, 0), (-1, 0, 0),
+        (0, 1, 0), (0, -1, 0)
+    ]
+
+    while stack:
+        cell = stack.pop()
+        volume.append(np.array(cell))
+
+        for dx, dy, dz in neighbors:
+            nx, ny, nz = cell[0] + dx, cell[1] + dy, cell[2] + dz
+
+            if not (0 <= nx < shape[0] and
+                    0 <= ny < shape[1] and
+                    0 <= nz < shape[2]):
+                continue
+
+            new_pos = (nx, ny, nz)
+
+            if new_pos in visited:
+                continue
+
+            n_value = data_cube[nx, ny, nz]
+            if n_value > init_value:
+                continue
+            if n_value < threshold:
+                continue
+
+            visited.add(new_pos)
+            stack.append(new_pos)
+        print(f"{len(volume)} : {new_pos} - {n_value}")
+
+    return volume

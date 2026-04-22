@@ -34,9 +34,9 @@ trainer = load_trainer("cached_model")
 trainer.validation_set = validation_ds
 trainer.training_set = training_ds
 trainer.validation_loss_method = nn.MSELoss()
-trainer.learning_rate = 1e-4
-trainer.network_settings["encoder_filters"] = 16
-trainer.network_settings["latent_features"] = 16
+trainer.learning_rate = 1e-3
+trainer.network_settings["encoder_filters"] = 8
+trainer.network_settings["latent_features"] = 8
 trainer.network_settings["encoder_layers"] = 3
 trainer.network_settings["hidden_features"] = 64
 trainer.network_settings["spectra_dim"] = 128
@@ -47,10 +47,12 @@ trainer.target_names = ["vdens"]
 #trainer.ema_warmup = 2000
 trainer.training_random_transform = True
 #trainer.init()
-#trainer.scheduler = torch.optim.lr_scheduler.StepLR(trainer.optimizer, 100, 0.1)
-trainer.train(100, batch_number=2, compute_validation=10,early_stopping=False)
-trainer.save()
-trainer.plot_validation()
-trainer.plot()
+#trainer.train(500, batch_number=1, compute_validation=10,early_stopping=True)
+#trainer.save()
+trainer.model.save_tensors = True
+trainer.get_prediction_batch()
+trainer.model.plot_latent_space()
+#trainer.plot_validation()
+#trainer.plot()
 
 plt.show()

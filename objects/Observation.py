@@ -215,6 +215,7 @@ class Observation():
                 pc = {
                     "name": properties[1],
                     "peak_n": float(properties[13+offset_index])*1e4*2,
+                    "catalog_core_cdens": float(properties[(12 if use_deconvolved_values else 11)+offset_index])*1e21*2,
                     "average_n": float(properties[(15 if use_deconvolved_values else 14)+offset_index])*1e4*2,
                     "mass": float(properties[6+offset_index]),
                     "radius_pc": float(properties[(4 if use_deconvolved_values else 5)+offset_index]),
@@ -240,10 +241,13 @@ class Observation():
                     continue
                 if der_dict["bonnorebert"] > 2:
                     continue
+                #if der_dict["catalog_core_cdens"] > obs_dict["peak_ncol"]:
+                #    continue
                 core = {**obs_dict, **der_dict}
                 cores.append(core)
                 break
 
+        print(len(cores))
         cores = [DenseCore(self, c) for c in cores]
         self.cores = cores
         return cores
@@ -1364,23 +1368,56 @@ class Observation():
 
     #-------SAVE-------
 
-    def serialize_cores(self, region:Union[Tuple[float,float,float,float],None]=None)->str:
+    def serialize_cores(self, region:Optional[Tuple[float,float,float,float]]=None, suffixes=None)->str:
         """Serialize the core properties into a file named 'cores.txt' within the observation folder."""
         cores = [c.data for c in self.get_cores()]
         if cores is None:
             LOGGER.error("Cant serialize, there is no cores.")
             return
-        predicted_densities, derived_densities, column_densities, indexes = self._get_cores_predicted_values(region=region, return_ncol=True, return_indexes=True)
+        
         returned_cores = []
-        for i0,i in enumerate(indexes):
-            returned_cores.append({
-                "name": cores[i]["name"],
-                "ra": cores[i]["ra"],
-                "dec": cores[i]["dec"],
-                "n_estimated": derived_densities[i0],
-                "n_predicted": predicted_densities[i0],
-                "column_density": column_densities[i0],
-            })
+        if suffixes is None: 
+            predicted_densities, derived_densities, column_densities, indexes = self._get_cores_predicted_values(region=region, return_ncol=True, return_indexes=True)
+            predicted_mw_densities, _, _, _ = self._get_cores_predicted_values(region=region, return_ncol=True, return_indexes=True, correction=False)
+            for i0,i in enumerate(indexes):
+                c_dict = {
+                    "name": cores[i]["name"],
+                    "ra": cores[i]["ra"],
+                    "dec": cores[i]["dec"],
+                    "NH": column_densities[i0],
+                    "nH_catalog": derived_densities[i0],
+                }
+                c_dict["nH_predicted"] = predicted_densities[i0]
+                c_dict["<nH>m_predicted"] = predicted_mw_densities[i0]
+                returned_cores.append(c_dict)
+
+        else:
+            for j,s in enumerate(suffixes):
+                self.prediction = self.load(s)
+                if self.prediction is None:
+                    LOGGER.warn(f"Can't serialize the core densities predicted by {s} because there is no such prediction (not found).")
+                    continue
+                
+                predicted_densities, derived_densities, column_densities, indexes = self._get_cores_predicted_values(region=region, return_ncol=True, return_indexes=True)
+                predicted_mw_densities, _, _, _ = self._get_cores_predicted_values(region=region, return_ncol=True, return_indexes=True, correction=False)
+
+                for i0,i in enumerate(indexes):
+                    if j == 0:
+                        c_dict = {
+                            "name": cores[i]["name"],
+                            "ra": cores[i]["ra"],
+                            "dec": cores[i]["dec"],
+                            "NH": column_densities[i0],
+                            "nH_catalog": derived_densities[i0],
+                        }
+                        returned_cores.append(c_dict)
+
+                    returned_cores[i0]["nH"+s] = predicted_densities[i0]
+                    returned_cores[i0]["<nH>m"+s] = predicted_mw_densities[i0]
+                    
+                        
+
+
         string = dictsToString(returned_cores)
         with open(os.path.join(self.folder, "cores.txt"), "w") as file:
             file.write(string)
