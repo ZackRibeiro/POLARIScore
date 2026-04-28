@@ -19,7 +19,7 @@ from POLARIScore.config import LOGGER
 import inspect
 import ast, re
 
-def convert_pc_to_index(pc:float,nres:int,size:float,start:float=0.,clip=True)->int:
+def convert_pc_to_index(pc:float,nres:int,size:float,start:float=0.,clip:bool=True,flip:bool=False)->int:
     """
     Args:
         pc(float): value in parsec unit
@@ -30,6 +30,8 @@ def convert_pc_to_index(pc:float,nres:int,size:float,start:float=0.,clip=True)->
         float: index
     """
     idx = (pc-start)/(size)
+    if flip:
+        idx = 1. - idx
     if (idx > 1 or idx < 0) and clip:
         return -1
     return (int(np.floor(idx*nres)))

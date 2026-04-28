@@ -4,7 +4,7 @@ from POLARIScore.utils.utils import *
 from POLARIScore.config import *
 from POLARIScore.utils.physics_utils import PC_TO_CM, power_spectrum_2d, power_spectrum_3d
 import matplotlib.pyplot as plt
-from matplotlib.colors import LogNorm
+from matplotlib.colors import LogNorm, PowerNorm
 import json
 import inspect
 from POLARIScore.utils.batch_utils import compute_img_score
@@ -24,6 +24,7 @@ import glob
 from POLARIScore.utils.sim_utils import init_idefix, init_ramses
 from POLARIScore.objects.SpectrumMap import SpectrumMap
 import json
+from scipy.ndimage import distance_transform_edt
 
 class Simulation_DC():
     """
@@ -152,7 +153,7 @@ class Simulation_DC():
         smap.line_settings = {}
         return smap
         
-    def load_cores(self, path:str='catalog_search_results.json', alpha_vir_max:Optional[float]=2.)->List[Dict]:
+    def load_cores(self, path:str='catalog_search_results.json', alpha_vir_max:Optional[float]=1.)->List[Dict]:
         if self.cores is not None:
             return self.cores
         with open(os.path.join(self.folder, path)) as file:
@@ -167,7 +168,7 @@ class Simulation_DC():
                         key_name = key_name.replace('pos_n_max','pos')
                     c[key_name] = data[key][index]
 
-                keys_to_invert = [('pos_x','pos_z')]
+                keys_to_invert = []#[('pos_x','pos_z'),('vel_x','vel_z'),('B_x','B_z')]
                 for key in keys_to_invert:
                     temp = c[key[0]]
                     c[key[0]] = c[key[1]]
@@ -187,38 +188,37 @@ class Simulation_DC():
             LOGGER.log(f"{len(self.cores)} cores loaded in simulation {self.name}")
             return self.cores
         
-    def get_cores(self, axis: int, box: Tuple[float, float, float, float]) -> Tuple[List[Dict], List[Tuple[float, float]]]:
+    def get_cores(self, axis: int, box: Optional[Tuple[float, float, float, float]]=None, just_center=False, flip_y=True) -> Tuple[List[Dict], List[Tuple[float, float]]]:
         """box is x_min, x_max, y_min, y_max or can add z_min, z_max"""
         self.cores = self.load_cores()
+        if box is None:
+            box = (self.axis[0][0],self.axis[0][1],self.axis[1][0],self.axis[1][1],self.axis[2][0],self.axis[2][1])
 
         key_1 = 'pos_'
         key_2 = 'pos_'
         key_3 = 'pos_'
         invert_x = False
-        invert_y = False
+        invert_y = flip_y
         invert_z = False
 
         if axis == 0:
-            key_1 += "z"
+            key_1 += "x"
             key_2 += "y"
-            key_3 += "x"
-            invert_y = True
-            invert_z = False
+            key_3 += "z"
         elif axis == 1:
-            key_1 += "z"
-            key_2 += "x"
+            key_1 += "x"
+            key_2 += "z"
             key_3 += "y"
-            invert_y = True
         elif axis == 2:
             key_1 += "y"
-            key_2 += "x"
-            key_3 += "z"
-            invert_y = True
+            key_2 += "z"
+            key_3 += "x"
 
         x_c = np.array([c[key_1] for c in self.cores])
         y_c = np.array([c[key_2] for c in self.cores])
         z_c = np.array([c[key_3] for c in self.cores])
         sizes = np.array([c["size"] for c in self.cores])
+
 
         if invert_x:
             x_c = self.global_size - x_c
@@ -227,12 +227,17 @@ class Simulation_DC():
         if invert_z:
             z_c = self.global_size - z_c
 
-        x_min_core = x_c - sizes
-        x_max_core = x_c + sizes
-        y_min_core = y_c - sizes
-        y_max_core = y_c + sizes
-        z_min_core = z_c - sizes
-        z_max_core = z_c + sizes
+
+        x_min_core,x_max_core = x_c,x_c
+        y_min_core,y_max_core = y_c,y_c
+        z_min_core,z_max_core = z_c,z_c
+        if not(just_center):
+            x_min_core = x_c - sizes
+            x_max_core = x_c + sizes
+            y_min_core = y_c - sizes
+            y_max_core = y_c + sizes
+            z_min_core = z_c - sizes
+            z_max_core = z_c + sizes
 
         flags = (
             (x_max_core >= box[0]) &
@@ -245,9 +250,10 @@ class Simulation_DC():
 
         indexes = np.where(flags)[0]
 
+
         cores_in_area = [self.cores[i] for i in indexes]
-        return cores_in_area, (x_c[indexes], y_c[indexes])
-    def get_cores_multiplicity(self, include_resolution:bool=False)->Tuple[float, float, float]:
+        return cores_in_area, (x_c[indexes], y_c[indexes], z_c[indexes])
+    def get_cores_multiplicity(self, include_resolution:bool=False, offset:float=0.)->Tuple[float, float, float]:
         "Gives core multiplicity per line of sight (value between 0 and 1.), if 1. then all line of sight showing dense cores have at least 2 dense cores"
         cores = self.load_cores()
         len_cores = len(self.cores)
@@ -265,7 +271,7 @@ class Simulation_DC():
                     continue
                 s2 = c2['size']
                 dists = np.array([np.sqrt((y-y2)**2 + (z-z2)**2), np.sqrt((x-x2)**2 + (z-z2)**2), np.sqrt((y-y2)**2 + (x-x2)**2)])
-                flags = dists < s/2+s2/2
+                flags = dists < s/2+s2/2+offset
                 if include_resolution:
                     flags = flags or dists <= self.relative_size*self.global_size/self.nres
 
@@ -307,7 +313,85 @@ class Simulation_DC():
 
         return volumes
             
+    def get_core_distance_map(self, axis:int=0, method:Literal["normal","sorted_peak"]="normal", plot:bool=False):
 
+        method = method.lower()
+        cores, _ = self.get_cores(axis=0)
+
+        distance_cube = None
+        if method == "normal":
+            grid = np.ones_like(self.data['RHO'], dtype=np.uint8)
+
+            for c in cores:
+                ix = int((c['pos_x'] - self.axis[0][0]) / (self.axis[0][1] - self.axis[0][0]) * self.nres)
+                iy = int((c['pos_y'] - self.axis[1][0]) / (self.axis[1][1] - self.axis[1][0]) * self.nres)
+                iz = int((c['pos_z'] - self.axis[2][0]) / (self.axis[2][1] - self.axis[2][0]) * self.nres)
+
+                grid[ix, iy, iz] = 0
+
+            factor = 2
+            sx, sy, sz = grid.shape
+            grid = grid.reshape(sx//factor, factor,
+                                sy//factor, factor,
+                                sz//factor, factor)
+            grid = grid.min(axis=(1, 3, 5))
+
+            LOGGER.log("Computing distance cube of cores...")
+            distance_cube = distance_transform_edt(grid).astype(np.float32)
+            distance_cube = 1.-distance_cube/(self.nres/factor)
+            distance_cube = distance_cube
+        elif method == "sorted_peak":
+            pass
+         
+        if plot and axis in [0,1,2] and distance_cube is not None:
+            fig, ax = plt.subplots()
+            plt.subplots_adjust(bottom=0.2)
+
+            artists = {'im': None, 'cores': None}
+
+            Nx, Ny = distance_cube.shape[1], distance_cube.shape[2]
+            x = np.arange(Ny)
+            y = np.arange(Nx)
+            X, Y = np.meshgrid(x, y)
+
+            def _plotData(slice=0):
+
+                global im
+
+                data = distance_cube[slice,::-1,:]
+                if axis == 1:
+                    data = distance_cube[::-1,slice,:]
+                elif axis == 2:
+                    data = distance_cube[::-1,:,slice]
+
+                if artists["im"] is None:
+                    artists["im"] = ax.imshow(data, origin="lower", cmap="jet", extent=[self.axis[0][0], self.axis[0][1], self.axis[1][0],self.axis[1][1]], norm=PowerNorm(gamma=2, vmin=np.min(distance_cube), vmax=np.max(distance_cube)))
+                else:
+                    artists["im"].set_data(data)
+
+                if self.cores is not None:
+                    _, cores_in_pos = self.get_cores(axis=axis, box=[self.axis[0][0], self.axis[0][1], self.axis[1][0],self.axis[1][1], (slice-1)/(self.nres/factor)*self.global_size*self.relative_size+self.axis[0][0],(slice+1)/(self.nres/factor)*self.global_size*self.relative_size+self.axis[0][0]])
+                    if artists["cores"] is None:
+                        artists["cores"] = ax.scatter(cores_in_pos[0], cores_in_pos[1], marker="+", color="white")
+                    else:
+                        artists["cores"].set_offsets(np.c_[cores_in_pos[0], cores_in_pos[1]])
+
+                ax.set_title(f"Slice {slice}")
+                fig.canvas.draw_idle()
+
+            _plotData(slice=0)
+            plt.colorbar(artists["im"], ax=ax, label="Distance")
+
+            ax_slider = fig.add_axes([0.2, 0.05, 0.6, 0.03])
+            slider = Slider(ax_slider, 'Slice', 0, distance_cube.shape[axis]-1, valinit=0, valfmt='%0.0f')
+            fig._slice_slider = slider
+
+            def update_slice(val):
+                slice_idx = int(val)
+                _plotData(slice=slice_idx)
+
+            fig._slice_slider.on_changed(update_slice)
+        return distance_cube
 
     def load_fit(self, key:str, path:str, unit:float=1.)->bool:
         """
@@ -362,7 +446,7 @@ class Simulation_DC():
         return self.volumic_density[axis]
 
     def generate_dataset(self,name:str=None,
-                         what_to_compute:Dict={"cospectra":False,"density":False,"context":None,"vdens":compute_mass_weighted_density,"cores":None}
+                         what_to_compute:Dict={"cospectra":False,"density":False,"context":None,"vdens":compute_mass_weighted_density,"cores":False}
                        ,number:int=8,size:Union[float,Tuple[float,float]]=0.,img_size:int=128,random_rotate:bool=True,limit_area:Tuple=(None,None,None),
                        nearest_size_factor:float=0.75,axes:Union[int,List[int]]=[0,1,2],
                        beam:Optional[Tuple[float,float]]=None)->bool:
@@ -429,6 +513,7 @@ class Simulation_DC():
         flag_number_density = what_to_compute["density"] if "density" in what_to_compute else False
         flag_context = (what_to_compute["context"] is not None and what_to_compute["context"]) if "context" in what_to_compute else False
         flag_physize = True
+        flag_cores = "cores" in what_to_compute and what_to_compute["cores"]
 
         order = ["cdens"]
         if what_to_compute["vdens"] is not None:
@@ -441,6 +526,8 @@ class Simulation_DC():
             order.append("cdens_context")
         if flag_physize:
             order.append("physize")
+        if flag_cores:
+            order.append("cores")
 
         name = self.name if name is None else name
 
@@ -471,8 +558,8 @@ class Simulation_DC():
                 limits = [0,self.global_size,0,self.global_size]
             center = np.array([limits[0]+(limits[1]-limits[0])*np.random.random(),limits[2]+(limits[3]-limits[2])*np.random.random()])
             c_x, c_y = center
-            c_x = convert_pc_to_index(c_x, self.nres,self.size,start=self.axis[0][0])
-            c_y = convert_pc_to_index(c_y, self.nres,self.size,start=self.axis[0][0])
+            c_x = convert_pc_to_index(c_x, self.nres,self.size,start=self.axis[0][0],flip=False)
+            c_y = convert_pc_to_index(c_y, self.nres,self.size,start=self.axis[0][0],flip=False)
             if(c_x < 0 or c_y < 0):
                 continue
             
@@ -503,7 +590,7 @@ class Simulation_DC():
             def _process_img(img, k, skip_crop=False):
                 p_img = img
                 if not(skip_crop):
-                    p_img = p_img[start_x:end_x, start_y:end_y]
+                    p_img = p_img[start_y:end_y, start_x:end_x]
                 #downsample
                 if p_img.shape[0] > img_size:
                     factors = []
@@ -515,11 +602,22 @@ class Simulation_DC():
                     p_img = zoom(p_img, factors, order=3)
 
                 # Randomly choose a rotation (0, 90, 180, or 270 degrees)
-                if random_rotate:
-                    p_img = np.rot90(p_img, k, axes=(0,1))
+                p_img = np.rot90(p_img, k, axes=(0,1))
                 return p_img
+            
+            def rotate_index(y, x, shape, k):
+                H, W = shape[:2]
 
-            k = np.random.choice([0, 1, 2, 3])
+                if k == 0:
+                    return y, x
+                elif k == 1:
+                    return W - 1 - x, y
+                elif k == 2: 
+                    return H - 1 - y, W - 1 - x
+                elif k == 3: 
+                    return x, H - 1 - y
+
+            k = np.random.choice([0, 1, 2, 3]) if random_rotate else 0
             b = [_process_img(c_dens,k)]
             if v_dens is not None:
                 b.append(_process_img(v_dens,k))
@@ -533,11 +631,11 @@ class Simulation_DC():
 
             if flag_number_density:
                 if face == 0:
-                    densities = self.data[:, start_x:end_x, start_y:end_y]
+                    densities = self.data[:, start_y:end_y, start_x:end_x]
                 elif face == 1:
-                    densities = self.data[start_x:end_x, :, start_y:end_y]
+                    densities = self.data[start_y:end_y, :, start_x:end_x]
                 elif face == 2:
-                    densities = self.data[start_x:end_x, start_y:end_y, :]
+                    densities = self.data[start_y:end_y, start_x:end_x, :]
 
                 if densities.shape[0] == self.nres:
                     densities = np.moveaxis(densities, 0, -1)
@@ -557,9 +655,9 @@ class Simulation_DC():
                 context_cdens = column_density[face].copy()
                 context_x1,context_y1,context_x2,context_y2 = find_context(canvas=context_cdens, region=(start_x,start_y,end_x,end_y), context_size=context_size_idx)
                 #crop to context
-                context_cdens = context_cdens[context_x1:context_x2,context_y1:context_y2]
+                context_cdens = context_cdens[context_y1:context_y2,context_x1:context_x2]
                 context_cropmask = np.zeros_like(context_cdens)
-                context_cropmask[start_x-context_x1:end_x-context_x1, start_y-context_y1:end_y-context_y1] = 1.
+                context_cropmask[start_y-context_y1:end_y-context_y1, start_x-context_x1:end_x-context_x1] = 1.
                 context_mat = np.zeros((2,img_size,img_size))
                 context_mat[0,:,:] = _process_img(context_cdens,k,skip_crop=True)
                 context_mat[1,:,:] = _process_img(context_cropmask,k,skip_crop=True)
@@ -567,6 +665,39 @@ class Simulation_DC():
 
             if flag_physize:
                 b.append(np.array([size]))
+
+            if flag_cores:
+                cx_max, cy_max = (center) + i_size/2
+                cx_min, cy_min = (center) - i_size/2
+                cores, cores_pos = self.get_cores(axis=face, box=([cx_min,cx_max,cy_min,cy_max]),just_center=True,flip_y=False)
+                #if len(cores) <= 0:
+                #    continue
+                catalog_cores = {}
+                for i,c in enumerate(cores):
+                    core = {}
+                    core['index'] = c['index']
+                    c_pos = np.array([cores_pos[0][i],cores_pos[1][i],cores_pos[2][i]])
+                    cx_idx = convert_pc_to_index(c_pos[0], img_size, i_size, start=cx_min)
+                    cy_idx = convert_pc_to_index(c_pos[1], img_size, i_size, start=cy_min)
+                    c_pos[2] = convert_pc_to_index(c_pos[2], self.nres, self.size, start=self.axis[0][0])
+
+                    c_pos[1], c_pos[0] = rotate_index(cy_idx, cx_idx, (img_size, img_size), k)
+                    c_pos = c_pos.astype(int)
+                    core['position_x'] = c_pos[0]
+                    core['position_y'] = c_pos[1]
+                    core['position_z'] = c_pos[2]
+                    core['position_z_pc'] = cores_pos[2][i]
+                    core['size'] = c['size'] * self.nres/self.size
+                    core['mass'] = c['mass']
+                    if face == 0:
+                        c_vel_los = c['vel_x']
+                    elif face == 1:
+                        c_vel_los = c['vel_y']
+                    else:
+                        c_vel_los = c['vel_z']
+                    core['velocity'] = c_vel_los
+                    catalog_cores[i] = core
+                b.append(catalog_cores)
 
             ds.data['physical_size'].append(size)
             ds.save_batch(b, img_generated)
@@ -576,7 +707,7 @@ class Simulation_DC():
             img_generated += 1
 
         print("")
-        
+
         #Random permutation
         '''
         random_idx = np.random.permutation(len(imgs))
@@ -596,7 +727,7 @@ class Simulation_DC():
             "order": order,
             "what_was_computed": what_to_compute,
             "img_number": img_generated,
-            "img_size": size,
+            "img_size": i_size,
             "areas_explored":areas_explored,
             "scores": scores,
             "scores_fct": inspect.getsourcelines(RANDOM_BATCH_SCORE_fct)[0][0],
@@ -646,21 +777,21 @@ class Simulation_DC():
 
                 global im, qui
 
-                density = data_rho[slice,::-1,:]
+                density = data_rho[slice,:,:]
                 if axis == 1:
-                    density = data_rho[::-1,slice,:]
+                    density = data_rho[:,slice,:]
                 elif axis == 2:
-                    density = data_rho[::-1,:,slice]
+                    density = data_rho[:,:,slice]
 
                 if not(any([val is None for val in velocity])):
-                    Ux = velocity[0][slice,::-1,:]
-                    Uy = velocity[1][slice,::-1,:]
+                    Ux = velocity[0][slice,:,:]
+                    Uy = velocity[1][slice,:,:]
                     if axis == 1:
-                        Ux = velocity[0][::-1,slice,:]
-                        Uy = velocity[2][::-1,slice,:]
+                        Ux = velocity[0][:,slice,:]
+                        Uy = velocity[2][:,slice,:]
                     elif axis == 2:
-                        Ux = velocity[1][::-1,:,slice]
-                        Uy = velocity[2][::-1,:,slice]
+                        Ux = velocity[1][:,:,slice]
+                        Uy = velocity[2][:,:,slice]
 
                     step_x = max(Ny // N_arrows, 1)
                     step_y = max(Nx // N_arrows, 1)
@@ -671,7 +802,7 @@ class Simulation_DC():
                     Uy_sub = Uy[::step_y, ::step_x]
 
                 if artists["im"] is None:
-                    artists["im"] = ax.imshow(density, origin="lower", cmap="jet", extent=[self.axis[0][0], self.axis[0][1], self.axis[1][0],self.axis[1][1]], norm=LogNorm(vmin=np.min(self.data['RHO']),vmax=np.max(self.data['RHO'])))
+                    artists["im"] = ax.imshow(density, cmap="jet", extent=[self.axis[0][0], self.axis[0][1], self.axis[1][0],self.axis[1][1]], norm=LogNorm(vmin=np.min(self.data['RHO']),vmax=np.max(self.data['RHO'])))
                 else:
                     artists["im"].set_data(density)
 
@@ -1068,7 +1199,7 @@ class Simulation_DC():
         return fig, ax
 
 
-def mergeSimu(sim_array:List[Simulation_DC])->Simulation_DC:
+def mergeSimu(sim_array:List[Simulation_DC],keys=['RHO'])->Simulation_DC:
     """
     Merge simulations into one.
     TODO: add temp and velocity
@@ -1085,19 +1216,20 @@ def mergeSimu(sim_array:List[Simulation_DC])->Simulation_DC:
 
     for i,sim in enumerate(sim_array):
         printProgressBar(i, len(sim_array), prefix="Merging:")
-        sim_data = sim.data['RHO'].transpose()
-        x_center, y_center, z_center = (centers[i] - mins)/(maxs-mins)
-        x_offset = int((x_center) * datacube_size*sim_len -datacube_size/2)
-        y_offset = int((y_center) * datacube_size*sim_len -datacube_size/2)
-        z_offset = int((z_center) * datacube_size*sim_len -datacube_size/2)
-        
-        if 0 <= x_offset < datacube_size*sim_len and 0 <= y_offset < datacube_size*sim_len and 0 <= z_offset < datacube_size*sim_len:
-            merged_simulation[x_offset:x_offset + datacube_size, 
-                               y_offset:y_offset + datacube_size, 
-                               z_offset:z_offset + datacube_size] = sim_data
-        else:
-            LOGGER.error(f"Simulation center ({x_center}, {y_center}, {z_center}) out of bounds for merged datacube.")
-            return
+        for k in keys:
+            sim_data = sim.data[k].transpose()
+            x_center, y_center, z_center = (centers[i] - mins)/(maxs-mins)
+            x_offset = int((x_center) * datacube_size*sim_len -datacube_size/2)
+            y_offset = int((y_center) * datacube_size*sim_len -datacube_size/2)
+            z_offset = int((z_center) * datacube_size*sim_len -datacube_size/2)
+            
+            if 0 <= x_offset < datacube_size*sim_len and 0 <= y_offset < datacube_size*sim_len and 0 <= z_offset < datacube_size*sim_len:
+                merged_simulation[x_offset:x_offset + datacube_size, 
+                                y_offset:y_offset + datacube_size, 
+                                z_offset:z_offset + datacube_size] = sim_data
+            else:
+                LOGGER.error(f"Simulation center ({x_center}, {y_center}, {z_center}) out of bounds for merged datacube.")
+                return
     LOGGER.log("Simulations merged")
 
     host = sim_array[0]
@@ -1114,7 +1246,7 @@ def mergeSimu(sim_array:List[Simulation_DC])->Simulation_DC:
     return host
 
 import glob
-def openSimulation(name_root:str, global_size:float, use_cache:bool=True,cache_name="sim_memory")->Simulation_DC:
+def openSimulation(name_root:str, global_size:float, use_cache:bool=True,cache_name="sim_memory",keys=['RHO','VX1','VX2','VX3','TEMP'])->Simulation_DC:
     """
     Open a datacube simulation
     TODO: add temp and velocity
@@ -1130,11 +1262,14 @@ def openSimulation(name_root:str, global_size:float, use_cache:bool=True,cache_n
     LOGGER.log(f"Opening {len(files)} simulations")
     names = [f.split("/")[-1] for f in files]
     sims = []
-    if use_cache and os.path.exists(CACHES_FOLDER+cache_name):
+    if use_cache and any([os.path.exists(CACHES_FOLDER+cache_name+"_"+k) for k in keys]):
         LOGGER.log("Merged using cached data")
         sim = Simulation_DC(names[0], global_size, init=True)
         sim_len = int(len(names)**(1/3))
-        sim.data['RHO'] = np.memmap(CACHES_FOLDER+cache_name, dtype='float32', mode='r', shape=(sim.data['RHO'].shape[0]*sim_len,sim.data['RHO'].shape[1]*sim_len,sim.data['RHO'].shape[2]*sim_len))
+        for k in keys:
+            if os.path.exists(CACHES_FOLDER+cache_name+"_"+k):
+                sim.data[k] = np.memmap(CACHES_FOLDER+cache_name+"_"+k, dtype='float32', mode='r', shape=(sim.data[k].shape[0]*sim_len,sim.data[k].shape[1]*sim_len,sim.data[k].shape[2]*sim_len))
+
         sim.nres = sim.nres*sim_len
         sim.relative_size = sim.relative_size*sim_len
         sim.center = np.array([0.5,0.5,0.5])
@@ -1148,7 +1283,13 @@ def openSimulation(name_root:str, global_size:float, use_cache:bool=True,cache_n
         sims.append(Simulation_DC(n, global_size, init=True))
     sim = mergeSimu(sims)
     del sims
-    fp = np.memmap(CACHES_FOLDER+cache_name, dtype='float32', mode='w+', shape=sim.data['RHO'].shape)
-    fp[:] = sim.data['RHO'][:]
-    sim.data['RHO'] = fp
+
+    for k in keys:
+        if not(k in sim.data):
+            continue
+        fp = np.memmap(CACHES_FOLDER+cache_name+"_"+k, dtype='float32', mode='w+', shape=sim.data[k].shape)
+        fp[:] = sim.data[k][:]
+        sim.data[k] = fp
+
+
     return sim

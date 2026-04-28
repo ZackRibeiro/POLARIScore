@@ -24,11 +24,21 @@ from POLARIScore.networks.architectures.nn_UNet import UNet
 
 #sim = SimulationArray(name="sim_512_A_3")
 #sim = Simulation_DC(name="orionMHD_lowB_multi_5")
-sim = openSimulation("orionMHD_lowB_multi_", global_size=66.0948+0.12) #offset bcs without dense cores have an offset :/
+sim = openSimulation("orionMHD_lowB_multi_", global_size=66.0948+0.12,keys=['RHO'],cache_name="orion") #offset bcs without dense cores have an offset :/
+sim.plot_pdf(what='rho')
 sim.load_cores()
+#cores, pos = sim.get_cores(axis=1, box=[27.5, 29.5, 37.5, 38.75])
+sim.plot()
+#sim.plot_slice(axis=1)
+#sim.generate_dataset(name="seg_orion_cores",what_to_compute={"vdens":compute_mass_weighted_density,"cores":True,"cospectra":True},number=200, img_size=128, random_rotate=True)
+
+#ds = getDataset("seg_orion_cores")
+#ds.plot_map(map_index=ds.get_element_index("vdens"), element_index=1)
+
+#sim.get_core_distance_map(axis=1)
 #sim.get_core_volumes(0, plot=True)
 #print(sim.get_cores_multiplicity()*100)
-sim.plot()
+#sim.plot()
 #sim.plot_slice(axis=2)
 #sim = SimulationArray(simulations=[Simulation_DC("sim_256_A_5"),Simulation_DC("sim_512_A_3")], indexes=[256,512])
 #sim = SimulationArray(simulations=[Simulation_DC("adastra_512_old"),Simulation_DC("adastra_512")], indexes=[0,1])

@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 import shutil
 from matplotlib.widgets import Slider
+from matplotlib.axis import Axis
 from typing import Any, Dict, List, Union, Tuple, Literal, Callable
 import copy
 import re
@@ -32,7 +33,8 @@ def _open_batch(batch_name:str)->Tuple[Dict[int, List], List[str]]:
     assert os.path.exists(TRAINING_BATCH_FOLDER), LOGGER.error(f"Can't open batch {batch_name}, no folder exists.")
     batch_path = os.path.join(TRAINING_BATCH_FOLDER,batch_name)
 
-    files = glob.glob(batch_path+"/*.npy")
+    pattern = re.compile(r"^(?!.*\/(settings|data)\.json$).*\.(npy|json)$")
+    files = [f for f in glob.glob(batch_path + "/*") if pattern.match(f)]
     files = [f.split("/")[-1] for f in files]
     files = sorted(files)
 
@@ -68,8 +70,13 @@ def getDataset(name:str)->"Dataset":
         LOGGER.error(f"Can't load dataset: {name}")
         return None
     except FileNotFoundError:
-        LOGGER.error(f"Dataset folder was not found. ({name})")
-        return None
+        if not("batch_" in name):
+            name = "batch_"+name
+        try:
+            ds.load_from_name(name, change_name=True)
+        except FileNotFoundError:
+            LOGGER.error(f"Dataset folder was not found. ({name})")
+            return None
     return ds
 
 class Dataset():
@@ -189,13 +196,20 @@ class Dataset():
 
     def load(self, paths:List[Union[List, np.ndarray, str]])->List[Union[List[np.ndarray],np.ndarray]]:
         result = []
+        def _load(path):
+            ext = path.split(".")[-1]
+            if ext == "json":
+                with open(path) as file:
+                    return json.load(file, object_hook=numpy_decoder)
+            elif ext == "npy":
+                return np.load(path)
         for pair in paths:
             if not(type(pair) is list or type(pair) is np.ndarray):
-                result.append(np.load(pair))
+                result.append(_load(pair))
                 continue
             temp = []
             for p in pair:
-                temp.append(np.load(p))
+                temp.append(_load(p))
             result.append(temp)
         del self.active_batch
         self.active_batch = result
@@ -506,7 +520,7 @@ class Dataset():
 
     def save_batch(self, batch:List[np.ndarray], i:int):
         """
-        Save a batch, here this means a pair of images not a list of pairs.
+        Save a batch, here this means a pair of data(numpy arrays or json) not a list of pairs.
         """
         if not(os.path.exists(TRAINING_BATCH_FOLDER)):
             os.mkdir(TRAINING_BATCH_FOLDER)
@@ -515,7 +529,11 @@ class Dataset():
             os.mkdir(batch_path)
         order = self.settings["order"]
         for j,o in enumerate(order):
-            np.save(os.path.join(batch_path,str(i)+"_"+o+".npy"), batch[j])
+            if isinstance(batch[j],(np.ndarray,list,tuple,float)):
+                np.save(os.path.join(batch_path,str(i)+"_"+o+".npy"), batch[j])
+            elif isinstance(batch[j],(dict)):
+                with open(os.path.join(batch_path,str(i)+"_"+o+".json"), 'w') as file:
+                    json.dump(batch[j], file, indent=4, cls=NumpyEncoder)
 
     def save_settings(self):
         if not(os.path.exists(TRAINING_BATCH_FOLDER)):
@@ -623,17 +641,14 @@ class Dataset():
         self.save_settings()
         self.save_data()
 
-        order = self.settings["order"]
         if batch is not None:
             for i,imgs in enumerate(batch):
-                for j,o in enumerate(order):
-                    np.save(os.path.join(batch_path,str(i)+"_"+o+".npy"), imgs[j])
+                self.save_batch(imgs,i)
         else:
             batch = self.batch
             for i in self.batch.keys():
                 imgs = self.get(i)
-                for j,o in enumerate(order):
-                    np.save(os.path.join(batch_path,str(i)+"_"+o+".npy"), imgs[j])
+                self.save_batch(imgs,i)
                 del imgs
 
         LOGGER.log(f"Dataset with {len(batch)} images saved.")
@@ -755,49 +770,111 @@ class Dataset():
         else:
             fig = ax.figure
 
-        if element_index < 0:
-            element_index = 0
+        element_index = max(0, element_index)
 
         bbox = ax.get_position()
-        width = bbox.width
-        height = bbox.height
-        left = bbox.x0
-        bottom = bbox.y0
+        width, height = bbox.width, bbox.height
+        left, bottom = bbox.x0, bbox.y0
         ax.set_visible(False)
-        ax_map = fig.add_axes([left, bottom+0.1, width, height-0.1])
 
-        batch = self.get(indexes=self.batch.keys()[element_index] if element_index > -1 else None)
-        im = ax_map.imshow(batch[map_index] if len(batch[map_index].shape) <= 2 else np.sum(batch[map_index], axis=-1), norm=LogNorm(), cmap="jet",
-                           extent=[val for ae in self.settings["areas_explored"][0][map_index] for val in (ae - self.settings["img_size"], ae + self.settings["img_size"])] if "areas_explored" in self.settings else None)
+        ax_map = fig.add_axes([left, bottom+0.12, width, height-0.12])
+
+        def get_batch(e_idx):
+            key = list(self.batch.keys())[e_idx]
+            return self.get(indexes=key)
+
+        def get_map_data(batch, m_idx):
+            data = batch[m_idx]
+
+            if not isinstance(data, np.ndarray):
+                raise ValueError(f"Data at map_index {m_idx} is not a numpy array")
+
+            if data.ndim == 2:
+                return data
+            elif data.ndim > 2:
+                return np.sum(data, axis=-1)
+            else:
+                raise ValueError(f"Data at map_index {m_idx} is not plottable as a map (shape={data.shape})")
+
+        batch = get_batch(element_index)
+        data = get_map_data(batch, map_index)
+
+        def get_extent(e_idx, m_idx):
+            return None
+            if "areas_explored" not in self.settings:
+                return None
+            return [
+                val
+                for ae in self.settings["areas_explored"][e_idx]
+                for val in (ae - self.settings["img_size"], ae + self.settings["img_size"])
+            ]
+
+        extent = get_extent(element_index, map_index)
+
+        artist = ax_map.imshow(data, norm=LogNorm(), cmap="jet", extent=extent)
+
+        def plot_positions(batch):
+            for d in batch:
+                if isinstance(d, dict):
+                    for v in d.values():
+                        if 'position_x' in v and 'position_y' in v:
+                            ax_map.scatter(v['position_x'], v['position_y'], marker="+", color="white")
+
+        plot_positions(batch)
 
         if show_title:
             ax_map.set_title(self.settings['order'][map_index])
 
-        if("areas_explored" in self.settings):
+        if "areas_explored" in self.settings:
             ax_map.set_xlabel("[pc]")
             ax_map.set_ylabel("[pc]")
-        plt.colorbar(im, label=self.settings['order'][map_index])
+
+        cbar = plt.colorbar(artist, ax=ax_map, label=self.settings['order'][map_index])
 
         if enable_slider:
-            ax_slider = fig.add_axes([left, bottom-0.03, width, 0.03])
-            slider = Slider(ax_slider, 'i', 0, len(self.settings['order']) - 1, valinit=map_index, valfmt='%0i')
+            ax_slider_map = fig.add_axes([left, bottom-0.03, width, 0.03])
+            fig._slider_map = Slider(ax_slider_map, 'map', 0, len(self.settings['order']) - 1,
+                                valinit=map_index, valfmt='%0.0f')
 
-            def update_map_index(val):
-                map_index = int(val)
-                im.set_data(batch[map_index] if len(batch[map_index].shape) <= 2 else np.sum(batch[map_index], axis=-1))
-                im.set_norm(LogNorm())
-                im.set_extent([val for ae in self.settings["areas_explored"][0][map_index] for val in (ae - self.settings["img_size"], ae + self.settings["img_size"])] if "areas_explored" in self.settings else None)
+            ax_slider_elem = fig.add_axes([left, bottom-0.08, width, 0.03])
+            fig._slider_elem = Slider(ax_slider_elem, 'element', 0, len(self.batch.keys()) - 1,
+                                valinit=element_index, valfmt='%0.0f')
+
+            def update(val):
+                nonlocal batch
+
+                e_idx = int(fig._slider_elem.val)
+                m_idx = int(fig._slider_map.val)
+
+                batch = get_batch(e_idx)
+                data = get_map_data(batch, m_idx)
+
+                artist.set_data(data)
+                artist.set_norm(LogNorm())
+                #artist.set_extent(get_extent(e_idx, m_idx))
+
+                ax_map.clear()
+                ax_map.imshow(data, norm=LogNorm(), cmap="jet", extent=get_extent(e_idx, m_idx))
+                plot_positions(batch)
+
                 if show_title:
-                    ax_map.set_title(self.settings['order'][map_index])
-                plt.colorbar(im, label=self.settings['order'][map_index])
+                    ax_map.set_title(self.settings['order'][m_idx])
+
+                if "areas_explored" in self.settings:
+                    ax_map.set_xlabel("[pc]")
+                    ax_map.set_ylabel("[pc]")
+
+                cbar.update_normal(artist)
+                cbar.set_label(self.settings['order'][m_idx])
+
                 fig.canvas.draw_idle()
 
-            slider.on_changed(update_map_index)    
+            fig._slider_map.on_changed(update)
+            fig._slider_elem.on_changed(update)
 
-            return fig, [ax_map, ax_slider] 
+            return fig, [ax_map, ax_slider_map, ax_slider_elem]
 
         return fig, [ax_map]
-
     def plot_correlation(self, X_i=0, Y_i=1, ax=None, bins_number=256, show_yx = False, method=np.log10, contour_levels=0, PDF=False, lines=[0,1,2], element_index=-1):
         if ax is None:
             fig, ax = plt.subplots()
