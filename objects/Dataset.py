@@ -716,7 +716,7 @@ class Dataset():
 
         return fig
 
-    def plot_histo(self, ax=None, element_index=-1, map_index=1, method=np.log10, enable_slider=True, lims=[1,8]):
+    def plot_histo(self, ax=None, element_index=-1, map_index=1, method=np.log10, enable_slider=True, lims=[1,8], bins=50):
         if ax is None:
             fig, ax = plt.subplots()
         else:
@@ -730,9 +730,9 @@ class Dataset():
         ax.set_visible(False)
 
         ax_histo = fig.add_axes([left, bottom+0.1, width, height-0.1])
-        histo_bins = 20
+        histo_bins = bins
 
-        batch = self.get(indexes=self.batch.keys()[element_index] if element_index > -1 else None)
+        batch = self.get(indexes=list(self.batch.keys())[element_index] if element_index > -1 else None)
         if element_index > -1:
             batch = [batch]
 
@@ -757,8 +757,8 @@ class Dataset():
 
         if enable_slider:
             ax_slider = fig.add_axes([left, bottom, width, 0.03], zorder=10)
-            slider = Slider(ax_slider, 'i', 0, len(self.settings['order']) - 1, valinit=map_index, valfmt='%0i')
-            slider.on_changed(update_map_index) 
+            fig.slider = Slider(ax_slider, 'i', 0, len(self.settings['order']) - 1, valinit=map_index, valfmt='%0i')
+            fig.slider.on_changed(update_map_index) 
 
             return fig, [ax_histo, ax_slider] 
 
@@ -880,7 +880,7 @@ class Dataset():
             fig, ax = plt.subplots()
         else:
             fig = ax.figure
-        batch = self.get(indexes=self.batch.keys()[element_index] if element_index > -1 else None)
+        batch = self.get(indexes=list(self.batch.keys())[element_index] if element_index > -1 else None)
         if element_index > -1:
             batch = [batch]
         c1 = np.array([method(b[X_i]) for b in batch]).flatten()

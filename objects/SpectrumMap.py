@@ -25,6 +25,10 @@ DEFAULT_OUTPUT_SETTINGS = {
     "velocity_resolution": 1e3*0.05,
     "lsr_velocity": 0,
     "v_function": _output_v_function,
+    "velocity_unit": r"m s$^{-1}$",
+    "intensity_unit": "K",
+    "velocity_name": "Velocity",
+    "intensity_name": "Intensity",
 }
 
 #Line settings example for 13CO J=U-L
@@ -171,11 +175,11 @@ class SpectrumMap():
             return S
         for x in range(len(map)):
             formatted_intensity_map.append([])
-            if isinstance(map[x],float):
+            if isinstance(map[x],(float,np.float32,np.float64)):
                 assert pos is not None
                 return make_spectrum(map)
             for y in range(len(map[x])):
-                #printProgressBar(x*len(map[x])+y,len(map)*len(map[x]),prefix="Format map", length=10)
+                #printProgressBar(x*len(map[x])+y,len(map)*len(map[x]),prefix="Formating map", length=10)
                 spectrum = map[x,y]
                 if isinstance(spectrum, Spectrum):
                     return map
@@ -681,21 +685,20 @@ class SpectrumMap():
     def plot(self, fit:Optional[str]=None, simulation=None, norm=LogNorm):
         fig, ax = plt.subplots()
         intensity_map = self.map
+        unit_y = self.output_settings.get("intensity_unit","K")
+        unit_x = self.output_settings.get("velocity_unit",r"m s$^{-1}$")
+        unit_y_name = self.output_settings.get("intensity_name","Intensity")
         image = ax.imshow(self.getIntegratedIntensity(),extent=None if simulation is None else [simulation.axis[0][0], simulation.axis[0][1], simulation.axis[1][0],simulation.axis[1][1]],
                           norm=norm() if norm is not None else None)
-        plt.colorbar(image, label=r"Integrated intensity [K m s$^{-1}$]")
-        if simulation is None:
-            ax.set_xlabel(r"$x_1$ [pixel]")
-            ax.set_ylabel(r"$x_2$ [pixel]")
-        else:
-            ax.set_xlabel(r"$x_1$ [pc]")
-            ax.set_ylabel(r"$x_2$ [pc]")
-
+        plt.colorbar(image, label=fr"Integrated {unit_y_name} [{unit_y}{unit_x}]")
+        spatial_unit = "pixel"
         def _convert_to_phys(x,y, invert=False):
+            global spatial_unit
             if simulation is not None:
                 x0, x1, y0, y1 = simulation.axis[0][0], simulation.axis[0][1], simulation.axis[1][0], simulation.axis[1][1]
                 img = self.getIntegratedIntensity()
                 nx, ny = img.shape[1], img.shape[0]
+                spatial_unit = "pc"
                 if not invert:
                     x = int(x/nx * (x1 - x0) + x0)
                     y = int(y/ny * (y1 - y0) + y0)
@@ -705,9 +708,11 @@ class SpectrumMap():
             return int(np.floor(x)),int(np.floor(y))
         fig2, ax2 = plt.subplots()
         spectrum_used = Spectrum(intensity_map[0,0])
-        spectrum_used.plot(ax=ax2, channels=spectrum_used.get_X(self.output_settings))
+        spectrum_used.plot(ax=ax2, channels=spectrum_used.get_X(self.output_settings), units=self.output_settings)
         x0, y0 = _convert_to_phys(0,0)
         marker, = ax.plot([x0], [y0], marker='x', color='red', markersize=6, mew=2)
+        ax.set_xlabel(rf"$x_1$ [{spatial_unit}]")
+        ax.set_ylabel(rf"$x_2$ [{spatial_unit}]")
 
         def onclick(event):
             if event.inaxes == ax:
@@ -718,8 +723,8 @@ class SpectrumMap():
                 if fit is not None:
                     spectrum_used.fit(method=fit)
                 #spectrum_used.spectrum = spectrum_used.add_noise(10)
-                spectrum_used.plot(ax=ax2, channels=spectrum_used.get_X(self.output_settings), show_fit=True)
-                ax2.set_title(f"Spectrum at ({round(x_click,2)}pc, {round(y_click,2)}pc)")
+                spectrum_used.plot(ax=ax2, channels=spectrum_used.get_X(self.output_settings), units=self.output_settings, show_fit=fit is not None)
+                ax2.set_title(f"Spectrum at {x0}{spatial_unit}, {y0}{spatial_unit}")
                 marker.set_data([x_click], [y_click])
                 fig.canvas.draw_idle()
                 fig2.canvas.draw_idle()

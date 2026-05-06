@@ -17,12 +17,12 @@ class SC_2(BaseModule):
         self.latent_features = latent_features
         self.encoder_cdens = UNet(convBlock=DoubleConvBlock, num_layers=encoder_layers, base_filters=encoder_filters,
                                   in_channels=1, out_channels=latent_features)
-        self.encoder_spectra = SC_2_spectra_encoder_1D2DUNet(encoder_layers=encoder_layers, encoder_filters=encoder_filters, latent_features=latent_features, spectra_dim=spectra_dim)
+        self.encoder_spectra = SC_2_spectra_encoder_3DUNet(encoder_layers=encoder_layers, encoder_filters=encoder_filters, latent_features=latent_features, spectra_dim=spectra_dim)
         #Test to replace it by flatten and KAN
         self.decoder = nn.Sequential(
-            nn.Conv2d(latent_features*2, hidden_features, kernel_size=3, padding=1),
+            nn.Conv2d(latent_features*2, hidden_features, kernel_size=1, padding=0),
             nn.ReLU(),
-            nn.Conv2d(hidden_features, hidden_features, kernel_size=3, padding=1),
+            nn.Conv2d(hidden_features, hidden_features, kernel_size=1, padding=0),
             nn.ReLU(),
             nn.BatchNorm2d(hidden_features),
             nn.Conv2d(hidden_features, 1, kernel_size=1, padding=0),
@@ -39,7 +39,7 @@ class SC_2(BaseModule):
 
         z = torch.cat([z_cdens, z_spectra], dim=1)
         if self.save_tensors:
-            self.z = z
+            self.z = z.clone()
             self.x = cdens
         x = self.decoder(z)
         return x

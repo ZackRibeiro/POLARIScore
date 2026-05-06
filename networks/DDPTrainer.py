@@ -145,7 +145,7 @@ class DDPTrainer(Trainer):
 
         return model(torch.cat([xt, input], dim=1), t), noise
 
-    def _infer_model(self, model, input):
+    def _infer_model(self, model, input, save_inter_steps:bool=False):
         # input: (B, C, H, W)
         if isinstance(input, list):
             input = input[0]
@@ -159,6 +159,8 @@ class DDPTrainer(Trainer):
             seq = list(range(self.timesteps))
 
         seq_next = [-1] + list(seq[:-1])
+
+        self.intermediaries_steps = []
 
         with torch.no_grad():
             x_t = torch.randn((B, *C), device=self.device)
@@ -214,8 +216,13 @@ class DDPTrainer(Trainer):
 
                 x_t = (torch.sqrt(at_next) * x0 + c1 * noise + c2 * eps)
 
-            return x_t.clamp(-1.0, 1.0)
-    
+                if save_inter_steps:
+                    self.intermediaries_steps.append(x_t.clone().squeeze(1).cpu().detach().numpy())
+
+            x_t = x_t.clamp(-1., 1.)
+
+            return x_t
+            
     @staticmethod
     def load(model_name, load_model=True):
         return load_trainer(model_name, load_model, trainer_class=DDPTrainer)

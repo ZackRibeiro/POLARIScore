@@ -32,9 +32,12 @@ def convert_pc_to_index(pc:float,nres:int,size:float,start:float=0.,clip:bool=Tr
     idx = (pc-start)/(size)
     if flip:
         idx = 1. - idx
-    if (idx > 1 or idx < 0) and clip:
+    if clip and (idx > 1 or idx < 0):
         return -1
-    return (int(np.floor(idx*nres)))
+    idx = np.floor(idx*nres)
+    if isinstance(idx, np.ndarray):
+        return idx.astype(int)
+    return int(idx)
 
 def compute_column_density(data_cube:np.ndarray,cell_size:float, axis:int=0)->np.ndarray:
     return np.sum(data_cube, axis=axis) * cell_size
@@ -670,3 +673,11 @@ def contour_3d(data_cube: np.ndarray, pos: Tuple[int, int, int], threshold: floa
         print(f"{len(volume)} : {new_pos} - {n_value}")
 
     return volume
+
+def is_vector_in_box(pos:np.ndarray, center:np.ndarray, half_length:float):
+        assert len(pos) == len(center), LOGGER.error(f"Position vector {len(pos)} has not the same size as Center vector {len(center)}")
+        return all([pos[i] <= center[i] + half_length and pos[i] >= center[i] - half_length for i in range(len(pos))])
+
+def is_vector_in_box_2(pos:np.ndarray, min:np.ndarray, max:np.ndarray):
+        assert len(pos) == len(min), LOGGER.error(f"Position vector {len(pos)} has not the same size as min or max vector {len(min),len(max)}")
+        return all([pos[i] <= max[i] and pos[i] >= min[i] for i in range(len(pos))])

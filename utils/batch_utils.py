@@ -1,7 +1,7 @@
 import numpy as np
 from POLARIScore.utils.utils import *
 import matplotlib.pyplot as plt
-from matplotlib.colors import LogNorm
+from matplotlib.colors import LogNorm, Normalize
 from typing import List
 import scipy
 
@@ -40,9 +40,12 @@ def plot_batch(batch, b_name:str="",same_limits:bool=True, number_per_row:int=8,
         #axes[2*(i//8)][i%8].set_title(str(np.round(score[0],3)))
         min_dat1 = np.min(data1)
         max_dat1 = np.max(data1) 
+        norm = LogNorm
+        if min_dat1 <= 0 or np.min(data2) <= 0:
+            norm = Normalize
         if len(data1.shape) == 2:
-            d1 = axes[2*(i//number_per_row)][i%number_per_row].imshow(data1, cmap="jet", norm=LogNorm(vmin=np.min(data1), vmax=np.max(data1)))
-            d2 = axes[2*(i//number_per_row)+1][i%number_per_row].imshow(data2, cmap="jet", norm=(LogNorm(vmin=np.min(data2), vmax=np.max(data2)) if not(same_limits) else LogNorm(min_dat1, max_dat1)))
+            d1 = axes[2*(i//number_per_row)][i%number_per_row].imshow(data1, cmap="jet", norm=norm(vmin=np.min(data1), vmax=np.max(data1)))
+            d2 = axes[2*(i//number_per_row)+1][i%number_per_row].imshow(data2, cmap="jet", norm=(norm(vmin=np.min(data2), vmax=np.max(data2)) if not(same_limits) else norm(min_dat1, max_dat1)))
         elif len(data1.shape) == 1:
             d1 = axes[2*(i//number_per_row)][i%number_per_row].plot(data1, color="black")
             d2 = axes[2*(i//number_per_row)][i%number_per_row].plot(data2, color="red")
@@ -82,3 +85,25 @@ def plot_batch_correlation(batch, ax=None, bins_number:int=256, show_yx:bool=Tru
     fig.tight_layout()
 
     return fig, ax
+
+def compute_density_pdf_skewness(density_tensor, eps=1e-8):
+    mean = np.mean(density_tensor, axis=-1, keepdims=True)
+    std = np.std(density_tensor, axis=-1, keepdims=True)
+
+    std = np.where(std < eps, eps, std)
+
+    centered = density_tensor - mean
+    skewness = np.mean((centered / std) ** 3, axis=-1)
+
+    return skewness
+
+def compute_density_pdf_kurtosis(density_tensor, eps=1e-8):
+    mean = np.mean(density_tensor, axis=-1, keepdims=True)
+    std = np.std(density_tensor, axis=-1, keepdims=True)
+
+    std = np.where(std < eps, eps, std)
+
+    centered = density_tensor - mean
+    kurtosis = np.mean((centered / std) ** 4, axis=-1)
+
+    return kurtosis

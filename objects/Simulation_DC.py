@@ -79,6 +79,9 @@ class Simulation_DC():
 
     def init(self, **kwargs):
         """Try to auto init depending on the files in the simulation folder"""
+
+
+
         if len(glob.glob(os.path.join(self.folder,"*.vtk"))) > 0:
             init_idefix(self, **kwargs)
         elif len(glob.glob(os.path.join(self.folder,"*.fits"))) > 0:
@@ -86,6 +89,24 @@ class Simulation_DC():
         else:
             LOGGER.warn(f"Can't initialize simulation {self.name}, verify if the folder exists and if there is data files in it.")
         
+        for k in self.data.keys():
+            d = self.data[k]
+            if not(isinstance(d, np.ndarray)):
+                continue
+            if isinstance(d,np.memmap):
+                continue
+            if d.size <= 1e4:
+                #Not a large file so we skip
+                continue
+            mem_path = os.path.join(self.folder,"data_"+k+".mem")
+            if os.path.exists(mem_path):
+                self.data[k] = np.memmap(mem_path, dtype='float32', mode='r', shape=self.data[k].shape)
+                continue
+            fp = np.memmap(mem_path, dtype='float32', mode='w+', shape=self.data[k].shape)
+            fp[:] = self.data[k][:]
+            self.data[k] = fp
+            
+
     def project_data(self, key:Union[str,np.ndarray], i,j ,axis):
         """Return 1D Vector with data on an axis.
         Args:
@@ -152,8 +173,30 @@ class Simulation_DC():
         smap.global_settings = {}
         smap.line_settings = {}
         return smap
+    
+    def format_key_to_spectrum_map(self, key="RHO" , axis=0)->"SpectrumMap":
+        assert key in self.data, LOGGER.error(f"No key {key} found in simulation data.")
+        channels_number = len(self.data[key])
+
+        data = np.moveaxis(self.data[key], axis, -1)
+
+        smap = SpectrumMap(self.name+f"_rho_ax_{axis}", map=data ,load=False)
+        smap.output_settings = {
+            "velocity_channels": channels_number,
+            "velocity_resolution": self.size/channels_number,
+            "lsr_velocity": 0,
+            "v_function": lambda _,chan,res: np.array(range(chan))*res,
+            "velocity_name": "Distance",
+            "velocity_unit": "pc",
+            "intensity_unit": r"$\mathrm{cm}^{-3}$",
+            "intensity_name": key,
+            }
+        smap.global_settings = {}
+        smap.line_settings = {}
+        return smap
+    
         
-    def load_cores(self, path:str='catalog_search_results.json', alpha_vir_max:Optional[float]=1.)->List[Dict]:
+    def load_cores(self, path:str='catalog_search_results.json', alpha_vir_max:Optional[float]=2.)->List[Dict]:
         if self.cores is not None:
             return self.cores
         with open(os.path.join(self.folder, path)) as file:
@@ -168,6 +211,7 @@ class Simulation_DC():
                         key_name = key_name.replace('pos_n_max','pos')
                     c[key_name] = data[key][index]
 
+
                 keys_to_invert = []#[('pos_x','pos_z'),('vel_x','vel_z'),('B_x','B_z')]
                 for key in keys_to_invert:
                     temp = c[key[0]]
@@ -177,6 +221,17 @@ class Simulation_DC():
                 keys_to_flip = []#['pos_y','pos_z']
                 for key in keys_to_flip:
                     c[key] = self.global_size - c[key]
+
+                keys_to_rename = [('rho_mean','average_n')]
+                keys_to_duplicate = [('size','radius_pc','radius')]
+                for key in keys_to_rename:
+                    c[key[1]] = c[key[0]]
+                    del c[key[0]]
+                for key in keys_to_duplicate:
+                    for key_2 in key[1:]:
+                        c[key_2] = c[key[0]]
+                #c['radius_pc'] = c['radius_pc']/2
+
 
                 if alpha_vir_max is not None and 'alpha_vir' in data.keys():
                     if c['alpha_vir'] > alpha_vir_max:
@@ -446,7 +501,7 @@ class Simulation_DC():
         return self.volumic_density[axis]
 
     def generate_dataset(self,name:str=None,
-                         what_to_compute:Dict={"cospectra":False,"density":False,"context":None,"vdens":compute_mass_weighted_density,"cores":False}
+                         what_to_compute:Dict={"cospectra":False,"density":False,"context":None,"vdens":compute_mass_weighted_density,"cores":False,"density_methods":None}
                        ,number:int=8,size:Union[float,Tuple[float,float]]=0.,img_size:int=128,random_rotate:bool=True,limit_area:Tuple=(None,None,None),
                        nearest_size_factor:float=0.75,axes:Union[int,List[int]]=[0,1,2],
                        beam:Optional[Tuple[float,float]]=None)->bool:
@@ -459,6 +514,7 @@ class Simulation_DC():
         - 'density': keep the density cube in the dataset
         - 'context': generate a downsampled global region (default is all the sim face) with a channel for a crop mask: 1 if the random region contains the pos else 0.
         - 'cores': generate a catalog of dense cores contained in the region
+        - 'density_methods': Dict of methods with keys=names and values=callable with each method taking the region cube of density (third axis is line of sight) and returns 2D maps.
 
         Args:
             number(int, default: 8): How many pairs of images do we want.
@@ -511,6 +567,7 @@ class Simulation_DC():
             else:
                 co_spectra = [smap.map for smap in co_spectra]
         flag_number_density = what_to_compute["density"] if "density" in what_to_compute else False
+        flag_density_methods = what_to_compute["density_methods"] is not None and isinstance(what_to_compute["density_methods"], dict)
         flag_context = (what_to_compute["context"] is not None and what_to_compute["context"]) if "context" in what_to_compute else False
         flag_physize = True
         flag_cores = "cores" in what_to_compute and what_to_compute["cores"]
@@ -520,6 +577,9 @@ class Simulation_DC():
             order.append("vdens")
         if flag_cospectra:
             order.append("cospectra")
+        if flag_density_methods:
+            for dens_method_name in what_to_compute["density_methods"].keys():
+                order.append("density_"+dens_method_name)
         if flag_number_density:
             order.append("density")
         if flag_context:
@@ -631,20 +691,38 @@ class Simulation_DC():
 
             if flag_number_density:
                 if face == 0:
-                    densities = self.data[:, start_y:end_y, start_x:end_x]
+                    densities = self.data['RHO'][:, start_y:end_y, start_x:end_x]
                 elif face == 1:
-                    densities = self.data[start_y:end_y, :, start_x:end_x]
+                    densities = self.data['RHO'][start_y:end_y, :, start_x:end_x]
                 elif face == 2:
-                    densities = self.data[start_y:end_y, start_x:end_x, :]
+                    densities = self.data['RHO'][start_y:end_y, start_x:end_x, :]
 
                 if densities.shape[0] == self.nres:
                     densities = np.moveaxis(densities, 0, -1)
                 elif densities.shape[1] == self.nres:
                     densities = np.moveaxis(densities, 1, -1)
+            if flag_density_methods:
+                if not(flag_number_density):
+                    if face == 0:
+                        densities = self.data['RHO'][:, start_y:end_y, start_x:end_x]
+                    elif face == 1:
+                        densities = self.data['RHO'][start_y:end_y, :, start_x:end_x]
+                    elif face == 2:
+                        densities = self.data['RHO'][start_y:end_y, start_x:end_x, :]
 
+                    if densities.shape[0] == self.nres:
+                        densities = np.moveaxis(densities, 0, -1)
+                    elif densities.shape[1] == self.nres:
+                        densities = np.moveaxis(densities, 1, -1)
+                for dens_method_name in what_to_compute["density_methods"]:
+                    dens_method = what_to_compute["density_methods"][dens_method_name]
+                    d_result:np.ndarray = dens_method(densities)
+                    d_result = _process_img(d_result, k, skip_crop=True)
+                    b.append(d_result)
+            if flag_number_density:
                 densities = _process_img(densities, k, skip_crop=True)
-
                 b.append(densities)
+
 
             if flag_context:
                 assert column_density[face].shape[0]//s, LOGGER.error("Datacube dimension need to be divisible by size asked to generate context.")
@@ -931,7 +1009,6 @@ class Simulation_DC():
         Args:
             method(function): Method to compute volumic density
             axis(int): which face of the sim, if -1 all faces are taken
-            contour_levels(int): If instead of using color map, a contour map is used (for value > 0, levels of the contour map = this var)
             force_compute(bool): if True, the column density and volume density will be computed even if cache is available.
         Returns:
             Tuple(fig, ax)
@@ -948,7 +1025,7 @@ class Simulation_DC():
         else:
             column_density = np.array([compute_column_density(self.data['RHO'], self.cell_size, axis=i) for i in range(3)]).flatten()
             volume_density = np.array([self._compute_v_density(method=method, axis=i,force=force_compute) for i in range(3)]).flatten()
-
+            
         logx = np.log10(column_density)
         logy = np.log10(volume_density)
 
@@ -957,7 +1034,6 @@ class Simulation_DC():
 
 
         _, _,_,hist = ax.hist2d(column_density, volume_density, bins=(xbins,ybins), norm=LogNorm(), cmap=cm.viridis)
-
 
         if colorbar:
             plt.colorbar(hist, ax=ax, label="counts")
@@ -971,7 +1047,7 @@ class Simulation_DC():
 
         plot_lines(ax, x=column_density, y=volume_density, lines=lines, logspace=True)
 
-        ax.grid(True)
+        #ax.grid(True)
         ax.set_axisbelow(True)
         #fig.tight_layout()
         return fig, ax
@@ -989,9 +1065,10 @@ class Simulation_DC():
         #axes["O"].remove()
 
         self.plot_pdf(ax=axes["A"], what="cdens", color="black", legend=False, offset_method='none', scatter=False, bins=40)
-        self.plot_pdf(ax=axes["C"], what="vdens", color="black", legend=False, offset_method='none', scatter=False, swap_axis=True, bins=40)
+        self.plot_pdf(ax=axes["C"], what="vdens", color="black", legend=False, offset_method='none', scatter=False, swap_axes=True, bins=40)
         axes["A"].set_ylabel(r"$P_{N_H}$")
         axes["C"].set_xlabel(r"$P_{<n_H>_m}$")
+        axes["C"].set_ylabel("")
         self.plot_correlation(ax=axes["B"], colorbar=False)
         self.fit_correlation(ax=axes["B"], show_gaussians=False, legend=False)
         self.fit_correlation(ax=axes["O"], legend=False, labels=False, show_data=False)
@@ -1132,7 +1209,7 @@ class Simulation_DC():
 
     def plot_pdf(self,ax=None,bins: int = 20,offset_method: Literal["mean", "max", "none"] = "none",what: Literal["cdens", "vdens", "rho", "vel"] = "rho",
                  color=None, legend=True, scatter=True, label:Optional[str]=None,drawstyle:Optional[str]="steps-mid",
-                 vdens_method:Optional[Callable]=compute_mass_weighted_density):
+                 vdens_method:Optional[Callable]=compute_mass_weighted_density, swap_axes=False):
         if ax is None:
             fig, ax = plt.subplots()
         else:
@@ -1176,17 +1253,21 @@ class Simulation_DC():
         bin_centers = _normalize_x(hist, bin_centers)
         if is_log:
             bin_centers = 10**bin_centers
-        ax.plot(bin_centers, hist, drawstyle=drawstyle, marker="+" if scatter else None, color=color, label=label)
-        ax.errorbar(bin_centers, hist, yerr=hist_stats_error * hist, fmt='none', color="black")
+        ax.plot(hist if swap_axes else bin_centers, bin_centers if swap_axes else hist, drawstyle=drawstyle, marker="+" if scatter else None, color=color, label=label)
+        if not(swap_axes):
+            ax.errorbar(bin_centers, hist, yerr=hist_stats_error * hist, fmt='none', color="black")
+
+        set_xlabel = ax.set_ylabel if swap_axes else ax.set_xlabel
+        set_ylabel = ax.set_xlabel if swap_axes else ax.set_ylabel
 
         if offset_method == "mean":
-            ax.set_xlabel(r"($x-\mu) / (max(x)-min(x))$")
+            set_xlabel(r"($x-\mu) / (max(x)-min(x))$")
         elif offset_method == "max":
-            ax.set_xlabel(r"($x-max(x)) / (max(x)-min(x))$")
+            set_xlabel(r"($x-max(x)) / (max(x)-min(x))$")
         else:
-            ax.set_xlabel(label)
-        
-        ax.set_ylabel("pdf")
+            set_xlabel(label)
+
+        set_ylabel("pdf")
 
         if is_log:
             ax.set_xscale("log")

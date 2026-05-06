@@ -7,12 +7,14 @@ from POLARIScore.utils.utils import plot_function
 from POLARIScore.utils.physics_utils import CONVERT_massn_TO_n, dcmf_func
 
 
-CORES_PATH = "/home/zack/Documents/POLARIScore/data/sims/orion_cores/catalog_search_results.json"
+CORES_PATH = "/home/ribeiroz/forks/Polaris/POLARIScore/data/sims/orionMHD_lowB_multi_5/catalog_search_results.json"
 bins = 15
 ax = None
 
-def plot_sim_dcmf(ax=None,factor=1.,fit=False, logM=True):
-    with open(CORES_PATH) as file:
+def plot_sim_dcmf(ax=None,factor=1.,fit=False, logM=True, path=None):
+    if path is None:
+         path = CORES_PATH
+    with open(path) as file:
         cores = json.load(file)
     c_masses = np.array(list(cores["mass"].values()))
     #c_alphvir = np.array(list(cores["alpha_vir"].values()))

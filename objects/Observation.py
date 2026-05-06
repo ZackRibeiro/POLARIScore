@@ -41,7 +41,7 @@ def _crop(wcs, lims):
 
 class Observation():
     """Observation object contains multiple tools to read observations and apply models on them."""
-    def __init__(self,name:str,file_name:str,distance:float=400.):
+    def __init__(self,name:str,file_name:str="column_density_map",distance:float=400.,mode:Literal["default","pc_map"]="default"):
 
         self.name:str = name
         self.folder:str = os.path.join(OBSERVATIONS_FOLDER, name)
@@ -50,21 +50,32 @@ class Observation():
         self.distance = distance
         """Distance (in parsec) to the observation"""
 
-        file_name = file_name.split(".fits")[0]+".fits"
-        self.file:str = os.path.join(self.folder,file_name)
-        """Path to the observation data"""
+        if file_name is not None:
+            file_name = file_name.split(".fits")[0]+".fits"
+            self.file:str = os.path.join(self.folder,file_name)
+        else:
+            self.file:str = ""
+            """Path to the observation data"""
         self.data:np.ndarray = None
         self.prediction:np.ndarray = None
         self.prediction_error:np.ndarray = None
         self.wcs: 'WCS' = None
-        self.cores: List[Dict] = None
-        """Cores [{...core1_properties}]"""
+        self.cores: List[DenseCore] = None
         self.catalog_name = "Könyves et al, 2020"
 
         self.skeleton = None
         """Skeleton map"""
 
+        self.mode = mode.lower()
+        if self.mode == "pc_map":
+            self.folder = None
+            self.file = None
+            return
+
         self.init()
+
+    def skycoord_to_pixel(self,coords,wcs):
+        return skycoord_to_pixel(coords, wcs)
     
     def init(self):
         file = fits.open(self.file)
@@ -95,10 +106,13 @@ class Observation():
         self.prediction = prediction
         return prediction   
 
-    def predict(self, model_trainer:'Trainer', patch_size:Tuple[int,int]=(128, 128), nan_value:float=-1.0, overlap:float=0.5, downsample_factor:float=1., apply_baseline:bool=True)->np.ndarray:
-        prediction = predict_map(self.data ,model_trainer, patch_size, nan_value, overlap, downsample_factor, apply_baseline)
+    def predict(self, model_trainer:'Trainer', method:Literal['mean','max_value','likeliest','median','min_value','sampling']="likeliest",
+                 patch_size:Tuple[int,int]=(128, 128),
+                 nan_value:float=-1.0, overlap:float=0.5, downsample_factor:float=1., apply_baseline:bool=True)->np.ndarray:
+        prediction, (up_prediction, low_prediction) = predict_map(self.data ,model_trainer=model_trainer, method=method, patch_size=patch_size,
+                                  nan_value=nan_value, overlap=overlap, downsample_factor=downsample_factor, apply_baseline=apply_baseline)
         self.prediction = prediction
-        return prediction
+        return prediction, (up_prediction, low_prediction)
     
     def apply_filter(self, method:Literal["gaussian"]="gaussian", factor=1., original_beam=18.2, replace=True):
         """
@@ -286,12 +300,15 @@ class Observation():
             LOGGER.error("No predicted density found")
             return None
 
-        coords = SkyCoord(
-            [core.data["ra"] for core in self.cores],
-            [core.data["dec"] for core in self.cores],
-            unit="deg"
-        )
-        x_pix, y_pix = skycoord_to_pixel(coords, self.wcs)
+        if self.mode == "pc_map":
+            x_pix, y_pix = self.skycoord_to_pixel(([core.data["pos_x"] for core in self.cores],[core.data["pos_y"] for core in self.cores]))
+        else:
+            coords = SkyCoord(
+                [core.data["ra"] for core in self.cores],
+                [core.data["dec"] for core in self.cores],
+                unit="deg"
+            )
+            x_pix, y_pix = skycoord_to_pixel(coords, self.wcs)
 
         values = []
         for x, y in zip(x_pix, y_pix):
@@ -318,6 +335,7 @@ class Observation():
         global_indexes = np.array(range(predicted_densities.shape[0]))
         mask = (~np.isnan(predicted_densities)) & (predicted_densities > 0) & (derived_densities > 0)
         if region is not None:
+            assert "ra" in self.get_cores()[0], LOGGER.error("Region argument is not supported for observations that do not have cores in format ra,dec")
             ra_max, ra_min, dec_min, dec_max = region
             ra = np.array([c.data["ra"] for c in self.get_cores()])
             dec = np.array([c.data["dec"] for c in self.get_cores()])
@@ -396,7 +414,7 @@ class Observation():
         """
 
         if plot_cores is not None:
-            plot_cores_lims = [0, 1e23]
+            plot_cores_lims = [0, 1e26]
             if(type(plot_cores) is not bool):
                 if((type(plot_cores) is tuple or type(plot_cores) is list) and len(plot_cores) >= 2):
                     plot_cores_lims = plot_cores
@@ -427,23 +445,27 @@ class Observation():
         if not(force_col) and (np.nanpercentile(data,50) < 1e10 or force_vol):
             flag_vol_density = True
             label=r"$<n_H>_m(cm^{-3})$"  if clabel is None else clabel
-        im = ax.imshow(data, cmap="rainbow" if cmap is None and len(data.shape) == 2 else cmap, norm=norm if len(data.shape) == 2 else None)
-        overlay = ax.get_coords_overlay('fk5')
-        if show_ax_labels:
-            overlay.grid(color='black', ls='dotted')
-            overlay[0].set_axislabel('ra')
-            overlay[1].set_axislabel('dec')
+        im = ax.imshow(data, cmap="jet" if cmap is None and len(data.shape) == 2 else cmap, norm=norm if len(data.shape) == 2 else None)
+        
+        if self.mode == "pc_map":
+            pass
         else:
-            for coord in overlay:
-                coord.set_ticks_visible(False)
-                coord.set_ticklabel_visible(False)
-                coord.set_axislabel('')
-            for coord in ax.coords:
-                coord.set_ticks_visible(False)
-                coord.set_ticklabel_visible(False)
-                coord.set_axislabel('')
-            ax.get_xaxis().set_visible(False)
-            ax.get_yaxis().set_visible(False)
+            overlay = ax.get_coords_overlay('fk5')
+            if show_ax_labels:
+                overlay.grid(color='black', ls='dotted')
+                overlay[0].set_axislabel('ra')
+                overlay[1].set_axislabel('dec')
+            else:
+                for coord in overlay:
+                    coord.set_ticks_visible(False)
+                    coord.set_ticklabel_visible(False)
+                    coord.set_axislabel('')
+                for coord in ax.coords:
+                    coord.set_ticks_visible(False)
+                    coord.set_ticklabel_visible(False)
+                    coord.set_axislabel('')
+                ax.get_xaxis().set_visible(False)
+                ax.get_yaxis().set_visible(False)
 
         if cbar and len(data.shape) == 2:
             plt.colorbar(im, label=label)
@@ -478,7 +500,8 @@ class Observation():
 
         return fig, ax
     
-    def plot_correlation(self, ax:Optional["axes.Axes"]=None, bins_number=128, show_yx:bool=True, lines:List[float]=[0,1,2]):
+    def plot_correlation(self, ax:Optional["axes.Axes"]=None, bins_number=128, lines:List[float]=[0,1,2], 
+                         xlabel=r"Measured N$_H$ (cm$^{-2}$)", ylabel=r"predicted $<n_H>_m$ (cm$^{-3}$)"):
             if ax is None:
                 fig, ax = plt.subplots()
             else:
@@ -490,22 +513,24 @@ class Observation():
             pred = np.log10(self.prediction[mask]).flatten()
 
             _, _, _,hist = ax.hist2d(data, pred, bins=(bins_number,bins_number), norm=LogNorm())
-            if show_yx:
-                yx = np.linspace(np.min(data), np.max(data), 10)
-                p = ax.plot(yx,yx,linestyle="--",color="red",label=r"$y=x$")
 
-            plt.colorbar(hist, ax=ax, label="counts")
+            if self.get_cores() is not None:
+                core_vol_dens = self.get_predicted_density_at_cores(column_density=False)
+                core_col_dens = self.get_predicted_density_at_cores(column_density=True)
+                ax.scatter(np.log10(core_col_dens), np.log10(core_vol_dens), color="red", marker="+", label="Cores")
+
+            plt.colorbar(hist, ax=ax, label="Counts")
             ax = plt.gca()
-            ax.set_xlim([20, 24])
-            ax.set_ylim([1, 8])
+            #ax.set_xlim([20, 24])
+            #ax.set_ylim([1, 8])
 
             plot_lines(ax,x=data, y=pred, lines=lines)
 
             ax.grid(True)
-            ax.set_axisbelow(True)
+            #ax.set_axisbelow(True)
 
-            ax.set_xlabel(r"measured $N_H$ ($cm^{-2}$)")
-            ax.set_ylabel(r"predicted $<n_H>_m$ ($cm^{-3}$)")
+            ax.set_xlabel(xlabel)
+            ax.set_ylabel(ylabel)
 
             fig.tight_layout()
 
@@ -619,30 +644,40 @@ class Observation():
                 return
         if lims[0] is not None or lims[1] is not None:
             resulted_cores = []
+            flag_skip = False
             for i,c in enumerate(cores):
                 flag = True
+                if "peak_ncol" not in c:
+                    flag_skip = True
+                    break
                 if lims[0] is not None and c["peak_ncol"] < lims[0]:
                     flag = False
                 if flag and lims[1] is not None and c["peak_ncol"] > lims[1]:
                     flag = False
                 if flag:
                     resulted_cores.append(c)
-            cores = resulted_cores
+            if not(flag_skip):
+                cores = resulted_cores
         LOGGER.log(f"Plot {len(cores)} cores.")
             
-        ra = [c["ra"] for c in cores]
-        dec = [c["dec"] for c in cores]
-        if vol_density:
-            values = np.array([c["peak_n"] for c in cores])
+        if self.mode == "pc_map":
+            values = np.array([c["average_n"] for c in cores])
+            x_pix, y_pix = self.skycoord_to_pixel(([c['pos_x'] for c in cores],[c['pos_y'] for c in cores]))
+            pixel_scale = 1
+            radius = self.pc_to_pixels(np.array([c["radius_pc"] if c["radius_pc"] > 0. else 1. for c in cores]))
         else:
-            values = np.array([c["peak_ncol"] for c in cores])
+            ra = [c["ra"] for c in cores]
+            dec = [c["dec"] for c in cores]
+            if vol_density:
+                values = np.array([c["peak_n"] for c in cores])
+            else:
+                values = np.array([c["peak_ncol"] for c in cores])
+            world_coords = SkyCoord(ra, dec, unit="deg", frame="fk5")
+            pixel_scale = np.mean(np.abs(ax.wcs.pixel_scale_matrix.diagonal()))
+            radius = np.array([c["radius"] if c["radius"] > 0. else 1. for c in cores]) / 3600
+            x_pix, y_pix = self.skycoord_to_pixel(world_coords, ax.wcs)
 
-        world_coords = SkyCoord(ra, dec, unit="deg", frame="fk5")
-        x_pix, y_pix = skycoord_to_pixel(world_coords, ax.wcs)
 
-        radius = np.array([c["radius"] if c["radius"] > 0. else 1. for c in cores]) / 3600
-
-        pixel_scale = np.mean(np.abs(ax.wcs.pixel_scale_matrix.diagonal()))
 
         if norm is None:
             colors = 'none'
@@ -787,7 +822,7 @@ class Observation():
         return fig, ax
 
     def plot_cores_baseline(self, ax:Optional["axes.Axes"]=None, suffixes:Optional[Union[List[str],str]]=None, derived_cores:bool=False, density_correction:bool=True,
-                             x_coldens:bool=False, invert_xy:bool=False, mov_average:int=0, fit:bool=False, cmap_color=True, forced_label=None):
+                             x_coldens:bool=True, invert_xy:bool=True, mov_average:int=0, fit:bool=False, cmap_color=True, forced_label=None):
         """
         Plot dense cores baseline with x axis depending on args. By default this plot the predicted mass-weighted average density of cores in function of their id.
         Args:
@@ -841,7 +876,7 @@ class Observation():
                 try:
                     if invert_xy:
                         popt, _ = curve_fit(_fit_function_inv, binned_x, np.log(binned_y), p0=[(np.max(densities)-np.min(densities))/(np.max(x)-np.min(x)), np.min(densities), 0.5],
-                                            bounds=([0, 1e21, 0],[np.inf, 1e22, 1]))
+                                            bounds=([0, 1e21, 0],[np.inf, 1e24, 1]))
                         fit_a, fit_b, fit_alpha = popt
                         func = lambda X: np.exp(_fit_function_inv(X, fit_a, fit_b, fit_alpha))
                         plot_function(func, ax=ax, scatter=False, logspace=True, lims= (np.min(x), np.max(x)), color=color, linestyle="--")
@@ -987,9 +1022,10 @@ class Observation():
 
         return fig, ax
 
-    def plot_dcmf(self, ax:Optional["axes.Axes"]=None, bins:int=10, ext_lims:Tuple[Union[float,None],Union[float,None]]=[None,None],
-                   logM:bool=True, fit=True, method:Literal['constant','gaussian']="constant",
-                    monte_carlo:int=100 , correction:bool=True , color:Optional[str]="red"
+    def plot_dcmf(self, ax:Optional["axes.Axes"]=None, bins:int=20, ext_lims:Tuple[Union[float,None],Union[float,None]]=[None,None],
+                   logM:bool=True, fit=False, method:Literal['constant','gaussian']="constant",
+                    monte_carlo:int=30 , correction:bool=True , color:Optional[str]="red",
+                    show_chabrier_imf:bool=False, mass_completeness:float=0.4,  show_sim_dcmf:Optional[str]=None, lims:Optional[Tuple[float,float,float,float]]=(0.01,100,0.8,600)
                 ):
         """
         Plot the dense core mass function
@@ -1010,15 +1046,20 @@ class Observation():
 
         cores = self.get_cores()
 
-        predicted_masses = np.array([c.compute_mass(method=method,correction=correction) for c in cores])
+        has_predicted_values = self.prediction is not None
+        
+
         derived_cores = [c.data for c in cores]
-        predicted_densities = np.array(self.get_predicted_density_at_cores(), dtype=np.float64)
         column_densities = np.array(self.get_predicted_density_at_cores(column_density=True), dtype=np.float64)
         derived_densities =  np.array([c.data["average_n"] for c in cores], dtype=np.float64)
         derived_masses = np.array([c.data["mass"] for c in cores], dtype=np.float64)
-        mask = (~np.isnan(predicted_densities)) & (predicted_densities > 0) & (derived_densities > 0) & (~np.isnan(predicted_masses))
+        mask = (derived_densities > 0)
+        if has_predicted_values:
+            predicted_densities = np.array(self.get_predicted_density_at_cores(), dtype=np.float64)
+            predicted_masses = np.array([c.compute_mass(method=method,correction=correction) for c in cores])
+            mask = mask & (~np.isnan(predicted_densities)) & (predicted_densities > 0) & (~np.isnan(predicted_masses))
+            predicted_masses = predicted_masses[mask]
         column_densities = column_densities[mask]
-        predicted_masses = predicted_masses[mask]
         derived_masses = derived_masses[mask]
 
         extinctions = []
@@ -1082,9 +1123,7 @@ class Observation():
 
         LOGGER.log(f"DCMF with {len(derived_radius[global_mask])} cores.")
 
-        if(self.prediction is not None):            
-            
-
+        if has_predicted_values:            
             predicted_dcmf, predicted_bin_centers = _get_dcmf(predicted_masses)
             predicted_bin_centers = 10**predicted_bin_centers
             if monte_carlo > 0 and self.prediction_error is not None:
@@ -1112,21 +1151,24 @@ class Observation():
                 func = lambda X: _dcmf_function(X, popt[0], popt[1], popt[2], popt[3], popt[4])
                 plot_function(func, ax=ax, scatter=False, logspace=True, lims= (0.01, 100), color=color, linestyle="--")
 
-        #plot_sim_dcmf(ax, factor=0.035, logM=logM)
-        ax.axvline(0.4, 0., 1., color='black', ls='--')
-        ax.text(0.4 - 0.1,0.5,r'Completeness limit: $M=0.4M_\odot$',
-            rotation=90,va='center',ha='left',color='black',fontsize=11, transform=ax.get_xaxis_transform())
-
-
-        #plot_imf_chabrier(ax, logM=logM, dcmf=0.4, x_min=1e-3, amp = np.max(predicted_dcmf))
+        if show_sim_dcmf:
+            plot_sim_dcmf(ax, factor=0.035, logM=logM, path=show_sim_dcmf)
+        if mass_completeness > 0.:
+            ax.axvline(0.4, 0., 1., color='black', ls='--')
+            ax.text(0.4 - 0.1,0.5,r'Completeness limit: $M=0.4M_\odot$',
+                rotation=90,va='center',ha='left',color='black',fontsize=11, transform=ax.get_xaxis_transform())
+        if show_chabrier_imf:
+            plot_imf_chabrier(ax, logM=logM, dcmf=0.4, x_min=1e-3, amp = np.max(predicted_dcmf))
         
         ax.set_xscale("log")
         ax.set_yscale("log")
         ax.set_xlabel(r"Mass [$M_\odot$]")
         ax.set_ylabel(r"$dN/d\log M$" if logM else r"$dN/dM$")
 
-        ax.set_xlim([0.01, 100])
-        ax.set_ylim([0.8,600])
+        if lims is not None:
+            x0,x1,y0,y1 = lims
+            ax.set_xlim([x0, x1])
+            ax.set_ylim([y0,y1])
 
         plt.legend()
 

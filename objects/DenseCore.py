@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.coordinates import SkyCoord
-from astropy.wcs.utils import skycoord_to_pixel, pixel_to_skycoord
 import astropy.units as u
 from matplotlib.colors import LogNorm
 from scipy.optimize import curve_fit
@@ -23,8 +22,12 @@ class DenseCore():
         self.fit_settings = None
         """Gaussian fit settings of the better slice"""
         self.wcs = obs.wcs
-        self.coord = SkyCoord(data["ra"], data["dec"], unit="deg")
-        """Coordinates of the dense core in deg"""
+        if obs.mode == "pc_map":
+            self.coord = (data["pos_x"],data["pos_y"])
+        else:
+            self.coord = SkyCoord(data["ra"], data["dec"], unit="deg")
+            """Coordinates of the dense core"""
+
 
     def get_center_density(self, correction=False, column_density=False):
         """Get volume density predicted at the presumed 2D core center
@@ -37,9 +40,9 @@ class DenseCore():
         else:
             assert self.obs.prediction is not None, LOGGER.error(f"No predicted density on the observation: {self.obs.name}.")
         densities = self.obs.data if column_density else self.obs.prediction
-        x_pix, y_pix = skycoord_to_pixel(self.coord, self.wcs)
-
-        x_int, y_int = int(round(float(x_pix))), int(round(float(y_pix)))
+        x_pix, y_pix = self.obs.skycoord_to_pixel(self.coord, self.wcs)
+        
+        x_int, y_int = int(np.floor(float(x_pix))), int(np.floor(float(y_pix)))
         if (0 <= y_int < densities.shape[0]) and (0 <= x_int < densities.shape[1]):
             rslt_density = densities[y_int, x_int]
             if correction and not(column_density):
@@ -139,7 +142,7 @@ class DenseCore():
         env_size = 5
         densities = self.obs.prediction
         r_px = self.obs.pc_to_pixels(self.data["radius_pc"])
-        x_center, y_center = skycoord_to_pixel(self.coord, self.wcs)
+        x_center, y_center = self.obs.skycoord_to_pixel(self.coord, self.wcs)
         region_half_px = self.obs.pc_to_pixels(env_size)
         x_min = max(0,int(x_center - region_half_px))
         x_max = min(densities.shape[1],int(x_center + region_half_px))
@@ -236,7 +239,7 @@ class DenseCore():
         if env_size is None:
             env_size = 7.5*self.data["radius_pc"]
 
-        x_center, y_center = skycoord_to_pixel(self.coord, self.wcs)
+        x_center, y_center = self.obs.skycoord_to_pixel(self.coord, self.wcs)
         region_half_px = self.obs.pc_to_pixels(env_size)
         x_min = max(0,int(x_center - region_half_px))
         x_max = min(densities.shape[1],int(x_center + region_half_px))
@@ -377,7 +380,7 @@ class DenseCore():
             theta_max = (1 / D_pc)*180/np.pi*u.deg
             near_mask = (sep < theta_max) & (sep > 0.)
             near_coords = all_coords[near_mask]
-            near_x, near_y = skycoord_to_pixel(near_coords, self.wcs)
+            near_x, near_y = self.obs.skycoord_to_pixel(near_coords, self.wcs)
             ax_reg.scatter(near_x - x_min, near_y - y_min,marker='^', facecolor='white', edgecolor='black', s=25, zorder=10, label="Nearby cores")
 
         scale_bar_px = self.obs.pc_to_pixels(env_size/5)

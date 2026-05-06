@@ -1,9 +1,11 @@
+
 import matplotlib.pyplot as plt
 from POLARIScore.utils.utils import compute_mass_weighted_density
-from POLARIScore.utils.batch_utils import *
 from POLARIScore.objects.SimulationArray import SimulationArray
 from POLARIScore.objects.Dataset import getDataset
 import torch
+
+
 
 sim_names=[
     "turb_sim_A","turb_sim_B","turb_sim_C","turb_sim_E"
@@ -26,40 +28,47 @@ if enable_dataset_gen:
 training_ds = getDataset("batch_idefix_training_13CO")
 validation_ds = getDataset("batch_idefix_validation_13CO")
 
-#training_ds.plot_map(map_index=training_ds.get_element_index("density_kurtosis"))
-
 from POLARIScore.networks.Trainer import Trainer, load_trainer, plot_models_residuals_extended
-from POLARIScore.networks.architectures.nn_SC_2 import SC_2
+from POLARIScore.networks.architectures.nn_MultiNet import MultiNet
+from POLARIScore.networks.architectures.nn_UNet import UNet
 from torch import nn
 
 
-trainer = Trainer(SC_2, training_set=training_ds, validation_set=validation_ds, model_name="13CO_kurtosis")
+
+trainer = Trainer(MultiNet, training_set=training_ds, validation_set=validation_ds, model_name="MultiNet_13CO")
 #trainer = load_trainer("cached_model")
 trainer.validation_set = validation_ds
 trainer.training_set = training_ds
 trainer.validation_loss_method = nn.MSELoss()
 trainer.learning_rate = 1e-3
-trainer.network_settings["encoder_filters"] = 16
-trainer.network_settings["latent_features"] = 16
-trainer.network_settings["encoder_layers"] = 3
-trainer.network_settings["hidden_features"] = 64
-trainer.network_settings["spectra_dim"] = 128
-trainer.input_names = ["cdens"]
-trainer.target_names = ["density_kurtosis"]
-trainer.norms = { 
-    "density_kurtosis": (lambda x:x, lambda x:x)
-}
-
+trainer.network_settings["base_filters"] = 32
+trainer.network_settings["branch_filters"] = 16
+trainer.network_settings["num_layers"] = 4
+#trainer.network_settings["channel_dimensions"]=[2 for _ in range(spectra_dim+1)]
+trainer.network_settings["channel_dimensions"] = [2]
+#trainer.input_names = ["cdens",*["cospectra"+str(i) for i in range(spectra_dim)]]
+trainer.input_names = ["cospectra"]
+trainer.target_names = ["vdens"]
+trainer.network_settings["channel_inchannels"] = [15]
+trainer.network_settings["channel_modes"] = [None]
 #trainer.ema = True
 #trainer.ema_warmup = 2000
-#trainer.training_random_transform = True
+#trainer.network_settings["channel_modes"] = [None for _ in range(spectra_dim+1)]
+trainer.training_random_transform = True
 trainer.init()
-trainer.train(100, batch_number=2, compute_validation=10,early_stopping=True,training_mode="normal")
+#trainer.scheduler = torch.optim.lr_scheduler.StepLR(trainer.optimizer, 100, 0.1)
+trainer.train(500, batch_number=8, compute_validation=10,early_stopping=True)
 trainer.save()
-trainer.model.save_tensors = True
-trainer.get_prediction_batch()
-trainer.model.plot_latent_space()
 trainer.plot_validation()
 trainer.plot()
+
+#trainer = load_trainer("MultiNet_ID_13CO_PCA"+str(spectra_dim))
+#trainer_wout_co = load_trainer("MultiNet_ID_wout_13CO_PCA"+str(spectra_dim))
+#trainers = [trainer, trainer_wout_co]
+#for t in trainers:
+#    t.plot_validation()
+#plot_models_residuals_extended(trainers=trainers)
+
+#trainer.model.plot_channel_weights(channel_names=trainer.input_names, cmap='viridis')
 
 plt.show()

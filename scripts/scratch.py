@@ -16,21 +16,60 @@ from POLARIScore.utils.utils import compute_mass_weighted_density
 from POLARIScore.objects.SimulationArray import SimulationArray
 from POLARIScore.objects.Dataset import Dataset, getDataset
 from torch import nn
+from POLARIScore.objects.Observation import Observation
 from POLARIScore.networks.DDPTrainer import DDPTrainer, DDPMUnet
 from POLARIScore.networks.Trainer import Trainer, load_trainer
+from POLARIScore.networks.INNTrainer import INNTrainer
 from POLARIScore.networks.architectures.nn_SpectraNetwork import SpectraNetwork
 from POLARIScore.networks.architectures.nn_UNet import UNet
-
+from POLARIScore.objects.Observation_Sim import Observation_Sim
+from POLARIScore.config import DATA_NORMALIZATION_CDENS, DATA_NORMALIZATION_VDENS, DATA_NORMALIZATION_CDENS_TORCH, DATA_NORMALIZATION_VDENS_TORCH
+from POLARIScore.objects.SpectrumMap import SpectrumMap, getSimulationSpectra
+from POLARIScore.objects.Spectrum import Spectrum
 
 #sim = SimulationArray(name="sim_512_A_3")
 #sim = Simulation_DC(name="orionMHD_lowB_multi_5")
 sim = openSimulation("orionMHD_lowB_multi_", global_size=66.0948+0.12,keys=['RHO'],cache_name="orion") #offset bcs without dense cores have an offset :/
-sim.plot_pdf(what='rho')
-sim.load_cores()
+#smap = sim.format_key_to_spectrum_map()
+#smap.gaussians(fit_method="iterative")
+#smap.pca(plot=True, return_cube=False)
+
+#sim.generate_dataset(name="highres_2",what_to_compute={"vdens":compute_mass_weighted_density},number=200, img_size=128, random_rotate=True)
+#ds = getDataset("highres_2")
+#ds1, ds2 = ds.split()
+#ds1.save()
+#ds2.save()
+
+#sim.plot_pdf(what='rho')
+#sim.load_cores()
+
+obs = Observation_Sim(sim, axis=0)
+
+#obs = Observation("OrionB", "column_density_map")
+obs.catalog_name = "Ntormousi & Hennebelle"
+trainer = load_trainer("DDPM", trainer_class=DDPTrainer)
+trainer.norms = {
+    "cdens": DATA_NORMALIZATION_CDENS,
+    "vdens": DATA_NORMALIZATION_VDENS,
+}
+trainer.get_validation_error()
+obs.predict(trainer, overlap=0.5, nan_value=1e19, apply_baseline=True)
+obs.prediction = compute_mass_weighted_density(sim.data['RHO'], axis=0)
+#obs.save("_ddpm_75")
+obs.plot_correlation()
+obs.load()
+obs.plot_correlation()
+
+#obs.plot(obs.prediction, plot_cores=True)
+
+#obs.plot_cores_error()
+#obs.plot_cores_baseline(mov_average=0, fit=True)
+#obs.plot_dcmf(lims=None, monte_carlo=10)
+
 #cores, pos = sim.get_cores(axis=1, box=[27.5, 29.5, 37.5, 38.75])
-sim.plot()
+#sim.plot(axis=0)
 #sim.plot_slice(axis=1)
-#sim.generate_dataset(name="seg_orion_cores",what_to_compute={"vdens":compute_mass_weighted_density,"cores":True,"cospectra":True},number=200, img_size=128, random_rotate=True)
+#sim.generate_dataset(name="seg_orion_cores",what_to_compute={"vdens":compute_mass_weighted_density,"cores":True},number=200, img_size=128, random_rotate=True)
 
 #ds = getDataset("seg_orion_cores")
 #ds.plot_map(map_index=ds.get_element_index("vdens"), element_index=1)
@@ -43,9 +82,6 @@ sim.plot()
 #sim = SimulationArray(simulations=[Simulation_DC("sim_256_A_5"),Simulation_DC("sim_512_A_3")], indexes=[256,512])
 #sim = SimulationArray(simulations=[Simulation_DC("adastra_512_old"),Simulation_DC("adastra_512")], indexes=[0,1])
 
-from POLARIScore.objects.SpectrumMap import SpectrumMap, getSimulationSpectra
-from POLARIScore.objects.Spectrum import Spectrum
-from POLARIScore.config import DATA_NORMALIZATION_CDENS, DATA_NORMALIZATION_VDENS, DATA_NORMALIZATION_CDENS_TORCH, DATA_NORMALIZATION_VDENS_TORCH
 
 #summed_densities = []
 #for s in sim.simulations:
@@ -105,6 +141,8 @@ trainer.save()
 trainer.plot()
 trainer.plot_validation()
 """
+
+"""
 from POLARIScore.objects.Observation import Observation
 #trainer = load_trainer("idefix_512_unet", trainer_class=Trainer)
 #trainer.get_validation_error()
@@ -115,9 +153,75 @@ from POLARIScore.objects.Observation import Observation
 
 
 obs = Observation("OrionB","column_density_map")
+
 #obs.load("_cinn")
 #obs.plot_cores_error(correction=False)
-#obs.plot_dcmf(monte_carlo=0)
+#obs.plot_dcmf(monte_carlo=0, method="gaussian")
+
+beam_width = 18.2/206265*400
+fig, ax = plt.subplots()
+cores = obs.get_cores()
+convolved_radius = [c.data['radius_pc'] for c in cores]
+print(all([c.data['radius_pc']>beam_width*np.sqrt(5) for c in cores]))
+deconvolved_cores = obs.get_cores(force_compute=True, use_deconvolved_values=True)
+deconvolved_radius = np.array([c.data['radius_pc'] for c in deconvolved_cores])
+
+diffs = [np.sqrt(convolved_radius[i]**2-deconvolved_radius[i]**2) for i in range(len(convolved_radius))] 
+
+print(np.min(diffs),np.max(diffs), np.mean(diffs), beam_width)
+
+x,y = convolved_radius, deconvolved_radius
+#ax.scatter(x,y,marker="+",color="red",label="cores")
+h = ax.hexbin(x, y, bins=40, cmap='viridis', norm=LogNorm())
+threshold = beam_width
+ax.axvline(threshold, color="black")
+ax.axhline(threshold, color="green")
+ax.text(threshold - 0.005, np.mean(y)+0.4,rf'Threshold: $={threshold:.2f}$pc',
+            rotation=90,va='center',ha='left',color='black',fontsize=11, transform=ax.get_xaxis_transform())
+ax.plot([np.min(x), np.max(x)], [np.min(x), np.max(x)], color="black", label="y=x")
+
+ax.plot(np.linspace(np.min(x),np.max(x),100), np.sqrt(np.power(np.linspace(np.min(x),np.max(x),100),2)-beam_width**2), color="red", label=r"$y^2=x^2-\mathrm{beam_width}^2$")
+
+ax.axvspan(min(x), threshold,
+           facecolor='none',
+           edgecolor='black',
+           hatch='//',
+           alpha=0.3)
+ax.fill_between(np.linspace(threshold, max(x),100), np.linspace(threshold, max(x),100) , max(y),
+                facecolor='none',
+                edgecolor='black',
+                hatch='//',
+                alpha=0.3)
+ax.annotate("resolved",
+            xy=(threshold, np.mean(y)),
+            xytext=(threshold + 0.01, np.mean(y)),
+            arrowprops=dict(arrowstyle="<-", color="black"))
+ax.set_xlabel("Convolved radii")
+ax.set_ylabel("Deconvolved radii")
+ax.set_xlim([min(x),max(x)])
+ax.set_ylim([min(y),max(y)])
+plt.colorbar(h, ax=ax, label="Core counts")
+ax.legend()
+
+flags = deconvolved_radius > threshold
+
+obs.get_cores(force_compute=True)
+new_cores = []
+for i in range(len(obs.cores)):
+    if flags[i]:
+        new_cores.append(obs.cores[i])
+obs.cores = new_cores
+
+obs.load("_cinn")
+obs.load_error("cINN")
+obs.plot_cores_error(correction=False)
+obs.plot_dcmf(monte_carlo=30, method="constant", bins=20)
+
+#Test sur catalogue ntormousi (garder que coeurs avec taille suffisante)
+#Lire louvet 2021
+"""
+
+
 """cores = obs.get_cores()
 true_col_dens = np.array([c.get_center_density(column_density=True) for c in cores])
 konyves_col_dens = np.array([c.data["peak_ncol"] for c in cores])
