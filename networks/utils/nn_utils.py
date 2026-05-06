@@ -1,6 +1,6 @@
 import numpy as np
 from torch.nn import init
-from typing import List, Tuple, Union, Callable
+from typing import List, Tuple, Union, Callable, Literal
 import torch
 import torch.nn.functional as F
 from POLARIScore.utils.utils import printProgressBar
@@ -99,11 +99,16 @@ def find_error_for_batch_accuracy(batch, accuracy=0.8, epsilon=0.01):
             sigma1 = sigma
     return sigma
 
-def predict_map(data, model_trainer:'Trainer', patch_size:Tuple[int,int]=(128, 128), nan_value:float=-1.0, overlap:float=0.5, downsample_factor:float=1., apply_baseline:bool=True):
+def predict_map(data, model_trainer:'Trainer', 
+                method:Literal['mean','max_value','likeliest','median','min_value','sampling']="mean",
+                weight:Literal['uniform','gaussian']="gaussian",
+                patch_size:Tuple[int,int]=(128, 128), nan_value:float=-1.0, overlap:float=0.5, downsample_factor:float=1., apply_baseline:bool=True):
     """
     Predict a quantity by applying a neural network to an observation.
     Args:
         model_trainer (Trainer): Model wrapped in a Trainer object.
+        method (str): Method used to make the final prediction (by default mean), be aware that other methods can need the full distributions and so use a lot of memory.
+        weight (str): Choose how to weight the counts of prediction (eg maybe if a pixel is near the edge of the patch then it will have a lower weight of if it was at the center).
         patch_size (tuple[int, int]): Shape of the 2D patches on which the model will be applied. The observation will be divided into patches of this shape.
         nan_value (float): Value used to replace NaNs in the observation.
         overlap (float): Fraction of overlap between consecutive patches.
