@@ -30,6 +30,7 @@ from POLARIScore.objects.Spectrum import Spectrum
 #sim = SimulationArray(name="sim_512_A_3")
 #sim = Simulation_DC(name="orionMHD_lowB_multi_5")
 sim = openSimulation("orionMHD_lowB_multi_", global_size=66.0948+0.12,keys=['RHO'],cache_name="orion") #offset bcs without dense cores have an offset :/
+sim.load_cores()
 #smap = sim.format_key_to_spectrum_map()
 #smap.gaussians(fit_method="iterative")
 #smap.pca(plot=True, return_cube=False)
@@ -47,22 +48,42 @@ obs = Observation_Sim(sim, axis=0)
 
 #obs = Observation("OrionB", "column_density_map")
 obs.catalog_name = "Ntormousi & Hennebelle"
-trainer = load_trainer("DDPM", trainer_class=DDPTrainer)
-trainer.norms = {
-    "cdens": DATA_NORMALIZATION_CDENS,
-    "vdens": DATA_NORMALIZATION_VDENS,
-}
-trainer.get_validation_error()
-obs.predict(trainer, overlap=0.5, nan_value=1e19, apply_baseline=True)
-obs.prediction = compute_mass_weighted_density(sim.data['RHO'], axis=0)
-#obs.save("_ddpm_75")
-obs.plot_correlation()
+#trainer = load_trainer("DDPM", trainer_class=DDPTrainer)
+#trainer.norms = {
+#    "cdens": DATA_NORMALIZATION_CDENS,
+#    "vdens": DATA_NORMALIZATION_VDENS,
+#}
+#trainer.get_validation_error()
+#_, error = obs.predict(trainer, method="mean", overlap=0.7, nan_value=1e19, apply_baseline=False)
+
+obs.load("_likeliest")
+obs.plot_error_histogram()
 obs.load()
-obs.plot_correlation()
+obs.plot_error_histogram()
+obs.save("_median")
+obs.plot_error_histogram()
+#pred_like = obs.load("_likeliest")
+#obs.plot_correlation()
+#_, ax = obs.plot_cores_error(show_errors=False, label="Likeliest",correction=False, log_average=0)
+#obs.load("_median")
+#_, ax = obs.plot_cores_error(ax=ax, show_errors=False, label="Median",correction=False)
+#pred_mean = obs.load()
+#obs.plot_correlation()
+#_, ax = obs.plot_cores_error(ax=ax,show_errors=False, label="mean",correction=False)
+#obs.prediction = compute_mass_weighted_density(sim.data['RHO'], axis=0,)
+#obs.plot_correlation()
+#_, ax = obs.plot_cores_error(ax=ax,show_errors=False, label="sim",correction=False, log_average=0)
 
-#obs.plot(obs.prediction, plot_cores=True)
+#obs.plot(error/obs.prediction, plot_cores=False, norm=None)
+#obs.plot(obs.prediction, plot_cores=False, clabel="sim")
+#obs.plot(pred_like, plot_cores=False, clabel="like")
+#obs.plot(pred_mean, plot_cores=False, clabel="mean")
 
-#obs.plot_cores_error()
+#histrogram rapport predic/simu 
+#Blur to get diffuse col dens
+
+
+
 #obs.plot_cores_baseline(mov_average=0, fit=True)
 #obs.plot_dcmf(lims=None, monte_carlo=10)
 

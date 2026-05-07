@@ -58,7 +58,11 @@ class Observation():
             """Path to the observation data"""
         self.data:np.ndarray = None
         self.prediction:np.ndarray = None
-        self.prediction_error:np.ndarray = None
+        """Tensor of the predicted quantities by the neural network"""
+        self.pred_method_error:np.ndarray = None
+        """Tensor with the error estimated during the application of the neural network on the observation """
+        self.network_error:Tuple = None
+        """Baseline/Raw error of the neural network estimated during inference/test of the network on the validation dataset."""
         self.wcs: 'WCS' = None
         self.cores: List[DenseCore] = None
         self.catalog_name = "Könyves et al, 2020"
@@ -109,10 +113,10 @@ class Observation():
     def predict(self, model_trainer:'Trainer', method:Literal['mean','max_value','likeliest','median','min_value','sampling']="likeliest",
                  patch_size:Tuple[int,int]=(128, 128),
                  nan_value:float=-1.0, overlap:float=0.5, downsample_factor:float=1., apply_baseline:bool=True)->np.ndarray:
-        prediction, (up_prediction, low_prediction) = predict_map(self.data ,model_trainer=model_trainer, method=method, patch_size=patch_size,
-                                  nan_value=nan_value, overlap=overlap, downsample_factor=downsample_factor, apply_baseline=apply_baseline)
+        prediction, prediction_pdf_std = predict_map(self.data ,model_trainer=model_trainer, method=method, patch_size=patch_size,
+                                  nan_value=nan_value, overlap=overlap, downsample_factor=downsample_factor, apply_baseline=apply_baseline, give_error=True)
         self.prediction = prediction
-        return prediction, (up_prediction, low_prediction)
+        return prediction, prediction_pdf_std
     
     def apply_filter(self, method:Literal["gaussian"]="gaussian", factor=1., original_beam=18.2, replace=True):
         """
@@ -378,11 +382,11 @@ class Observation():
             revert: If true go backward, i.e add the mean to the predicted map.
         """
         assert self.prediction is not None, LOGGER.error("Can't rectify baseline of prediction if there is no prediction loaded in the observation.")
-        assert self.prediction_error is not None, LOGGER.error("Can't rectify baseline of prediction if there is no baseline (error) loaded in the observation.")
+        assert self.network_error is not None, LOGGER.error("Can't rectify baseline of prediction if there is no baseline (error) loaded in the observation.")
         
         log10_pred = np.log10(self.prediction)
 
-        bin_centers, _, _, means = self.prediction_error            
+        bin_centers, _, _, means = self.network_error            
         interp_mean = np.interp(log10_pred, bin_centers, means)
 
         return 10**(log10_pred+interp_mean) if revert else 10**(log10_pred-interp_mean)
@@ -585,9 +589,9 @@ class Observation():
         ax.plot(10**bin_centers, hist, drawstyle=draw_style, marker=marker, color=color, label=label)
         ax.errorbar(10**bin_centers, hist, yerr=hist_stats_error*hist, fmt='none', color=color)
         
-        if self.prediction_error is not None and monte_carlo > 0:
+        if self.network_error is not None and monte_carlo > 0:
             try:
-                bin_centers_pred, q1, q2, _ = self.prediction_error
+                bin_centers_pred, q1, q2, _ = self.network_error
             except:
                 LOGGER.error("Density error is not in the good format in DenseCore -> Can't sample a random density given the error.")
             q1_interp = np.interp(log10, bin_centers_pred, q1)
@@ -1126,11 +1130,11 @@ class Observation():
         if has_predicted_values:            
             predicted_dcmf, predicted_bin_centers = _get_dcmf(predicted_masses)
             predicted_bin_centers = 10**predicted_bin_centers
-            if monte_carlo > 0 and self.prediction_error is not None:
+            if monte_carlo > 0 and self.network_error is not None:
                 all_pred_dcmfs = []
                 for mc in range(monte_carlo):
                     printProgressBar(mc, monte_carlo, prefix="MC-DCMF", length=20)
-                    random_predicted_masses = np.array([c.compute_mass(method=method, density_error=self.prediction_error) for c in cores])[mask]
+                    random_predicted_masses = np.array([c.compute_mass(method=method, density_error=self.network_error) for c in cores])[mask]
                     _dcmf, _bin_centers = _get_dcmf(random_predicted_masses)
                     all_pred_dcmfs.append(_dcmf)
                 print("")
@@ -1226,9 +1230,9 @@ class Observation():
         predicted_masses = predicted_masses[sorted_indexes]
         predicted_densities = predicted_densities[sorted_indexes]
 
-        has_errors = True if self.prediction_error is not None else False
+        has_errors = True if self.network_error is not None else False
         if has_errors:
-            bin_centers, q1, q2, means = self.prediction_error            
+            bin_centers, q1, q2, means = self.network_error            
             log10_pd = np.log10(predicted_densities)
             interp_mean = np.interp(log10_pd, bin_centers, means)
             interp_q1 = np.interp(log10_pd, bin_centers, q1)
@@ -1315,7 +1319,7 @@ class Observation():
         return fig, ax
     
     def plot_cores_error(self, ax:Optional["axes.Axes"]=None, region:Union[Tuple[float,float,float,float],None]=None, alpha:float=1.,
-                          mov_average:int=5, log_average:int=0 ,show_errors:bool=True, show_model_errors:bool=False,
+                          mov_average:int=0, log_average:int=50 ,show_errors:bool=True, show_model_errors:bool=False,
                             correction:bool=True, color=None, linestyle=None, label=None):
         """
         Args:
@@ -1348,8 +1352,8 @@ class Observation():
         ax.axhline(0., color="red")
 
         column_densities = 10**column_densities
-        if self.prediction_error is not None and show_model_errors:
-            bin_centers, q1, q2, means = self.prediction_error            
+        if self.network_error is not None and show_model_errors:
+            bin_centers, q1, q2, means = self.network_error            
             interp_mean = np.interp(predicted_densities, bin_centers, means)
             interp_q1 = np.interp(predicted_densities, bin_centers, q1)
             interp_q2 = np.interp(predicted_densities, bin_centers, q2)
@@ -1466,7 +1470,7 @@ class Observation():
         LOGGER.log(f"Cores serialized for obs {self.name}, see the cores.txt file.")
         return string
 
-    def save(self,replace:bool=True,suffix=""):
+    def save(self,suffix="",replace:bool=True):
         """
         Args:
             replace (bool): if set to False, if there is an existing file then this function does nothing.
@@ -1508,8 +1512,8 @@ class Observation():
         if not(os.path.exists(path)):
             LOGGER.error(f"File: {path} doesn't exist -> Unable to load neural network errors.")
             return
-        self.prediction_error = np.load(path)
-        return self.prediction_error
+        self.network_error = np.load(path)
+        return self.network_error
 
 def script_data_and_figures(name,crop=None,suffix=None,save_fig=False,plot_cores=True,normcol=[None,None],normvol=[None,None], show=True):
     obs = Observation(name, "column_density_map")
