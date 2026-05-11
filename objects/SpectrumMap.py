@@ -139,7 +139,7 @@ def _worker_ray_radiative_transfer(cube_dimension, position, direction, last_ste
 #TODO As for training sets, make this memory less by opening the spectra just when it is needed
 class SpectrumMap():
     """
-    Map (matrix NxN) of spectra. Each element of the matrix contains a list of values (which can be passed easily to Spectra object).
+    Map (matrix NxNxC) where C is the number of channels in spectra. Each element of the matrix contains a list of values (which can be passed easily to Spectra object).
     """
     def __init__(self, name:str,map:np.ndarray=None, load:bool=True):
 

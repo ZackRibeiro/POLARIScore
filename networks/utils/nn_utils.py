@@ -1,10 +1,11 @@
 import numpy as np
 from torch.nn import init
-from typing import List, Tuple, Union, Callable, Literal
+from typing import *
 import torch
 import torch.nn.functional as F
 from POLARIScore.utils.utils import printProgressBar
-from POLARIScore.config import LOGGER
+from POLARIScore.config import LOGGER, CACHES_FOLDER
+import os
 
 def init_network(model, init_method:Callable=init.kaiming_uniform_):
     """
@@ -102,12 +103,20 @@ def find_error_for_batch_accuracy(batch, accuracy=0.8, epsilon=0.01):
 
 def predict_map(data, model_trainer:'Trainer', 
                 method:Literal['mean','max','likeliest','median','min','sampling']="mean",
+                kernel:Union[Literal['gaussian','quadratic','uniform'],Callable[[float],float]]='uniform',
+                repeat:int=1, repeat_batch:int=1,
+                save_samples:Optional[str]=None, skip_using_saved_samples:bool=False, only_error:bool=True,
                 patch_size:Tuple[int,int]=(128, 128), nan_value:float=-1.0, overlap:float=0.5, downsample_factor:float=1., apply_baseline:bool=True, give_error:bool=False):
     """
-    Predict a quantity by applying a neural network to an observation.
+    Predict a quantity by applying a neural network to a map (2D tensor).
     Args:
         model_trainer (Trainer): Model wrapped in a Trainer object.
         method (str): Method used to make the final prediction (by default mean), be aware that other methods can need the full distributions and so use a lot of memory.
+        kernel (str): Kernel used to weight the count.
+        repeat (int): How many time the network is runned on the same context region,
+        repeat_batch (int): Batch in the same tensor
+        save_samples (str): If not none, save the pdf map as a file named by this arg (in the cache folder)
+        skip_using_saved_samples (bool): If True, try to fetch the samples file and use it to skip prediction.
         patch_size (tuple[int, int]): Shape of the 2D patches on which the model will be applied. The observation will be divided into patches of this shape.
         nan_value (float): Value used to replace NaNs in the observation.
         overlap (float): Fraction of overlap between consecutive patches.
@@ -117,9 +126,13 @@ def predict_map(data, model_trainer:'Trainer',
         predicted_observation
     """
 
+    repeat = max(repeat,1)
     method = method.lower()
-    LOGGER.log(f"Predicting map using {method} method with {model_trainer.network_type}")
-    if method in ["mean","max","min"]:
+    has_kernel = not(isinstance(kernel, str)) or kernel != "uniform"
+    if isinstance(kernel, str):
+        kernel = kernel.lower()
+    LOGGER.log(f"Predicting map using {method} method with {model_trainer.network_type} and kernel: {kernel}")
+    if method in ["mean","max","min"] and not(save_samples is not None and len(save_samples) > 0) and not(has_kernel):
         return (predict_map_reduced(data, model_trainer, method, patch_size, nan_value, overlap, downsample_factor, apply_baseline),None)
 
     input_matrix = data
@@ -147,42 +160,140 @@ def predict_map(data, model_trainer:'Trainer',
     for i in i_range:
         for j in j_range:
             coverage[i:i+patch_height, j:j+patch_width] += 1
-    max_samples = int(coverage.max())
-    LOGGER.log(f"Samples per line of sight: {max_samples}")
+    max_samples = int(coverage.max())*repeat
+    LOGGER.log(f"Samples per pixel: {max_samples}")
+    LOGGER.log(f"Number of predictions: {len(i_range)*len(j_range)*repeat}")
 
-    samples_tensor = np.zeros((max_samples, height, width), dtype=np.float32)
+    samples_tensor = np.empty((height, width, max_samples), dtype=np.float32)
+    """make memmap:
+    samples_tensor = np.memmap(samples_path,dtype=np.float32,mode='w+',shape=(max_samples, height, width))
+    memmap output
+    """
+    samples_tensor.fill(np.nan)
     count_tensor = np.zeros((height, width), dtype=np.int32)
 
-    for i0,i in enumerate(i_range):
-        for j0,j in enumerate(j_range):
-            printProgressBar(i0*len(j_range)+j0,len(i_range)*len(j_range),prefix="Obs Pred")
-            patch = downsampled_tensor[i:i+patch_height, j:j+patch_width].cpu().detach().numpy()
-            patch = np.expand_dims(patch, axis=0)
-            valid_patch_mask = downsampled_nan_mask[i:i + patch_height, j:j + patch_width]
+    if has_kernel:
+        weight_tensor = np.zeros_like(samples_tensor)
+    skip_prediction = False
+    skip_kernel = not(has_kernel)
+    if skip_using_saved_samples:
+        samples_path = os.path.join(CACHES_FOLDER, save_samples)
+        if ".npy" not in samples_path:
+            samples_path += ".npy"
+        if os.path.exists(samples_path):
+            samples_tensor = np.load(samples_path, mmap_mode='r')
+            kernel_path = samples_path.split(".npy")[0]+"_"+kernel+"_weight.npy"
+            if os.path.exists(kernel_path):
+                if has_kernel:
+                    weight_tensor = np.load(kernel_path, mmap_mode='r')
+                skip_kernel = True
+                count_tensor = np.sum(~np.isnan(samples_tensor), axis=-1)
+            skip_prediction = True
+    if skip_prediction:
+        LOGGER.log("Skip prediction is ON and the samples file was found -> Skipping model application")
+    if not(skip_prediction and skip_kernel):
+        for i0,i in enumerate(i_range):
+            for j0,j in enumerate(j_range):
+                patch = downsampled_tensor[i:i+patch_height, j:j+patch_width].cpu().detach().numpy()
+                patch = np.expand_dims(patch, axis=0)
+                valid_patch_mask = downsampled_nan_mask[i:i + patch_height, j:j + patch_width]
 
-            if np.any(valid_patch_mask):
-                continue
-            
-            #Work only for 1 output: col density
-            output_patch = model_trainer.predict_tensor(patch, input_names="cdens", output_names="vdens")[0]
-            if apply_baseline:
-                output_patch = model_trainer.apply_baseline(output_patch, log=False)
+                if np.any(valid_patch_mask):
+                    printProgressBar(i0*len(j_range)*repeat+j0*repeat,len(i_range)*len(j_range)*repeat,prefix="Obs Pred")
+                    continue
+                for k in range(repeat):
+                    printProgressBar(i0*len(j_range)*repeat+j0*repeat+k,len(i_range)*len(j_range)*repeat,prefix="Obs Pred")
+                    
+                    #Work only for 1 output: col density
+                    if not(skip_prediction):
+                        output_patch = model_trainer.predict_tensor(patch, input_names="cdens", output_names="vdens")[0]
+                        if apply_baseline:
+                            output_patch = model_trainer.apply_baseline(output_patch, log=False)
 
-            k = count_tensor[i:i+patch_height, j:j+patch_width]
-            for di in range(patch_height):
-                for dj in range(patch_width):
-                    idx = k[di, dj]
-                    samples_tensor[idx, i+di, j+dj] = output_patch[di, dj]
-                    count_tensor[i+di, j+dj] += 1
+                    co = count_tensor[i:i+patch_height, j:j+patch_width]
+                    for di in range(patch_height):
+                        for dj in range(patch_width):
+                            idx = co[di, dj]
+                            if not(skip_prediction):
+                                samples_tensor[i+di, j+dj, idx] = output_patch[di, dj]
+                            count_tensor[i+di, j+dj] += 1
+                            if has_kernel:
+                                weight = 1.
+                                distance_to_center = np.sqrt((patch_height/2-di)**2+(patch_width/2-dj)**2)
+                                distance_to_center /= max(patch_height,patch_width)/2
+                                if isinstance(kernel, str):
+                                    if kernel == "gaussian":
+                                        sigma = 0.3
+                                        weight = np.exp(-(distance_to_center**2) / (2 * sigma**2))
+                                    elif kernel == "quadratic":
+                                        weight = 1/(distance_to_center**2+1e-3)
+                                else:
+                                    weight = kernel(distance_to_center)
+                                weight_tensor[i+di, j+dj, idx] = weight
+    H,W,C = samples_tensor.shape
 
-    C,H,W = samples_tensor.shape
 
-    if method == "median":
-        output = np.median(samples_tensor, axis=0)
+    if give_error:
+        error = np.std(samples_tensor, axis=-1)
+        upsampled_error = F.interpolate(torch.from_numpy(error).unsqueeze(0).unsqueeze(0), 
+                                    size=(input_matrix.shape[0], input_matrix.shape[1]), 
+                                    mode='bilinear', align_corners=False).squeeze(0).squeeze(0)
+        error = upsampled_error.numpy()
+        error[nan_mask] = np.nan
+        if only_error:
+            return None, error
+    
+
+    if save_samples is not None:
+        samples_path = os.path.join(CACHES_FOLDER, save_samples)
+        if ".npy" not in samples_path:
+            samples_path += ".npy"
+        if not(skip_prediction):
+            if os.path.exists(samples_path):
+                os.remove(samples_path)
+            np.save(samples_path, samples_tensor)
+            LOGGER.log(f"Samples tensor saved at {samples_path}")
+        if has_kernel:
+            kernel_path = samples_path.split(".npy")[0]+"_"+kernel+"_weight.npy"
+            if os.path.exists(kernel_path):
+                os.remove(kernel_path)
+            np.save(kernel_path, weight_tensor)
+            LOGGER.log(f"Weight tensor saved at {kernel_path}")        
+        
+                
+    
+    if method == "mean":
+        if has_kernel:
+
+            K = samples_tensor.shape[-1]
+            idx = np.arange(K)
+            mask = idx < count_tensor[..., None]
+            weighted_sum = np.sum(samples_tensor * weight_tensor * mask,axis=-1)
+
+            weight_sum = np.sum(weight_tensor * mask,axis=-1)
+
+            output = np.divide(weighted_sum,weight_sum,
+                out=np.full((H, W), np.nan, dtype=np.float32),where=weight_sum > 0)
+        else:
+            output = np.nanmean(samples_tensor, axis=-1)
+    elif method == "max":
+        if has_kernel:
+            LOGGER.warn(f"Kernel not yet implemented in {method}.")
+        output = np.nanmax(samples_tensor, axis=-1)
+    elif method == "min":
+        if has_kernel:
+            LOGGER.warn(f"Kernel not yet implemented in {method}.")
+        output = np.nanmin(samples_tensor, axis=-1)
+    elif method == "median":
+        if has_kernel:
+            LOGGER.warn(f"Kernel not yet implemented in {method}.")
+        output = np.nanmedian(samples_tensor, axis=-1)
 
     elif method == "sampling":
+        if has_kernel:
+            LOGGER.warn(f"Kernel not yet implemented in {method}.")
         idx = np.random.randint(0, count_tensor, size=(H, W))
-        output = samples_tensor[idx, np.arange(H)[:,None], np.arange(W)]
+        output = samples_tensor[np.arange(H)[:,None], np.arange(W), idx]
 
     elif method == "likeliest":
         output = np.zeros((H, W), dtype=np.float32)
@@ -193,15 +304,33 @@ def predict_map(data, model_trainer:'Trainer',
                 if n == 0:
                     output[y, x] = np.nan
                     continue
-                vals = samples_tensor[:n, y, x]
-                if np.all(vals == vals[0]):
-                    output[y, x] = vals[0]
+                vals = samples_tensor[y, x, :n]
+                                
+                finite_mask = np.isfinite(vals)
+                vals = vals[finite_mask]
+
+                if has_kernel:
+                    w = weight_tensor[y, x, :n][finite_mask]
+                else:
+                    w = None
+
+                if len(vals) == 0:
+                    output[y, x] = np.nan
                     continue
-                hist, bin_edges = np.histogram(vals, bins="auto", density=True)
+
+                vmin = np.min(vals)
+                vmax = np.max(vals)
+                if not np.isfinite(vmin) or not np.isfinite(vmax):
+                    output[y, x] = np.nan
+                    continue
+
+                if np.isclose(vmin, vmax, rtol=1e-6, atol=1e-12):
+                    output[y, x] = vmin
+                    continue
+                hist, bin_edges = np.histogram(vals, bins=min(32, max(8, int(np.sqrt(n)))), density=True, weights=w)
                 max_bin = np.argmax(hist)
-                output[y, x] = 0.5 * (
-                    bin_edges[max_bin] + bin_edges[max_bin + 1]
-                )
+                output[y, x] = 0.5 * (bin_edges[max_bin] + bin_edges[max_bin + 1])
+                del vals
 
 
     upsampled_output = F.interpolate(torch.from_numpy(output).unsqueeze(0).unsqueeze(0), 
@@ -211,14 +340,7 @@ def predict_map(data, model_trainer:'Trainer',
     output_matrix[nan_mask] = np.nan
 
     if give_error:
-        error = np.std(samples_tensor, axis=0)
-        upsampled_error = F.interpolate(torch.from_numpy(error).unsqueeze(0).unsqueeze(0), 
-                                    size=(input_matrix.shape[0], input_matrix.shape[1]), 
-                                    mode='bilinear', align_corners=False).squeeze(0).squeeze(0)
-        error = upsampled_error.numpy()
-        error[nan_mask] = np.nan
         return output_matrix, error
-
     return output_matrix
 
 
@@ -297,3 +419,70 @@ def predict_map_reduced(data, model_trainer:'Trainer', method:Literal["mean","ma
     output_matrix[nan_mask] = np.nan
 
     return output_matrix
+
+from POLARIScore.objects.SpectrumMap import SpectrumMap
+def open_samples_as_spectrummap(path:str, bins:int=32, is_in_cache_folder:bool=True)->'SpectrumMap':
+    if is_in_cache_folder and CACHES_FOLDER not in path:
+        path = os.path.join(CACHES_FOLDER, path)
+    if ".npy" not in path:
+        path += ".npy"
+    if not(os.path.exists(path)):
+        LOGGER.error(f"Can't open samples because there is no such file: {path}.") 
+    kernel_path = path.split(".npy")[0]+"_weight.npy"
+    has_kernel = os.path.exists(kernel_path)
+    if has_kernel:
+        weight_tensor = np.load(kernel_path, mmap_mode='r')
+    else:
+        weight_tensor = None
+    samples_tensor = np.load(path, mmap_mode='r')
+    count_tensor = np.sum(~np.isnan(samples_tensor), axis=-1)
+    
+    H,W,C = samples_tensor.shape
+    pdf_map = np.zeros((H,W,bins))
+    for y in range(H):
+        for x in range(W):
+            printProgressBar(y*W+x,W*H,prefix="Transforming samples tensor to a pdf tensor")
+            n = count_tensor[y, x]
+            if n == 0:
+                continue
+            vals = samples_tensor[y, x, :n]
+                            
+            finite_mask = np.isfinite(vals)
+            vals = vals[finite_mask]
+
+            if has_kernel:
+                w = weight_tensor[y, x, :n][finite_mask]
+            else:
+                w = None
+
+            if len(vals) == 0:
+                continue
+
+            vmin = np.min(vals)
+            vmax = np.max(vals)
+            if not np.isfinite(vmin) or not np.isfinite(vmax):
+                continue
+
+            if np.isclose(vmin, vmax, rtol=1e-6, atol=1e-12):
+                continue
+            hist, bin_edges = np.histogram(vals, bins=min(bins, max(8, int(np.sqrt(n)))), density=True, weights=w)
+            if len(hist) < bins:
+                hist = np.pad(hist, (0, bins - len(hist)), mode='constant') 
+            del vals
+            max_bin = np.argmax(hist)
+            #Multiply by the likeliest value to have a good looking integrated map when opened with SpectrumMap.
+            hist *= .5*(bin_edges[max_bin] + bin_edges[max_bin + 1])/np.sum(hist)
+            pdf_map[y,x] = hist
+    
+    map = SpectrumMap(name="pdf_map", map=pdf_map, load=False)
+ 
+    map.output_settings['velocity_channels'] = bins
+    map.output_settings['velocity_resolution'] = 1
+    map.output_settings['v_function'] = lambda lsr,chan,res: np.array(range(chan))
+    map.output_settings['velocity_unit'] = ""
+    map.output_settings['velocity_name'] = "Channels"
+    map.output_settings['intensity_unit'] = ""
+    map.output_settings['intensity_name'] = "Prediction"
+
+    return map
+    

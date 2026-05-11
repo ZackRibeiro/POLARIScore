@@ -12,6 +12,7 @@ from typing import List
 from POLARIScore.objects.Simulation_DC import Simulation_DC, openSimulation
 from POLARIScore.utils.sim_utils import init_idefix,init_ramses
 from POLARIScore.utils.utils import compute_mass_weighted_density
+from POLARIScore.config import *
 
 from POLARIScore.objects.SimulationArray import SimulationArray
 from POLARIScore.objects.Dataset import Dataset, getDataset
@@ -26,6 +27,7 @@ from POLARIScore.objects.Observation_Sim import Observation_Sim
 from POLARIScore.config import DATA_NORMALIZATION_CDENS, DATA_NORMALIZATION_VDENS, DATA_NORMALIZATION_CDENS_TORCH, DATA_NORMALIZATION_VDENS_TORCH
 from POLARIScore.objects.SpectrumMap import SpectrumMap, getSimulationSpectra
 from POLARIScore.objects.Spectrum import Spectrum
+from POLARIScore.networks.utils.nn_utils import open_samples_as_spectrummap
 
 #sim = SimulationArray(name="sim_512_A_3")
 #sim = Simulation_DC(name="orionMHD_lowB_multi_5")
@@ -45,34 +47,65 @@ sim.load_cores()
 #sim.load_cores()
 
 obs = Observation_Sim(sim, axis=0)
+path_samples = "pdf_orionb_cached"
 
-#obs = Observation("OrionB", "column_density_map")
+obs = Observation("OrionB", "column_density_map")
+
 obs.catalog_name = "Ntormousi & Hennebelle"
-#trainer = load_trainer("DDPM", trainer_class=DDPTrainer)
-#trainer.norms = {
-#    "cdens": DATA_NORMALIZATION_CDENS,
-#    "vdens": DATA_NORMALIZATION_VDENS,
-#}
-#trainer.get_validation_error()
-#_, error = obs.predict(trainer, method="mean", overlap=0.7, nan_value=1e19, apply_baseline=False)
+trainer = load_trainer("DDPM", trainer_class=DDPTrainer)
+trainer.norms = {
+    "cdens": DATA_NORMALIZATION_CDENS,
+    "vdens": DATA_NORMALIZATION_VDENS,
+}
+trainer.get_validation_error()
+#trainer.plot_residuals()
+_, error = obs.predict(trainer, method="likeliest", repeat=1, overlap=0.75, nan_value=1e19, apply_baseline=True, kernel="gaussian", save_samples=path_samples, skip_using_saved_samples=True, only_error=False)
 
-obs.load("_likeliest")
-obs.plot_error_histogram()
-obs.load()
-obs.plot_error_histogram()
-obs.save("_median")
-obs.plot_error_histogram()
+obs.save("_ddpm_likeliest_gaussian")
+#obs.load("_ddpm_likeliest_gaussian")
+#obs.plot(error/obs.prediction, norm=None)
+#obs.plot(obs.prediction, norm=LogNorm(vmin=1e2, vmax=3e5))
+
+likeliest = obs.prediction
+_, ax = obs.plot_cores_error(show_errors=False, label="likeliest",correction=True, log_average=30)
+obs.plot_dcmf()
+obs.load("_ddpm")
+obs.plot(obs.prediction/likeliest, norm=None)
+obs.plot_cores_error(ax=ax, show_errors=False, label="mean",correction=True, log_average=30)
+
+
+#obs.load("_likeliest_gaussian")
+#_, ax = obs.plot_cores_error(show_errors=False, label="gaussian",correction=False, log_average=30)
+#obs.plot_error_histogram(min_truth=[10,1e2,5e3,5e4,np.inf])
+#obs.load("_likeliest_uniform")
+#obs.plot_error_histogram(min_truth=[10,1e2,5e3,5e4,np.inf])
+#obs.plot_cores_error(ax=ax, show_errors=False, label="uniform",correction=False, log_average=30)
+#obs.prediction = compute_mass_weighted_density(sim.data['RHO'], axis=0,)
+#obs.plot_cores_error(ax=ax, show_errors=False, label="simulation",correction=False, log_average=30)
+
+#path_to_changes = ["pdf_orionb_cached_gaussian_weight.npy","pdf_cached_gaussian_weight.npy","pdf_cached.npy"]
+#for p in path_to_changes:
+#    path = os.path.join(CACHES_FOLDER,p)
+#    arr = np.load(path)
+#    new_arr = np.moveaxis(arr, 0, -1)
+#    np.save(path, new_arr)
+
+#smap = open_samples_as_spectrummap(path_samples, 16)
+#smap.plot()
+
+#obs.load()
+#obs.plot_error_histogram()
+#obs.save("_median")
+#obs.plot_error_histogram()
 #pred_like = obs.load("_likeliest")
 #obs.plot_correlation()
-#_, ax = obs.plot_cores_error(show_errors=False, label="Likeliest",correction=False, log_average=0)
 #obs.load("_median")
 #_, ax = obs.plot_cores_error(ax=ax, show_errors=False, label="Median",correction=False)
 #pred_mean = obs.load()
 #obs.plot_correlation()
 #_, ax = obs.plot_cores_error(ax=ax,show_errors=False, label="mean",correction=False)
-#obs.prediction = compute_mass_weighted_density(sim.data['RHO'], axis=0,)
 #obs.plot_correlation()
-#_, ax = obs.plot_cores_error(ax=ax,show_errors=False, label="sim",correction=False, log_average=0)
+#obs.plot_cores_error(ax=ax,show_errors=False, label="sim",correction=False, log_average=30)
 
 #obs.plot(error/obs.prediction, plot_cores=False, norm=None)
 #obs.plot(obs.prediction, plot_cores=False, clabel="sim")

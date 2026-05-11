@@ -3,6 +3,10 @@ import os
 from datetime import datetime
 from typing import List
 
+from datetime import datetime
+def _get_date() -> str:
+    return datetime.now().strftime("%H:%M:%S")
+
 class Logger():
     def __init__(self, level:int=0, auto_save:int=5, save_path=None):
         """
@@ -20,6 +24,7 @@ class Logger():
         self.save_path:str = save_path
         self.global_color = "32m"
         self.print_borders = True
+        self.print_date = True
 
         self._init_gc = self.global_color
 
@@ -39,10 +44,12 @@ class Logger():
         """
         if self.level < level:
             return None
+        if self.print_date:
+            string = "\033[0;37m["+_get_date()+"]\033[0m"
         if type is None:
-            string = message
+            string += message
         else:
-            string = f"(\033[{color}{type.upper()}\033[0m) {message}"
+            string += f"[\033[{color}{type.upper()}\033[0m] {message}"
         print(string)
         self.messages.append(string)
         if self.auto_save > 0 and len(self.messages) % self.auto_save == 0:

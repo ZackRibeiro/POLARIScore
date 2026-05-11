@@ -111,10 +111,10 @@ class Observation():
         return prediction   
 
     def predict(self, model_trainer:'Trainer', method:Literal['mean','max_value','likeliest','median','min_value','sampling']="likeliest",
-                 patch_size:Tuple[int,int]=(128, 128),
-                 nan_value:float=-1.0, overlap:float=0.5, downsample_factor:float=1., apply_baseline:bool=True)->np.ndarray:
-        prediction, prediction_pdf_std = predict_map(self.data ,model_trainer=model_trainer, method=method, patch_size=patch_size,
-                                  nan_value=nan_value, overlap=overlap, downsample_factor=downsample_factor, apply_baseline=apply_baseline, give_error=True)
+                 repeat=1, patch_size:Tuple[int,int]=(128, 128),
+                 nan_value:float=-1.0, overlap:float=0.5, downsample_factor:float=1., apply_baseline:bool=True, **args)->np.ndarray:
+        prediction, prediction_pdf_std = predict_map(self.data ,model_trainer=model_trainer, method=method, repeat=repeat, patch_size=patch_size,
+                                  nan_value=nan_value, overlap=overlap, downsample_factor=downsample_factor, apply_baseline=apply_baseline, give_error=True, **args)
         self.prediction = prediction
         return prediction, prediction_pdf_std
     

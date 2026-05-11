@@ -84,7 +84,7 @@ def convolve_map(map, resolution, beam_size=18.2, distance=400):
 def rotate_cube(data_cube:np.ndarray, angle:float, axis:int)->np.ndarray:
     """Rotates the cube around a given axis (0=X, 1=Y, 2=Z) by a given angle in degrees."""
     return rotate(data_cube, angle, axes=axis, reshape=False, mode="nearest")
-def compute_pdf(data_slice:np.ndarray, bins:int=100, func:Callable=lambda x: np.log10(x), center:bool=False)->Tuple[List[float],List[float]]:
+def compute_pdf(data_slice:np.ndarray, bins:int=100, func:Callable=lambda x: np.log10(x), center:bool=False, density:bool=True)->Tuple[List[float],List[float]]:
     """
     Compute the probability density function of a matrix
 
@@ -97,7 +97,7 @@ def compute_pdf(data_slice:np.ndarray, bins:int=100, func:Callable=lambda x: np.
     Returns:
         probabilities, edges
     """
-    hist = np.histogram(func(data_slice.flatten()[~np.isnan(data_slice.flatten())]),bins=bins, density=True)
+    hist = np.histogram(func(data_slice.flatten()[~np.isnan(data_slice.flatten())]),bins=bins, density=density)
     probabilities = hist[0]
     edges = hist[1]
     if(center):
@@ -156,7 +156,7 @@ def printProgressBar(iteration,total,prefix='',suffix='',decimals=1,length=50,fi
     print(string, end=printEnd)
         
     if iteration >= total-1:
-        LOGGER.log(f'\r{prefix} - Done in {format_time(time.time()-_time_0)}'+' '*(length+10))
+        print(f'\r{prefix} - Done in {format_time(time.time()-_time_0)}'+' '*(length+10))
 
 def divide_matrix_to_sub(matrix:np.ndarray,final_dim:int=128)->List[np.ndarray]:
     final_dim = int(2**round(np.log2(final_dim)))
