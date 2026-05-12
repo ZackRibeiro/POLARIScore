@@ -16,7 +16,7 @@ from POLARIScore.objects.math.QNode import QNode
 class Simulation_ARM():
     def __init__(self, name, global_size, init=True):
         self.name = name
-        """Simulatio name, name of the folder where the sim is in"""
+        """Simulation name, name of the folder where the sim is in"""
         self.folder = os.path.join(os.path.dirname(os.path.abspath(__file__)),"../data/sims/"+name+"/")
         """Path to the folder where the simulation is stored"""
         self.file = os.path.join(self.folder,"cellsToPoints_cgs.h5")
@@ -35,10 +35,11 @@ class Simulation_ARM():
         LOGGER.log("Initializing the AMR Simulation  ")
 
         with h5py.File(self.file, "r") as f:
-            points = f["points"][:] 
-            density = f["scalars/density"][:] 
-            size = f["scalars/size"][:]
-            LOGGER.log(f"Particle sizes go from {min(size):.4f} to {max(size):.4f}")
+            points = f["points"][:] .astype(np.float32)
+            density = f["scalars/density"][:] .astype(np.float32)
+            size = f["scalars/size"][:].astype(np.float32)
+            min_res = min(size)*self.global_size*0.4
+            LOGGER.log(f"Particle sizes go from {min(size):.4f} to {max(size):.4f}, i.e min resolution of {min_res:.4f}, i.e equivalent to fetching a cube of {int(1/min(size))}")
 
         x, y, z = points[:, 0], points[:, 1], points[:, 2]
 
@@ -57,7 +58,7 @@ class Simulation_ARM():
 
         for i in range(len(x)):
             printProgressBar(i, len(x), "Creating OcTree")
-            node = QNode(np.array([x[i],y[i],z[i]]),{"density":number_density,"size":size,"mass":number_density})
+            node = QNode(np.array([x[i],y[i],z[i]]),{"density":number_density[i],"size":size[i],"mass":number_density[i]})
             oct_tree.insert_leaves(node)
         
         self.data = oct_tree

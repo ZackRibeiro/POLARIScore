@@ -5,7 +5,7 @@ import astropy.units as u
 from matplotlib.colors import LogNorm
 from scipy.optimize import curve_fit
 from scipy.integrate import quad
-from POLARIScore.utils.physics_utils import PC_TO_CM, density_gaussian, CONVERT_massn_TO_n_coldens
+from POLARIScore.utils.physics_utils import PC_TO_CM, density_gaussian
 from POLARIScore.utils.utils import plot_function
 from POLARIScore.config import LOGGER
 from copy import deepcopy
@@ -29,29 +29,33 @@ class DenseCore():
             """Coordinates of the dense core"""
 
 
-    def get_center_density(self, correction=False, column_density=False):
+    def get_center_density(self, correction:Optional[Literal['blurred','fixed']]=None, column_density=False, custom_data:Optional[np.ndarray]=None):
         """Get volume density predicted at the presumed 2D core center
         Args:
-            correction(bool, default=False): Apply correction by making the assumption of two mediums: dense core and diffuse along the l.o.s
+            correction(bool): Apply correction by making the assumption of two mediums: dense core and diffuse along the l.o.s
             column_density(bool, default:False): Return the column density instead.
+            custom_data: if not None, use this map instead of data
         """
         if column_density:
             assert self.obs.data is not None, LOGGER.error(f"No column density on the observation: {self.obs.name}.")
         else:
             assert self.obs.prediction is not None, LOGGER.error(f"No predicted density on the observation: {self.obs.name}.")
+
+        if correction is not None and not(column_density):
+            return self.obs._from_massweighted_to_core_densities(method=correction, dense_core=self)
+
         densities = self.obs.data if column_density else self.obs.prediction
+        if custom_data is not None:
+            densities = custom_data
         x_pix, y_pix = self.obs.skycoord_to_pixel(self.coord, self.wcs)
         
         x_int, y_int = int(np.floor(float(x_pix))), int(np.floor(float(y_pix)))
         if (0 <= y_int < densities.shape[0]) and (0 <= x_int < densities.shape[1]):
-            rslt_density = densities[y_int, x_int]
-            if correction and not(column_density):
-                rslt_density = CONVERT_massn_TO_n_coldens(float(self.get_center_density(column_density=True)),10,float(rslt_density),float(self.data["radius_pc"]), is_density=False)
-            return rslt_density
+            return densities[y_int, x_int]
         else:
             return np.nan
     
-    def compute_mass(self, method:Literal["gaussian","constant"]="gaussian", density_error:Union[np.ndarray, None]=None, correction:bool=True):
+    def compute_mass(self, method:Literal["gaussian","constant"]="gaussian", density_error:Union[np.ndarray, None]=None, correction:Optional[Literal["blurred","fixed"]]=True):
         """Compute mass of the core using predicted density.
         Args:
             method(str,default='constant'): Method used to compute the mass, if constant then this is just the volume*density, if gaussian: this is a 3D isotrope gaussian. 
@@ -83,9 +87,9 @@ class DenseCore():
 
             if(self.data["peak_ncol"] < 1e22):
                 if fit_set[0] is not None:
-                    popt_v[0] = CONVERT_massn_TO_n_coldens(self.get_center_density(column_density=True),10,popt_v[0],self.data["radius_pc"], is_density=False)
+                    popt_v[0] = self.obs._from_massweighted_to_core_densities(method=correction, dense_core=self, predicted_densities=popt_v[0])
                 if fit_set[1] is not None:
-                    popt_h[0] = CONVERT_massn_TO_n_coldens(self.get_center_density(column_density=True),10,popt_h[0],self.data["radius_pc"], is_density=False)
+                    popt_h[0] = self.obs._from_massweighted_to_core_densities(method=correction, dense_core=self, predicted_densities=popt_h[0])
 
             def mass_integrand(r, n0, sigma, r0):
                 return 4 * np.pi * r**2 * n0 * np.exp(-0.5 * ((r-r0) / sigma)**2)
@@ -107,8 +111,8 @@ class DenseCore():
             r_cm = self.data["radius_pc"] * pc_to_cm
             volume = (4/3) * np.pi * (r_cm**3)
             mw_density = float(self.get_center_density())
-            if correction:
-                n = CONVERT_massn_TO_n_coldens(float(self.get_center_density(column_density=True)),10,mw_density,float(self.data["radius_pc"]), is_density=False)
+            if correction is not None:
+                n = self.obs._from_massweighted_to_core_densities(method=correction, dense_core=self, predicted_densities=mw_density)
             else:
                 n = mw_density
 

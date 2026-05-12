@@ -20,7 +20,7 @@ from POLARIScore.networks.Trainer import Trainer
 from POLARIScore.objects.Dataset import getDataset
 from typing import Dict, List, Optional, Tuple, Union, Literal
 from scipy.stats import lognorm
-from scipy.ndimage import gaussian_filter
+from scipy.ndimage import gaussian_filter, median_filter, grey_opening
 from scipy.optimize import curve_fit
 from POLARIScore.scripts.plotORIONsimDCMF import plot_sim_dcmf
 from POLARIScore.utils.batch_utils import compute_smoothness
@@ -57,6 +57,9 @@ class Observation():
             self.file:str = ""
             """Path to the observation data"""
         self.data:np.ndarray = None
+
+        self.convolved_data:np.ndarray = None
+
         self.prediction:np.ndarray = None
         """Tensor of the predicted quantities by the neural network"""
         self.pred_method_error:np.ndarray = None
@@ -118,26 +121,37 @@ class Observation():
         self.prediction = prediction
         return prediction, prediction_pdf_std
     
-    def apply_filter(self, method:Literal["gaussian"]="gaussian", factor=1., original_beam=18.2, replace=True):
+    def apply_filter(self, method:Literal["gaussian","median","median_min"]="gaussian", factor=1., original_beam=18.2, replace=False):
         """
         Apply filter, e.g convolve by a gaussian beam with a width of original_beam*factor.
         """
 
+        method = method.lower()
+        LOGGER.log(f"Applying {method} filter on observation.")
         try:
-            pixscale_deg = np.abs(self.wcs.pixel_scale_matrix.diagonal()).mean()
-        except AttributeError:
-            cdelt = self.wcs.wcs.cdelt
-            pixscale_deg = np.mean(np.abs(cdelt))
+            try:
+                pixscale_deg = np.abs(self.wcs.pixel_scale_matrix.diagonal()).mean()
+            except AttributeError:
+                cdelt = self.wcs.wcs.cdelt
+                pixscale_deg = np.mean(np.abs(cdelt))
 
-        sigma_pixels = (original_beam*factor / (2*np.sqrt(2*np.log(2)))) / (pixscale_deg*3600)
-        
+            sigma_pixels = (original_beam*factor / (2*np.sqrt(2*np.log(2)))) / (pixscale_deg*3600)
+        except AttributeError:
+            sigma_pixels = factor  / (2*np.sqrt(2*np.log(2)))
+
         if method == "gaussian":
             smoothed = gaussian_filter(self.data, sigma=sigma_pixels)
-            if replace:
-                self.data = smoothed
-            return smoothed
+        elif method == "median":
+            smoothed = median_filter(self.data, size=5*int(sigma_pixels))
+        elif method == "median_min":
+            smoothed = median_filter(self.data, size=5*int(sigma_pixels))
+            smoothed = np.minimum(smoothed, self.data)
         else:
             raise NotImplementedError()
+        
+        if replace:
+            self.data = smoothed
+        return smoothed
 
     def find_scale(self, pc: float, px_size: int, distance_pc: float) -> float:
         """
@@ -265,7 +279,6 @@ class Observation():
                 cores.append(core)
                 break
 
-        print(len(cores))
         cores = [DenseCore(self, c) for c in cores]
         self.cores = cores
         return cores
@@ -286,7 +299,7 @@ class Observation():
 
         return self.skeleton
 
-    def get_predicted_density_at_cores(self, column_density:bool=False)->List[float]:
+    def get_predicted_density_at_cores(self, column_density:bool=False,custom_data:Optional[np.ndarray]=None)->List[float]:
         """
         By default, returns the predicted densities at cores position. If column_density is set to True, then it returns the column density instead.
         """
@@ -299,6 +312,8 @@ class Observation():
         densities = self.prediction
         if column_density:
             densities = self.data
+        if custom_data is not None:
+            densities = custom_data
 
         if densities is None:
             LOGGER.error("No predicted density found")
@@ -323,8 +338,58 @@ class Observation():
                 values.append(np.nan)
 
         return values
+    
+    def _from_massweighted_to_core_densities(self, method:Literal['fixed','blurred'],mask:Optional[np.ndarray]=None, dense_core:Optional['DenseCore']=None, predicted_densities:Optional[Union[np.ndarray, float]]=None, column_densities:Optional[Union[np.ndarray, float]]=None)->Union[np.ndarray,float]:
         
-    def _get_cores_predicted_values(self, region:Union[Tuple[float,float,float,float],None]=None, return_ncol:bool=False, return_indexes:bool=False, correction:bool=True):
+        if dense_core is None:
+            predicted_densities = np.array(self.get_predicted_density_at_cores()) if predicted_densities is None else predicted_densities
+            column_densities = np.array(self.get_predicted_density_at_cores(column_density=True)) if column_densities is None else column_densities
+            radius = np.array([c.data["radius_pc"] for c in self.get_cores()])
+        else:
+            predicted_densities = float(dense_core.get_center_density(correction=None)) if predicted_densities is None else predicted_densities
+            column_densities = float(dense_core.get_center_density(column_density=True)) if column_densities is None else column_densities
+            radius = float(dense_core.data["radius_pc"])
+
+        if mask is not None and isinstance(predicted_densities, (np.ndarray)):
+            predicted_densities = predicted_densities[mask]
+            column_densities = column_densities[mask]
+            radius = radius[mask]
+
+        
+        if isinstance(method, bool):
+            if not(method):
+                return predicted_densities
+            else:
+                method = "blurred"
+    
+        
+        if method == "fixed":
+            predicted_densities = CONVERT_massn_TO_n_coldens(column_densities,10,predicted_densities,radius,is_density=False)
+        elif method == "blurred":
+            if self.convolved_data is None:
+                self.convolved_data = self.apply_filter(method="median_min", factor=10, replace=False)
+            if dense_core is not None:
+                background_densities = float(dense_core.get_center_density(correction=None, custom_data=self.convolved_data))
+            else:
+                background_densities = np.array(self.get_predicted_density_at_cores(custom_data=self.convolved_data))
+                background_densities = background_densities if mask is None else background_densities[mask]
+
+            alpha = background_densities/column_densities
+
+            if isinstance(predicted_densities, (list, np.ndarray, tuple)):
+                for i in range(len(predicted_densities)):
+                    if alpha[i] < 1:
+                        predicted_densities[i] = predicted_densities[i] * (1/(1-alpha[i]))
+            else:
+                if alpha < 1:
+                    predicted_densities = predicted_densities * (1/(1-alpha))
+        else:
+            raise NotImplementedError()
+
+        return predicted_densities
+        
+        
+    def _get_cores_predicted_values(self, region:Union[Tuple[float,float,float,float],None]=None, return_ncol:bool=False, return_indexes:bool=False, correction:Optional[Literal["fixed","blurred"]]="blurred"):
         """
         Returns values in LOG10
         Deprecated, use DenseCore object instead
@@ -334,6 +399,7 @@ class Observation():
             return_indexes: Return indexes
             correction: if True apply density correction
         """
+
         predicted_densities = np.array(self.get_predicted_density_at_cores())
         derived_densities =  np.array([c.data["average_n"] for c in self.get_cores()])
         global_indexes = np.array(range(predicted_densities.shape[0]))
@@ -347,8 +413,9 @@ class Observation():
             mask = mask & region_mask
         predicted_densities = predicted_densities[mask]
         column_densities = np.array(self.get_predicted_density_at_cores(column_density=True))[mask]
-        if correction:
-            predicted_densities = CONVERT_massn_TO_n_coldens(column_densities,10,predicted_densities,np.array([c.data["radius_pc"] for c in self.get_cores()])[mask],is_density=False)
+        if correction is not None:
+            predicted_densities = self._from_massweighted_to_core_densities(method=correction, mask=mask)
+        
         derived_densities = derived_densities[mask]
         global_indexes = global_indexes[mask]
         predicted_densities = np.log10(predicted_densities)
@@ -1028,7 +1095,7 @@ class Observation():
 
     def plot_dcmf(self, ax:Optional["axes.Axes"]=None, bins:int=20, ext_lims:Tuple[Union[float,None],Union[float,None]]=[None,None],
                    logM:bool=True, fit=False, method:Literal['constant','gaussian']="constant",
-                    monte_carlo:int=30 , correction:bool=True , color:Optional[str]="red",
+                    monte_carlo:int=30 , correction:Optional[Literal["blurred","fixed"]]="blurred" , color:Optional[str]="red",
                     show_chabrier_imf:bool=False, mass_completeness:float=0.4,  show_sim_dcmf:Optional[str]=None, lims:Optional[Tuple[float,float,float,float]]=(0.01,100,0.8,600)
                 ):
         """
@@ -1320,7 +1387,7 @@ class Observation():
     
     def plot_cores_error(self, ax:Optional["axes.Axes"]=None, region:Union[Tuple[float,float,float,float],None]=None, alpha:float=1.,
                           mov_average:int=0, log_average:int=50 ,show_errors:bool=True, show_model_errors:bool=False,
-                            correction:bool=True, color=None, linestyle=None, label=None):
+                            correction:Optional[Literal["blurred","fixed"]]="blurred", color=None, linestyle=None, label=None):
         """
         Args:
             ax: matplotlib axis

@@ -32,7 +32,7 @@ from POLARIScore.networks.utils.nn_utils import open_samples_as_spectrummap
 #sim = SimulationArray(name="sim_512_A_3")
 #sim = Simulation_DC(name="orionMHD_lowB_multi_5")
 sim = openSimulation("orionMHD_lowB_multi_", global_size=66.0948+0.12,keys=['RHO'],cache_name="orion") #offset bcs without dense cores have an offset :/
-sim.load_cores()
+#sim.load_cores()
 #smap = sim.format_key_to_spectrum_map()
 #smap.gaussians(fit_method="iterative")
 #smap.pca(plot=True, return_cube=False)
@@ -46,32 +46,64 @@ sim.load_cores()
 #sim.plot_pdf(what='rho')
 #sim.load_cores()
 
-obs = Observation_Sim(sim, axis=0)
+AXIS = 0
+#----------------------------------------
+#REMOVE CORES if they are in the SAME L.O.S
+#----------------------------------------
+"""print(sim.get_cores_multiplicity(include_resolution=True, include_scale=False))
+new_cores = []
+for c in sim.cores:
+    if 'confused' in c and c['confused'][AXIS]:
+        continue
+    new_cores.append(c)
+sim.cores = new_cores"""
+
+obs = Observation_Sim(sim, axis=AXIS)
 path_samples = "pdf_orionb_cached"
 
 obs = Observation("OrionB", "column_density_map")
 
 obs.catalog_name = "Ntormousi & Hennebelle"
-trainer = load_trainer("DDPM", trainer_class=DDPTrainer)
-trainer.norms = {
-    "cdens": DATA_NORMALIZATION_CDENS,
-    "vdens": DATA_NORMALIZATION_VDENS,
-}
-trainer.get_validation_error()
+#trainer = load_trainer("DDPM")
+#trainer = load_trainer("DDPM", trainer_class=DDPTrainer)
+#trainer.norms = {
+#    "cdens": DATA_NORMALIZATION_CDENS,
+#    "vdens": DATA_NORMALIZATION_VDENS,
+#}
+#trainer.get_validation_error()
 #trainer.plot_residuals()
-_, error = obs.predict(trainer, method="likeliest", repeat=1, overlap=0.75, nan_value=1e19, apply_baseline=True, kernel="gaussian", save_samples=path_samples, skip_using_saved_samples=True, only_error=False)
+#_, error = obs.predict(trainer, method="likeliest", repeat=1, overlap=0.75, downsample_factor=obs.find_scale(3.30474,128,400), nan_value=1e19, apply_baseline=True, kernel="gaussian", save_samples=path_samples, skip_using_saved_samples=True, only_error=False)
 
-obs.save("_ddpm_likeliest_gaussian")
-#obs.load("_ddpm_likeliest_gaussian")
+#obs.save("_ddpm_likeliest_gaussian")
+obs.load("_cinn")
+obs.plot_cores_error(show_errors=False, label="cinn",correction="blurred", log_average=30)
+
 #obs.plot(error/obs.prediction, norm=None)
-#obs.plot(obs.prediction, norm=LogNorm(vmin=1e2, vmax=3e5))
+#obs.load_error("DDPM")
+#obs.prediction = obs.rectify_error_baseline()
+#obs.plot(obs.prediction, norm=LogNorm(vmin=1e2, vmax=1e6))
 
-likeliest = obs.prediction
-_, ax = obs.plot_cores_error(show_errors=False, label="likeliest",correction=True, log_average=30)
-obs.plot_dcmf()
-obs.load("_ddpm")
-obs.plot(obs.prediction/likeliest, norm=None)
-obs.plot_cores_error(ax=ax, show_errors=False, label="mean",correction=True, log_average=30)
+#----------------------------------------
+#Blurred correction vs Fixed correction vs No correction
+#----------------------------------------
+#obs = Observation_Sim(sim, axis=AXIS)
+#obs.prediction = compute_mass_weighted_density(sim.data['RHO'], axis=AXIS)
+#_, ax = obs.plot_cores_error(show_errors=False, label="blurred",correction="blurred", log_average=30)
+#_, ax = obs.plot_cores_error(ax=ax, show_errors=False, label="fixed",correction="fixed", log_average=30)
+#_, ax = obs.plot_cores_error(ax=ax, show_errors=False, label="no correction",correction=None, log_average=30)
+
+#obs.plot_dcmf()
+
+#_, ax = obs.plot_dcmf()
+obs.plot(obs.data)
+obs.plot(obs.convolved_data)
+#obs.load("_ddpm")
+#obs.plot_dcmf(color="green")
+#obs.plot_cores_error(ax=ax, show_errors=False, label="mean and uniform",correction=True, log_average=30)
+
+#obs.predict(trainer, method="likeliest", repeat=1, overlap=0.75, nan_value=1e19, apply_baseline=True, kernel="uniform", save_samples=path_samples, skip_using_saved_samples=True, only_error=False)
+#obs.plot_cores_error(ax=ax, show_errors=False, label="uniform",correction=True, log_average=30)
+
 
 
 #obs.load("_likeliest_gaussian")
@@ -80,8 +112,11 @@ obs.plot_cores_error(ax=ax, show_errors=False, label="mean",correction=True, log
 #obs.load("_likeliest_uniform")
 #obs.plot_error_histogram(min_truth=[10,1e2,5e3,5e4,np.inf])
 #obs.plot_cores_error(ax=ax, show_errors=False, label="uniform",correction=False, log_average=30)
+
 #obs.prediction = compute_mass_weighted_density(sim.data['RHO'], axis=0,)
 #obs.plot_cores_error(ax=ax, show_errors=False, label="simulation",correction=False, log_average=30)
+#obs.plot(obs.prediction, norm=LogNorm(vmin=1e2, vmax=1e6))
+
 
 #path_to_changes = ["pdf_orionb_cached_gaussian_weight.npy","pdf_cached_gaussian_weight.npy","pdf_cached.npy"]
 #for p in path_to_changes:

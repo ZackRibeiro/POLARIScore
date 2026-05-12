@@ -308,7 +308,7 @@ class Simulation_DC():
 
         cores_in_area = [self.cores[i] for i in indexes]
         return cores_in_area, (x_c[indexes], y_c[indexes], z_c[indexes])
-    def get_cores_multiplicity(self, include_resolution:bool=False, offset:float=0.)->Tuple[float, float, float]:
+    def get_cores_multiplicity(self, include_scale:bool=True, include_resolution:bool=False, offset:float=0.,add_flag_to_core:bool=True)->Tuple[float, float, float]:
         "Gives core multiplicity per line of sight (value between 0 and 1.), if 1. then all line of sight showing dense cores have at least 2 dense cores"
         cores = self.load_cores()
         len_cores = len(self.cores)
@@ -319,19 +319,25 @@ class Simulation_DC():
             x,y,z = c['pos_x'], c['pos_y'], c['pos_z']
             s = c['size']
             flags_m = [False, False, False]
-            for j in range(i + 1, len_cores):
+            for j in range(len_cores):
                 c2 = cores[j]
                 x2, y2, z2 = c2['pos_x'], c2['pos_y'], c2['pos_z']
                 if x2 == x and y == y2 and z2 == z:
                     continue
                 s2 = c2['size']
                 dists = np.array([np.sqrt((y-y2)**2 + (z-z2)**2), np.sqrt((x-x2)**2 + (z-z2)**2), np.sqrt((y-y2)**2 + (x-x2)**2)])
-                flags = dists < s/2+s2/2+offset
+                flags = [False, False, False]
+                if include_scale:
+                    flags = np.logical_or(flags, dists < s/2+s2/2+offset)
                 if include_resolution:
-                    flags = flags or dists <= self.relative_size*self.global_size/self.nres
+                    flags = np.logical_or(flags, dists <= self.relative_size*self.global_size/self.nres)
 
                 for k, f in enumerate(flags):
                     if f and not(flags_m[k]):
+                        if add_flag_to_core:
+                            if not('confused' in c):
+                                c['confused'] = [False,False,False]
+                            c['confused'][k] = True
                         multiplicities[k] += 1
                         flags_m[k] = True
                 if all(flags_m):

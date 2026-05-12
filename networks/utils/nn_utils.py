@@ -331,6 +331,8 @@ def predict_map(data, model_trainer:'Trainer',
                 max_bin = np.argmax(hist)
                 output[y, x] = 0.5 * (bin_edges[max_bin] + bin_edges[max_bin + 1])
                 del vals
+    else:
+        raise NotImplementedError()
 
 
     upsampled_output = F.interpolate(torch.from_numpy(output).unsqueeze(0).unsqueeze(0), 

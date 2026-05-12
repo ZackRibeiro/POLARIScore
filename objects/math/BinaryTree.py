@@ -227,7 +227,7 @@ class OcTree():
         if os.path.exists(path):
              LOGGER.warn(f"A previous cache named {cache}_{resolution}.npy was replaced(removed).")
              os.remove(path)
-             np.save(path, grid)
+        np.save(path, grid)
 
         return grid
 

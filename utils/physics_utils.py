@@ -38,7 +38,7 @@ CONVERT_EXTINCTION_TO_NH = lambda a: a*2*0.94e21
 
 CONVERT_massn_TO_n = lambda n_d,L_d,n,r_c: (n+np.sqrt(n**2-(2*L_d/r_c)*(n_d**2-n*n_d)))/2
 def CONVERT_massn_TO_n_coldens(N:Union[np.ndarray[float],float], L_d:Union[np.ndarray[float],float], n:Union[np.ndarray[float],float], r_c:Union[np.ndarray[float],float]
-                               , filter:Union[None,float]=22.1, is_density=False, is_column_density=False):
+                               , filter:Union[None,float]=25.1, is_density=False, is_column_density=False):
     """
     Args:
         N: column density (particles/cm^-2)
