@@ -61,7 +61,7 @@ sim.cores = new_cores"""
 obs = Observation_Sim(sim, axis=AXIS)
 path_samples = "pdf_orionb_cached"
 
-obs = Observation("OrionB", "column_density_map")
+#obs = Observation("OrionB", "column_density_map")
 
 obs.catalog_name = "Ntormousi & Hennebelle"
 #trainer = load_trainer("DDPM")
@@ -75,8 +75,8 @@ obs.catalog_name = "Ntormousi & Hennebelle"
 #_, error = obs.predict(trainer, method="likeliest", repeat=1, overlap=0.75, downsample_factor=obs.find_scale(3.30474,128,400), nan_value=1e19, apply_baseline=True, kernel="gaussian", save_samples=path_samples, skip_using_saved_samples=True, only_error=False)
 
 #obs.save("_ddpm_likeliest_gaussian")
-obs.load("_cinn")
-obs.plot_cores_error(show_errors=False, label="cinn",correction="blurred", log_average=30)
+#obs.load("_cinn")
+#obs.plot_cores_error(show_errors=False, label="cinn",correction="blurred", log_average=30)
 
 #obs.plot(error/obs.prediction, norm=None)
 #obs.load_error("DDPM")
@@ -87,16 +87,16 @@ obs.plot_cores_error(show_errors=False, label="cinn",correction="blurred", log_a
 #Blurred correction vs Fixed correction vs No correction
 #----------------------------------------
 #obs = Observation_Sim(sim, axis=AXIS)
-#obs.prediction = compute_mass_weighted_density(sim.data['RHO'], axis=AXIS)
-#_, ax = obs.plot_cores_error(show_errors=False, label="blurred",correction="blurred", log_average=30)
-#_, ax = obs.plot_cores_error(ax=ax, show_errors=False, label="fixed",correction="fixed", log_average=30)
-#_, ax = obs.plot_cores_error(ax=ax, show_errors=False, label="no correction",correction=None, log_average=30)
+obs.prediction = compute_mass_weighted_density(sim.data['RHO'], axis=AXIS)
+_, ax = obs.plot_cores_error(show_errors=False, label="blurred",correction="blurred", log_average=30)
+_, ax = obs.plot_cores_error(ax=ax, show_errors=False, label="fixed",correction="fixed", log_average=30)
+_, ax = obs.plot_cores_error(ax=ax, show_errors=False, label="no correction",correction=None, log_average=30)
+obs.plot(obs.data)
+obs.plot(obs.convolved_data)
 
 #obs.plot_dcmf()
 
 #_, ax = obs.plot_dcmf()
-obs.plot(obs.data)
-obs.plot(obs.convolved_data)
 #obs.load("_ddpm")
 #obs.plot_dcmf(color="green")
 #obs.plot_cores_error(ax=ax, show_errors=False, label="mean and uniform",correction=True, log_average=30)
