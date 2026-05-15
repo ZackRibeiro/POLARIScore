@@ -10,6 +10,7 @@ from scipy.optimize import curve_fit
 from typing import List
 
 from POLARIScore.objects.Simulation_DC import Simulation_DC, openSimulation
+from POLARIScore.objects.Simulation_AMR import *
 from POLARIScore.utils.sim_utils import init_idefix,init_ramses
 from POLARIScore.utils.utils import compute_mass_weighted_density
 from POLARIScore.config import *
@@ -30,8 +31,21 @@ from POLARIScore.objects.Spectrum import Spectrum
 from POLARIScore.networks.utils.nn_utils import open_samples_as_spectrummap
 
 #sim = SimulationArray(name="sim_512_A_3")
-#sim = Simulation_DC(name="orionMHD_lowB_multi_5")
-sim = openSimulation("orionMHD_lowB_multi_", global_size=66.0948+0.12,keys=['RHO'],cache_name="orion") #offset bcs without dense cores have an offset :/
+#sim = openSimulation("orionMHD_lowB_multi_", global_size=66.0948+0.12,keys=['RHO'],cache_name="orion") #offset bcs without dense cores have an offset :/
+#sim.plot(axis=-1)
+
+sim = Simulation_AMR("orionMHD_lowB_AMR", global_size=66.0948+0.12, init_datacubes=False)
+#bbox = np.array([34.6, 35.4, 34.5, 36.3])
+bbox = np.array([34.1, 34.8, 35.2, 35.9])
+
+
+tensor = sim.to_datacube("RHO", res=512, bbox=[[bbox[0], bbox[1]], [bbox[2], bbox[3]], None],
+                          filling_method=lambda t: fill_zeros_slice(t, method=fill_zeros_nearest, axis=-1), smoothing=0., force=True)
+plt.figure()
+plt.imshow(np.sum(tensor, -1)*(sim.size*PC_TO_CM/512), cmap="jet", norm=LogNorm(), extent=bbox)
+#sim.init_datacubes(res=512)
+#
+
 #sim.load_cores()
 #smap = sim.format_key_to_spectrum_map()
 #smap.gaussians(fit_method="iterative")
@@ -58,12 +72,12 @@ for c in sim.cores:
     new_cores.append(c)
 sim.cores = new_cores"""
 
-obs = Observation_Sim(sim, axis=AXIS)
-path_samples = "pdf_orionb_cached"
+#obs = Observation_Sim(sim, axis=AXIS)
+#path_samples = "pdf_orionb_cached"
 
 #obs = Observation("OrionB", "column_density_map")
 
-obs.catalog_name = "Ntormousi & Hennebelle"
+#obs.catalog_name = "Ntormousi & Hennebelle"
 #trainer = load_trainer("DDPM")
 #trainer = load_trainer("DDPM", trainer_class=DDPTrainer)
 #trainer.norms = {
@@ -87,12 +101,12 @@ obs.catalog_name = "Ntormousi & Hennebelle"
 #Blurred correction vs Fixed correction vs No correction
 #----------------------------------------
 #obs = Observation_Sim(sim, axis=AXIS)
-obs.prediction = compute_mass_weighted_density(sim.data['RHO'], axis=AXIS)
-_, ax = obs.plot_cores_error(show_errors=False, label="blurred",correction="blurred", log_average=30)
-_, ax = obs.plot_cores_error(ax=ax, show_errors=False, label="fixed",correction="fixed", log_average=30)
-_, ax = obs.plot_cores_error(ax=ax, show_errors=False, label="no correction",correction=None, log_average=30)
-obs.plot(obs.data)
-obs.plot(obs.convolved_data)
+#obs.prediction = compute_mass_weighted_density(sim.data['RHO'], axis=AXIS)
+#_, ax = obs.plot_cores_error(show_errors=False, label="blurred",correction="blurred", log_average=30)
+#_, ax = obs.plot_cores_error(ax=ax, show_errors=False, label="fixed",correction="fixed", log_average=30)
+#_, ax = obs.plot_cores_error(ax=ax, show_errors=False, label="no correction",correction=None, log_average=30)
+#obs.plot(obs.data)
+#obs.plot(obs.convolved_data)
 
 #obs.plot_dcmf()
 

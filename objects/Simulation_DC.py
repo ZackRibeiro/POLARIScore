@@ -66,7 +66,7 @@ class Simulation_DC():
         """Simulation cell size in cm"""
         self.size:float = self.global_size
         """Real spatial size of the simulation in parsec"""
-        self.axis:Tuple[Tuple[float,float],Tuple[float,float],Tuple[float,float]] = ([0, self.size],[0, self.size],[0, self.size])
+        self.bbox:Tuple[Tuple[float,float],Tuple[float,float],Tuple[float,float]] = ([0, self.size],[0, self.size],[0, self.size])
         """Simulation faces surface in parsec"""
 
         self.volumic_density = [None,None,None]
@@ -247,7 +247,7 @@ class Simulation_DC():
         """box is x_min, x_max, y_min, y_max or can add z_min, z_max"""
         self.cores = self.load_cores()
         if box is None:
-            box = (self.axis[0][0],self.axis[0][1],self.axis[1][0],self.axis[1][1],self.axis[2][0],self.axis[2][1])
+            box = (self.bbox[0][0],self.bbox[0][1],self.bbox[1][0],self.bbox[1][1],self.bbox[2][0],self.bbox[2][1])
 
         key_1 = 'pos_'
         key_2 = 'pos_'
@@ -357,7 +357,7 @@ class Simulation_DC():
         volumes = []
         for c in cores:
             pos = np.array([c['pos_x'],c['pos_y'],c['pos_z']])
-            pos = np.astype(np.floor(((pos-self.axis[0][0]) / (self.relative_size*self.global_size))*self.nres),int)
+            pos = np.astype(np.floor(((pos-self.bbox[0][0]) / (self.relative_size*self.global_size))*self.nres),int)
             volumes.append(contour_3d(self.data['RHO'], pos=pos,threshold=density_threshold))
 
         if plot:
@@ -384,9 +384,9 @@ class Simulation_DC():
             grid = np.ones_like(self.data['RHO'], dtype=np.uint8)
 
             for c in cores:
-                ix = int((c['pos_x'] - self.axis[0][0]) / (self.axis[0][1] - self.axis[0][0]) * self.nres)
-                iy = int((c['pos_y'] - self.axis[1][0]) / (self.axis[1][1] - self.axis[1][0]) * self.nres)
-                iz = int((c['pos_z'] - self.axis[2][0]) / (self.axis[2][1] - self.axis[2][0]) * self.nres)
+                ix = int((c['pos_x'] - self.bbox[0][0]) / (self.bbox[0][1] - self.bbox[0][0]) * self.nres)
+                iy = int((c['pos_y'] - self.bbox[1][0]) / (self.bbox[1][1] - self.bbox[1][0]) * self.nres)
+                iz = int((c['pos_z'] - self.bbox[2][0]) / (self.bbox[2][1] - self.bbox[2][0]) * self.nres)
 
                 grid[ix, iy, iz] = 0
 
@@ -426,12 +426,12 @@ class Simulation_DC():
                     data = distance_cube[::-1,:,slice]
 
                 if artists["im"] is None:
-                    artists["im"] = ax.imshow(data, origin="lower", cmap="jet", extent=[self.axis[0][0], self.axis[0][1], self.axis[1][0],self.axis[1][1]], norm=PowerNorm(gamma=2, vmin=np.min(distance_cube), vmax=np.max(distance_cube)))
+                    artists["im"] = ax.imshow(data, origin="lower", cmap="jet", extent=[self.bbox[0][0], self.bbox[0][1], self.bbox[1][0],self.bbox[1][1]], norm=PowerNorm(gamma=2, vmin=np.min(distance_cube), vmax=np.max(distance_cube)))
                 else:
                     artists["im"].set_data(data)
 
                 if self.cores is not None:
-                    _, cores_in_pos = self.get_cores(axis=axis, box=[self.axis[0][0], self.axis[0][1], self.axis[1][0],self.axis[1][1], (slice-1)/(self.nres/factor)*self.global_size*self.relative_size+self.axis[0][0],(slice+1)/(self.nres/factor)*self.global_size*self.relative_size+self.axis[0][0]])
+                    _, cores_in_pos = self.get_cores(axis=axis, box=[self.bbox[0][0], self.bbox[0][1], self.bbox[1][0],self.bbox[1][1], (slice-1)/(self.nres/factor)*self.global_size*self.relative_size+self.bbox[0][0],(slice+1)/(self.nres/factor)*self.global_size*self.relative_size+self.bbox[0][0]])
                     if artists["cores"] is None:
                         artists["cores"] = ax.scatter(cores_in_pos[0], cores_in_pos[1], marker="+", color="white")
                     else:
@@ -505,7 +505,7 @@ class Simulation_DC():
             self.volumic_density_method[axis] = method.__name__
             self.volumic_density[axis] = method(self.data['RHO'], axis=axis)
         return self.volumic_density[axis]
-
+    
     def generate_dataset(self,name:str=None,
                          what_to_compute:Dict={"cospectra":False,"density":False,"context":None,"vdens":compute_mass_weighted_density,"cores":False,"density_methods":None}
                        ,number:int=8,size:Union[float,Tuple[float,float]]=0.,img_size:int=128,random_rotate:bool=True,limit_area:Tuple=(None,None,None),
@@ -624,8 +624,8 @@ class Simulation_DC():
                 limits = [0,self.global_size,0,self.global_size]
             center = np.array([limits[0]+(limits[1]-limits[0])*np.random.random(),limits[2]+(limits[3]-limits[2])*np.random.random()])
             c_x, c_y = center
-            c_x = convert_pc_to_index(c_x, self.nres,self.size,start=self.axis[0][0],flip=False)
-            c_y = convert_pc_to_index(c_y, self.nres,self.size,start=self.axis[0][0],flip=False)
+            c_x = convert_pc_to_index(c_x, self.nres,self.size,start=self.bbox[0][0],flip=False)
+            c_y = convert_pc_to_index(c_y, self.nres,self.size,start=self.bbox[0][0],flip=False)
             if(c_x < 0 or c_y < 0):
                 continue
             
@@ -763,7 +763,7 @@ class Simulation_DC():
                     c_pos = np.array([cores_pos[0][i],cores_pos[1][i],cores_pos[2][i]])
                     cx_idx = convert_pc_to_index(c_pos[0], img_size, i_size, start=cx_min)
                     cy_idx = convert_pc_to_index(c_pos[1], img_size, i_size, start=cy_min)
-                    c_pos[2] = convert_pc_to_index(c_pos[2], self.nres, self.size, start=self.axis[0][0])
+                    c_pos[2] = convert_pc_to_index(c_pos[2], self.nres, self.size, start=self.bbox[0][0])
 
                     c_pos[1], c_pos[0] = rotate_index(cy_idx, cx_idx, (img_size, img_size), k)
                     c_pos = c_pos.astype(int)
@@ -880,18 +880,18 @@ class Simulation_DC():
                     step_x = max(Ny // N_arrows, 1)
                     step_y = max(Nx // N_arrows, 1)
 
-                    X_sub = X[::step_y, ::step_x]/self.nres*(self.axis[0][1]-self.axis[0][1])+self.axis[0][1]
-                    Y_sub = Y[::step_y, ::step_x]/self.nres*(self.axis[0][1]-self.axis[0][1])+self.axis[0][1]
+                    X_sub = X[::step_y, ::step_x]/self.nres*(self.bbox[0][1]-self.bbox[0][1])+self.bbox[0][1]
+                    Y_sub = Y[::step_y, ::step_x]/self.nres*(self.bbox[0][1]-self.bbox[0][1])+self.bbox[0][1]
                     Ux_sub = Ux[::step_y, ::step_x]
                     Uy_sub = Uy[::step_y, ::step_x]
 
                 if artists["im"] is None:
-                    artists["im"] = ax.imshow(density, cmap="jet", extent=[self.axis[0][0], self.axis[0][1], self.axis[1][0],self.axis[1][1]], norm=LogNorm(vmin=np.min(self.data['RHO']),vmax=np.max(self.data['RHO'])))
+                    artists["im"] = ax.imshow(density, cmap="jet", extent=[self.bbox[0][0], self.bbox[0][1], self.bbox[1][0],self.bbox[1][1]], norm=LogNorm(vmin=np.min(self.data['RHO']),vmax=np.max(self.data['RHO'])))
                 else:
                     artists["im"].set_data(density)
 
                 if self.cores is not None:
-                    cores_in, cores_in_pos = self.get_cores(axis=axis, box=[self.axis[0][0], self.axis[0][1], self.axis[1][0],self.axis[1][1], (slice-1)/self.nres*self.global_size*self.relative_size+self.axis[0][0],(slice+1)/self.nres*self.global_size*self.relative_size+self.axis[0][0]])
+                    cores_in, cores_in_pos = self.get_cores(axis=axis, box=[self.bbox[0][0], self.bbox[0][1], self.bbox[1][0],self.bbox[1][1], (slice-1)/self.nres*self.global_size*self.relative_size+self.bbox[0][0],(slice+1)/self.nres*self.global_size*self.relative_size+self.bbox[0][0]])
                     if artists["cores"] is None:
                         artists["cores"] = ax.scatter(cores_in_pos[0], cores_in_pos[1], marker="+", color="white")
                     else:
@@ -968,10 +968,10 @@ class Simulation_DC():
 
         def _plot(column, data, ax):
             plt_ax:matplotlib.axes.Axes = axes[0][column]
-            cd = plt_ax.imshow(data, extent=[self.axis[0][0], self.axis[0][1], self.axis[1][0],self.axis[1][1]], cmap="jet", norm=LogNorm() if norm is None else norm)
+            cd = plt_ax.imshow(data, extent=[self.bbox[0][0], self.bbox[0][1], self.bbox[1][0],self.bbox[1][1]], cmap="jet", norm=LogNorm() if norm is None else norm)
             
             if self.cores is not None:
-                cores_in, cores_in_pos = self.get_cores(axis=ax, box=[self.axis[0][0], self.axis[0][1], self.axis[1][0],self.axis[1][1]])
+                cores_in, cores_in_pos = self.get_cores(axis=ax, box=[self.bbox[0][0], self.bbox[0][1], self.bbox[1][0],self.bbox[1][1]])
                 plt_ax.scatter(cores_in_pos[0], cores_in_pos[1], marker="+", color="white")
             
             if plot_pdf:
@@ -1328,7 +1328,7 @@ def mergeSimu(sim_array:List[Simulation_DC],keys=['RHO'])->Simulation_DC:
     host.cell_size = (host.global_size*host.relative_size/host.nres) * u.parsec
     host.cell_size = host.cell_size.to(u.cm)
     host.size = host.global_size*host.relative_size
-    host.axis = ([host.center[0]*host.global_size-host.size/2,host.center[0]*host.global_size+host.size/2],[host.center[1]*host.global_size-host.size/2,host.center[1]*host.global_size+host.size/2],[host.center[2]*host.global_size-host.size/2,host.center[2]*host.global_size+host.size/2])  
+    host.bbox = ([host.center[0]*host.global_size-host.size/2,host.center[0]*host.global_size+host.size/2],[host.center[1]*host.global_size-host.size/2,host.center[1]*host.global_size+host.size/2],[host.center[2]*host.global_size-host.size/2,host.center[2]*host.global_size+host.size/2])  
     
     return host
 
@@ -1363,7 +1363,7 @@ def openSimulation(name_root:str, global_size:float, use_cache:bool=True,cache_n
         sim.cell_size = (sim.global_size*sim.relative_size/sim.nres) * u.parsec
         sim.cell_size = sim.cell_size.to(u.cm).value
         sim.size = sim.global_size*sim.relative_size
-        sim.axis = ([sim.center[0]*sim.global_size-sim.size/2,sim.center[0]*sim.global_size+sim.size/2],[sim.center[1]*sim.global_size-sim.size/2,sim.center[1]*sim.global_size+sim.size/2],[sim.center[2]*sim.global_size-sim.size/2,sim.center[2]*sim.global_size+sim.size/2])  
+        sim.bbox = ([sim.center[0]*sim.global_size-sim.size/2,sim.center[0]*sim.global_size+sim.size/2],[sim.center[1]*sim.global_size-sim.size/2,sim.center[1]*sim.global_size+sim.size/2],[sim.center[2]*sim.global_size-sim.size/2,sim.center[2]*sim.global_size+sim.size/2])  
         return sim
 
     for n in names:

@@ -6,6 +6,8 @@ import torch
 This file contains all utils variables, like for simulation, plots...
 """
 
+AMR_BASE_RESOLUTION = 256
+
 EXPORT_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)),"export/")
 """Where all the objects saves are stored (ex: models, training_batchs)"""
 

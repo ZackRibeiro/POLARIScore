@@ -37,7 +37,7 @@ def init_ramses(simulation, load_temp=True, load_vel=True):
         simulation.cell_size = (simulation.global_size*simulation.relative_size/simulation.nres) * u.parsec
         simulation.cell_size = simulation.cell_size.to(u.cm).value
         simulation.size = simulation.global_size*simulation.relative_size
-        simulation.axis = ([simulation.center[0]*simulation.global_size-simulation.size/2,simulation.center[0]*simulation.global_size+simulation.size/2],[simulation.center[1]*simulation.global_size-simulation.size/2,simulation.center[1]*simulation.global_size+simulation.size/2],[simulation.center[2]*simulation.global_size-simulation.size/2,simulation.center[2]*simulation.global_size+simulation.size/2])    
+        simulation.bbox = ([simulation.center[0]*simulation.global_size-simulation.size/2,simulation.center[0]*simulation.global_size+simulation.size/2],[simulation.center[1]*simulation.global_size-simulation.size/2,simulation.center[1]*simulation.global_size+simulation.size/2],[simulation.center[2]*simulation.global_size-simulation.size/2,simulation.center[2]*simulation.global_size+simulation.size/2])    
     LOGGER.log(f"Simulation {simulation.name} loaded.")
 
 from POLARIScore.utils.vtk_io import readVTK
@@ -126,7 +126,7 @@ def init_idefix(simulation, blacklist=["BX1","BX2","BX3"], vtk_path:Optional[str
     simulation.size = simulation.global_size
     simulation.cell_size = (simulation.global_size*simulation.relative_size/simulation.nres) * u.parsec
     simulation.cell_size = simulation.cell_size.to(u.cm).value
-    simulation.axis = ([simulation.center[0]*simulation.global_size-simulation.size/2,simulation.center[0]*simulation.global_size+simulation.size/2],[simulation.center[1]*simulation.global_size-simulation.size/2,simulation.center[1]*simulation.global_size+simulation.size/2],[simulation.center[2]*simulation.global_size-simulation.size/2,simulation.center[2]*simulation.global_size+simulation.size/2])
+    simulation.bbox = ([simulation.center[0]*simulation.global_size-simulation.size/2,simulation.center[0]*simulation.global_size+simulation.size/2],[simulation.center[1]*simulation.global_size-simulation.size/2,simulation.center[1]*simulation.global_size+simulation.size/2],[simulation.center[2]*simulation.global_size-simulation.size/2,simulation.center[2]*simulation.global_size+simulation.size/2])
     LOGGER.log(f"Simulation {simulation.name} loaded.")
 
 from POLARIScore.utils.utils import compute_column_density, compute_mass_weighted_density

@@ -7,6 +7,60 @@ from datetime import datetime
 def _get_date() -> str:
     return datetime.now().strftime("%H:%M:%S")
 
+import inspect
+def _get_caller():
+    stack = inspect.stack()
+
+    for frame_info in stack[2:]:
+        locals_ = frame_info.frame.f_locals
+
+        if "self" in locals_:
+            obj = locals_["self"]
+
+            # Skip logger methods
+            if obj.__class__.__name__ == "Logger":
+                continue
+
+            return f"{obj.__class__.__name__}.{frame_info.function}"
+
+        return frame_info.function
+
+    return "unknown"
+from pathlib import Path
+
+def get_clickable_caller():
+
+    stack = inspect.stack()
+
+    for frame_info in stack[2:]:
+
+        frame = frame_info.frame
+        locals_ = frame.f_locals
+
+        if "self" in locals_:
+            obj = locals_["self"]
+
+            if obj.__class__.__name__ == "Logger":
+                continue
+
+            cls_name = obj.__class__.__name__
+            label = f"{cls_name}.{frame_info.function}"
+
+        else:
+            label = frame_info.function
+
+        filename = Path(frame_info.filename).resolve()
+        line = frame_info.lineno
+
+        url = f"file://{filename}"
+
+        return (
+            f"\033]8;;{url}\033\\"
+            f"{label}:{line}"
+            f"\033]8;;\033\\"
+        )
+
+    return "unknown"
 class Logger():
     def __init__(self, level:int=0, auto_save:int=5, save_path=None):
         """
@@ -25,6 +79,7 @@ class Logger():
         self.global_color = "32m"
         self.print_borders = True
         self.print_date = True
+        self.print_caller = True
 
         self._init_gc = self.global_color
 
@@ -46,10 +101,17 @@ class Logger():
             return None
         if self.print_date:
             string = "\033[0;37m["+_get_date()+"]\033[0m"
+        string += f"[\033[{color}{type.upper()}\033[0m]"
+        if self.print_caller:
+            try:
+                caller = get_clickable_caller()
+                string += f"\033[3;37m({caller})\033[0m "
+            except:
+                caller = None
         if type is None:
             string += message
         else:
-            string += f"[\033[{color}{type.upper()}\033[0m] {message}"
+            string += f"{message}"
         print(string)
         self.messages.append(string)
         if self.auto_save > 0 and len(self.messages) % self.auto_save == 0:
