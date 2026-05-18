@@ -112,7 +112,7 @@ def format_time(seconds:float)->str:
 
 import time
 _time_0 = 0
-def printProgressBar(iteration,total,prefix='',suffix='',decimals=1,length=50,fill='█',printEnd="\r",show_tr=True,show_speed=True):
+def printProgressBar(iteration,total,prefix='',suffix='',decimals=1,length=50,fill='█',printEnd="\r",show_tr=True,show_speed=True,disable_done=False):
     global _time_0
     delta_time = 0.
     if iteration==0 or iteration==1:
@@ -155,7 +155,7 @@ def printProgressBar(iteration,total,prefix='',suffix='',decimals=1,length=50,fi
 
     print(string, end=printEnd)
         
-    if iteration >= total-1:
+    if iteration >= total-1 and not(disable_done):
         print(f'\r{prefix} - Done in {format_time(time.time()-_time_0)}'+' '*(length+10))
 
 def divide_matrix_to_sub(matrix:np.ndarray,final_dim:int=128)->List[np.ndarray]:
@@ -551,7 +551,7 @@ def plot_map(map, ax=None, cmap=None, norm=None, toplabel=None, show_ax_labels=T
     
 from matplotlib.patches import Rectangle, FancyBboxPatch
 
-def plot_rect_bg(fig, axes, color, pad=0.01, text=None, opacity=0.3, text_offset=+0.05):
+def plot_rect_bg(fig, axes, color, pad=0.01, text=None, opacity=0.3, text_offset=+0.05, text_pos="top", show_bbox=None):
     bboxes = [ax.get_position() for ax in axes]
 
     xmin = min(bb.x0 for bb in bboxes)
@@ -572,16 +572,11 @@ def plot_rect_bg(fig, axes, color, pad=0.01, text=None, opacity=0.3, text_offset
 
     if text is not None:
         fig.text(
-            xmin + 0.005,ymax + text_offset,
-            text,ha="left",va="top",
+            xmin + 0.005,ymax + text_offset if text_pos == "top" else ymin - text_offset,
+            text,ha="left",va=text_pos,
             fontsize=10,fontweight="bold",color="black",
             zorder=1,
-            #bbox=dict(
-            #    facecolor="white",
-            #    alpha=0.8,
-            #    edgecolor="none",
-            #    pad=2
-            #)
+            bbox=dict(facecolor=color,alpha=opacity,edgecolor="black",pad=2) if show_bbox else None
         )
 
     fig.add_artist(rect)

@@ -87,7 +87,7 @@ class Logger():
         """Reset logger to initial state"""
         self.global_color = self._init_gc
 
-    def print(self, message:str, color:str="0m", type:str=None, level:int=0)->str:
+    def print(self, message:str, color:str="0m", type:str=None, level:int=0, print_caller:bool=True)->str:
         """Print a message in the console with decorations.
         Args:
             message(str): Message to print
@@ -101,17 +101,15 @@ class Logger():
             return None
         if self.print_date:
             string = "\033[0;37m["+_get_date()+"]\033[0m"
-        string += f"[\033[{color}{type.upper()}\033[0m]"
-        if self.print_caller:
+        if type is not None:
+            string += f"[\033[{color}{type.upper()}\033[0m]"
+        if self.print_caller and print_caller:
             try:
                 caller = get_clickable_caller()
                 string += f"\033[3;37m({caller})\033[0m "
             except:
                 caller = None
-        if type is None:
-            string += message
-        else:
-            string += f"{message}"
+        string += message
         print(string)
         self.messages.append(string)
         if self.auto_save > 0 and len(self.messages) % self.auto_save == 0:
@@ -139,7 +137,7 @@ class Logger():
             border_line = f"{dashes}{message}{dashes}-"
         else:
             border_line = f"{dashes}{message}{dashes}"
-        return self.print(f"\033[{color}{border_line}\033[0m", level=level)
+        return self.print(f"\033[{color}{border_line}\033[0m", level=level, print_caller=False)
     
     def warn(self, message:str)->str:
         return self.print(message, type="warn", color="33m", level=1)

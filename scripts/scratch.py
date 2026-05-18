@@ -20,6 +20,7 @@ from POLARIScore.objects.Dataset import Dataset, getDataset
 from torch import nn
 from POLARIScore.objects.Observation import Observation
 from POLARIScore.networks.DDPTrainer import DDPTrainer, DDPMUnet
+from POLARIScore.networks.architectures.nn_SAUNet import SizeAwareUNet
 from POLARIScore.networks.Trainer import Trainer, load_trainer
 from POLARIScore.networks.INNTrainer import INNTrainer
 from POLARIScore.networks.architectures.nn_SpectraNetwork import SpectraNetwork
@@ -34,17 +35,72 @@ from POLARIScore.networks.utils.nn_utils import open_samples_as_spectrummap
 #sim = openSimulation("orionMHD_lowB_multi_", global_size=66.0948+0.12,keys=['RHO'],cache_name="orion") #offset bcs without dense cores have an offset :/
 #sim.plot(axis=-1)
 
-sim = Simulation_AMR("orionMHD_lowB_AMR", global_size=66.0948+0.12, init_datacubes=False)
-#bbox = np.array([34.6, 35.4, 34.5, 36.3])
-bbox = np.array([34.1, 34.8, 35.2, 35.9])
+#sim = Simulation_AMR("orionMHD_lowB_AMR", global_size=66.0948+0.12, init_datacubes=False)
+#sim.generate_dataset(name="cube_256px", img_size=256, number=300)
+#ds = getDataset("cube_256px")
+#ds1, ds2 = ds.split(0.8)
+#ds1.save()
+#ds2.save()
+
+#sim = Simulation_AMR("orionMHD_lowB_AMR", global_size=66.0948+0.12, init_datacubes=False)
+#sim.generate_dataset(name="amr_2pc", size=4., img_size=256, number=300)
+#ds2 = getDataset("amr_2pc")
+#ds1_2, ds2_2 = getDataset("amr_2pc_b1"), getDataset("amr_2pc_b2")#ds2.split(0.8)
+#ds1_2.save()
+#ds2_2.save()
+
+#training_ds = getDataset("amr_1pc_b1")
+#validation_ds = getDataset("amr_1pc_b2")
+
+#training_ds.merge([ds1, ds1_2], name="sa_training_set", save=True)
+#validation_ds.merge([ds2, ds2_2], name="sa_validation_set", save=True)
+
+training_ds = getDataset("sa_training_set")
+validation_ds = getDataset("sa_validation_set")
 
 
-tensor = sim.to_datacube("RHO", res=512, bbox=[[bbox[0], bbox[1]], [bbox[2], bbox[3]], None],
-                          filling_method=lambda t: fill_zeros_slice(t, method=fill_zeros_nearest, axis=-1), smoothing=0., force=True)
-plt.figure()
-plt.imshow(np.sum(tensor, -1)*(sim.size*PC_TO_CM/512), cmap="jet", norm=LogNorm(), extent=bbox)
-#sim.init_datacubes(res=512)
-#
+def classic_log_mse(output, target):
+    output_phys = DATA_NORMALIZATION_VDENS_TORCH[1](output)
+    target_phys = DATA_NORMALIZATION_VDENS_TORCH[1](target)
+    output_log = torch.log(output_phys)
+    target_log = torch.log(target_phys)
+    mse = torch.mean((output_log - target_log) ** 2)
+    return mse
+
+
+#trainer = Trainer(SizeAwareUNet, training_ds, validation_ds, "SizeAware_Unet")
+trainer = load_trainer("SizeAware_Unet")
+#trainer.pred_type = "v"
+trainer.norms = { 
+#    "cdens": DATA_NORMALIZATION_CDENS,
+#    "vdens": DATA_NORMALIZATION_VDENS,
+    "physize": (lambda x:x, lambda x:x)
+}
+
+#trainer.ema = True
+#trainer.validation_loss_method = classic_log_mse
+#trainer.ema_warmup = 30
+trainer.learning_rate = 1e-4
+trainer.network_settings["base_filters"] = 64
+trainer.network_settings["num_layers"] = 5
+#trainer.network_settings["attention_layers"] = [2]
+#trainer.network_settings["attention_heads"] = [8]
+#trainer.network_settings["filter_function"] = "linear"
+trainer.training_random_transform = True
+trainer.optimizer_name = "Adam"
+trainer.target_names = ["vdens"]
+trainer.input_names = ["cdens",'physize']
+trainer.auto_save = 250
+trainer.scheduler = None
+#trainer.init()
+#trainer.train(1000,batch_number=8,compute_validation=10,early_stopping=False)
+#trainer.save()
+trainer.get_validation_error()
+
+#trainer.plot(save=True)
+#trainer.plot_validation(save=True, number=16, number_per_row=4)
+
+
 
 #sim.load_cores()
 #smap = sim.format_key_to_spectrum_map()
@@ -75,7 +131,7 @@ sim.cores = new_cores"""
 #obs = Observation_Sim(sim, axis=AXIS)
 #path_samples = "pdf_orionb_cached"
 
-#obs = Observation("OrionB", "column_density_map")
+obs = Observation("OrionB", "column_density_map")
 
 #obs.catalog_name = "Ntormousi & Hennebelle"
 #trainer = load_trainer("DDPM")
@@ -86,16 +142,18 @@ sim.cores = new_cores"""
 #}
 #trainer.get_validation_error()
 #trainer.plot_residuals()
-#_, error = obs.predict(trainer, method="likeliest", repeat=1, overlap=0.75, downsample_factor=obs.find_scale(3.30474,128,400), nan_value=1e19, apply_baseline=True, kernel="gaussian", save_samples=path_samples, skip_using_saved_samples=True, only_error=False)
+_, error = obs.predict(trainer, method="mean", repeat=1, overlap=0., downsample_factor=obs.find_scale(2.,256,400), nan_value=1e19, apply_baseline=True, kernel="uniform", save_samples="pdf_orionb_amr", skip_using_saved_samples=True, only_error=False, patch_size=(256,256))
 
-#obs.save("_ddpm_likeliest_gaussian")
-#obs.load("_cinn")
+#obs.save("_unet_amr")
+#obs.load("_unet_amr")
 #obs.plot_cores_error(show_errors=False, label="cinn",correction="blurred", log_average=30)
 
 #obs.plot(error/obs.prediction, norm=None)
 #obs.load_error("DDPM")
 #obs.prediction = obs.rectify_error_baseline()
-#obs.plot(obs.prediction, norm=LogNorm(vmin=1e2, vmax=1e6))
+obs.plot(obs.prediction, norm=LogNorm(1e2, 4e5))
+obs.plot_dcmf(correction="fixed")
+obs.plot_cores_error(correction="fixed")
 
 #----------------------------------------
 #Blurred correction vs Fixed correction vs No correction

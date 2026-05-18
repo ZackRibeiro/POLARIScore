@@ -11,7 +11,7 @@ from matplotlib.colors import LogNorm
 import shutil
 from matplotlib.widgets import Slider
 from matplotlib.axis import Axis
-from typing import Any, Dict, List, Union, Tuple, Literal, Callable
+from typing import *
 import copy
 import re
 from POLARIScore.utils.utils import NumpyEncoder, numpy_decoder, merge_dicts, split_dict
@@ -178,6 +178,8 @@ class Dataset():
             return
         if not(indexes is None):
             if not(isinstance(indexes, (torch.Tensor, np.ndarray, list))):
+                if indexes < 0:
+                    indexes = list(self.batch.keys())[indexes]
                 return self.load(self.batch[indexes])
             elif len(indexes) < 2:
                 return self.load(self.batch[int(indexes[0])])
@@ -407,12 +409,15 @@ class Dataset():
 
 
     
-    def clone(self, new_name:str)->'Dataset':
+    def clone(self, new_name:Optional[str]=None)->'Dataset':
         ds = Dataset()
         ds.batch = copy.deepcopy(self.batch)
         ds.settings = copy.deepcopy(self.settings)
         ds.data = copy.deepcopy(self.data)
-        ds.name = new_name
+        ds.name = new_name if new_name is not None else str(uuid.uuid4())
+        ds.save()
+        LOGGER.log(f"Dataset {self.name} cloned with new name: {ds.name}")
+        ds = getDataset(ds.name)
         return ds
 
     def downsample(self, channel_names:Union[List[str],str], target_sizes:Union[List[int], int], axis:Union[int,List[int]]=2, methods:Literal['mean','max','crop','first','nn']="mean", replace:bool=False):
@@ -689,7 +694,7 @@ class Dataset():
                     a.remove()
             axes_map = None
             if element_index > -1:
-                _, axes_map = self.plot_map(ax=ax1, element_index=element_index, enable_slider=False)
+                _, axes_map = self.plot_map(ax=ax1, element_index=element_index, enable_slider=False, show_colorbar=False)
             ax2.clear()
             self.plot_correlation(ax=ax2, element_index=element_index, PDF=True)#, contour_levels=[0.38,0.69, 0.95]
             ax3.clear()
@@ -699,11 +704,11 @@ class Dataset():
                     a.remove()
             axes_map2 = None
             if element_index > -1:
-                _, axes_map2 = self.plot_map(ax=ax3, element_index=element_index, map_index= 1, enable_slider=False)
+                _, axes_map2 = self.plot_map(ax=ax3, element_index=element_index, map_index= self.get_element_index("vdens"), enable_slider=False, show_colorbar=False)
             if axes_histo is not None:
                 for a in axes_histo:
                     a.remove()
-            _, axes_histo = self.plot_histo(ax=ax4, element_index=element_index, enable_slider=False)
+            _, axes_histo = self.plot_histo(ax=ax4, element_index=element_index, map_index=self.get_element_index("vdens"), enable_slider=False)
             fig.canvas.draw_idle()
 
         update_element_index(element_index)
@@ -764,7 +769,7 @@ class Dataset():
 
         return fig, [ax_histo]
 
-    def plot_map(self, ax=None, element_index=0, map_index=0, enable_slider=True, show_title=True):        
+    def plot_map(self, ax=None, element_index=0, map_index=0, enable_slider=True, show_title=True, show_colorbar=True):        
         if ax is None:
             fig, ax = plt.subplots()
         else:
@@ -829,7 +834,7 @@ class Dataset():
             ax_map.set_xlabel("[pc]")
             ax_map.set_ylabel("[pc]")
 
-        cbar = plt.colorbar(artist, ax=ax_map, label=self.settings['order'][map_index])
+        cbar = plt.colorbar(artist, ax=ax_map, label=self.settings['order'][map_index]) if show_colorbar else None
 
         if enable_slider:
             ax_slider_map = fig.add_axes([left, bottom-0.03, width, 0.03])
@@ -864,8 +869,9 @@ class Dataset():
                     ax_map.set_xlabel("[pc]")
                     ax_map.set_ylabel("[pc]")
 
-                cbar.update_normal(artist)
-                cbar.set_label(self.settings['order'][m_idx])
+                if show_colorbar:
+                    cbar.update_normal(artist)
+                    cbar.set_label(self.settings['order'][m_idx])
 
                 fig.canvas.draw_idle()
 
@@ -875,7 +881,13 @@ class Dataset():
             return fig, [ax_map, ax_slider_map, ax_slider_elem]
 
         return fig, [ax_map]
-    def plot_correlation(self, X_i=0, Y_i=1, ax=None, bins_number=256, show_yx = False, method=np.log10, contour_levels=0, PDF=False, lines=[0,1,2], element_index=-1):
+    def plot_correlation(self, X_i=None, Y_i=None, ax=None, bins_number=256, show_yx = False, method=np.log10, contour_levels=0, PDF=False, lines=[0,1,2], element_index=-1):
+        
+        if X_i is None:
+            X_i = self.get_element_index("cdens")
+        if Y_i is None:
+            Y_i =self.get_element_index("vdens")
+        
         if ax is None:
             fig, ax = plt.subplots()
         else:
@@ -941,7 +953,7 @@ class Dataset():
                     ax.set_ylim(y_min, y_max)
 
         if type(lines) is list and len(lines) > 0:
-            plot_lines(None, None, ax, lines=lines, x_max=x_max, x_min=x_min, y_max=y_max, y_min=y_min)
+            plot_lines(ax=ax, x=None, y=None, lines=lines, x_max=x_max, x_min=x_min, y_max=y_max, y_min=y_min)
 
         
         #plt.colorbar(hist, ax=ax, label="PDF" if PDF else "counts")

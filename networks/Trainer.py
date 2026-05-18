@@ -35,7 +35,7 @@ NETWORK_OPTIONS = {
     "UneK": UneK,
     "MultiNet": MultiNet,
     "PPV": PPV,
-    "SAUnet": SizeAwareUNet,
+    "SizeAwareUNet": SizeAwareUNet,
     "CAUNet": ContextAwareUNet,
     "JustKAN": JustKAN,
     "cINN": cINN,
@@ -246,7 +246,7 @@ class Trainer():
             minbatch_nbr = int(np.floor(batch_size/batch_number))
             epoch_time = time.time()
             for b in range(minbatch_nbr if minbatch_nbr > 1 else 1):
-                printProgressBar(b, minbatch_nbr, length=10, prefix=f"{b}/{minbatch_nbr}")
+                printProgressBar(b, minbatch_nbr, length=10, prefix=f"{b}/{minbatch_nbr}", disable_done=True)
                 if training_mode == "normal":
                     self.optimizer.zero_grad()
                 used_batch = self.training_set.get(indexes=shuffled_indices[b*batch_number:(b+1)*batch_number if minbatch_nbr >= 1 else -1])
@@ -303,7 +303,7 @@ class Trainer():
                     val_total_loss = 0
                     eval_model = self._get_eval_model(epoch=total_epoch)
                     for b in range(minbatch_nbr if minbatch_nbr > 1 else 1):
-                        printProgressBar(b, minbatch_nbr, length=10, prefix=f"{b}/{minbatch_nbr}")
+                        printProgressBar(b, minbatch_nbr, length=10, prefix=f"{b}/{minbatch_nbr}", disable_done=True)
                         used_batch = self.validation_set.get(indexes=list(range(len(self.validation_set.batch)))[b*batch_number:(b+1)*batch_number if minbatch_nbr >= 1 else -1])
                         if batch_number == 1:
                             used_batch = [used_batch]
@@ -511,7 +511,8 @@ class Trainer():
         minbatch_nbr = int(np.floor(batch_size/batch_number))
         for b in range(minbatch_nbr if minbatch_nbr > 1 else 1):
             #printProgressBar(b, minbatch_nbr, length=10, prefix=f"{b}/{minbatch_nbr}")
-            used_batch = dataset.get(indexes=list(range(batch_size))[b*batch_number:(b+1)*batch_number if minbatch_nbr > 1 else -1])
+            indexes_to_fetch = list(range(batch_size))[b*batch_number:(b+1)*batch_number if minbatch_nbr > 1 else -1] if batch_size > 1 else [0]
+            used_batch = dataset.get(indexes=[list(dataset.batch.keys())[i] for i in indexes_to_fetch])
             if batch_number == 1:
                 used_batch = [used_batch]
             input_tensor, target_tensor = self.model.shape_batch(used_batch, dataset.get_element_index(self.target_names), dataset.get_element_index(self.input_names),
@@ -918,8 +919,8 @@ def load_trainer(model_name, load_model=True, trainer_class=Trainer, model_class
     if model_class is None:
         try:
             trainer.network = network_options[settings["network"]]
-        except e:
-            LOGGER.error(f"Automatic loading of network class failed : {e}")
+        except:
+            LOGGER.error(f"Automatic loading of network class failed")
     else:
         trainer.network = model_class
     trainer.learning_rate = float(settings["learning_rate"])

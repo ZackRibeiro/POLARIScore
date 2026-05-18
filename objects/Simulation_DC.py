@@ -506,11 +506,40 @@ class Simulation_DC():
             self.volumic_density[axis] = method(self.data['RHO'], axis=axis)
         return self.volumic_density[axis]
     
+    def get_region_datacube(self, key:str, axis:int, bbox:Tuple[float,float,float,float], res:int):
+        assert key in self.data, LOGGER.error(f"Can't fetch region because there is no {key} in data.")
+        
+        x0,x1,y0,y1 = bbox
+
+        i_x0 = convert_pc_to_index(x0, self.nres,self.size,start=self.bbox[0][0],flip=False)
+        i_x1 = convert_pc_to_index(x1, self.nres,self.size,start=self.bbox[0][0],flip=False)
+        i_y0 = convert_pc_to_index(y0, self.nres,self.size,start=self.bbox[1][0],flip=False)
+        i_y1 = convert_pc_to_index(y1, self.nres,self.size,start=self.bbox[1][0],flip=False)
+        
+        if axis == 0:
+            data = self.data[key][:, i_y0:i_y1, i_x0:i_x1]
+            data = np.moveaxis(data, 0, -1)
+        elif axis == 1:
+            data = self.data[key][i_y0:i_y1, :, i_x0:i_x1]
+            data = np.moveaxis(data, 1, -1)
+        elif axis == 2:
+            data = self.data[key][i_y0:i_y1, i_x0:i_x1, :]
+
+        if data.shape[0] > res:
+            factors = []
+            for si, shape in enumerate(data.shape):
+                if si < 2:
+                    factors.append(res/shape)
+                    continue
+                factors.append(1.)
+            data = zoom(data, factors, order=3)
+
+        return data
+
     def generate_dataset(self,name:str=None,
-                         what_to_compute:Dict={"cospectra":False,"density":False,"context":None,"vdens":compute_mass_weighted_density,"cores":False,"density_methods":None}
+                         what_to_compute:Dict={"cospectra":False,"density":False,"vdens":compute_mass_weighted_density,"cores":False,"density_methods":None}
                        ,number:int=8,size:Union[float,Tuple[float,float]]=0.,img_size:int=128,random_rotate:bool=True,limit_area:Tuple=(None,None,None),
-                       nearest_size_factor:float=0.75,axes:Union[int,List[int]]=[0,1,2],
-                       beam:Optional[Tuple[float,float]]=None)->bool:
+                       nearest_size_factor:float=0.75,axes:Union[int,List[int]]=[0,1,2])->bool:
         """
         Util method to generate a dataset from simulation.
 
@@ -518,7 +547,6 @@ class Simulation_DC():
         - 'vdens': compute average volume density along axes
         - 'co_spectra': compute the co spectra
         - 'density': keep the density cube in the dataset
-        - 'context': generate a downsampled global region (default is all the sim face) with a channel for a crop mask: 1 if the random region contains the pos else 0.
         - 'cores': generate a catalog of dense cores contained in the region
         - 'density_methods': Dict of methods with keys=names and values=callable with each method taking the region cube of density (third axis is line of sight) and returns 2D maps.
 
@@ -534,27 +562,11 @@ class Simulation_DC():
         Returns:
             flag: if dataset was correctly generated.
         """
-
-        assert 'RHO' in self.data, LOGGER.error(f"Can't generate dataset -> There is no density stored in data. Keys actually stored in data: {self.data.keys()}")
-
         LOGGER.border("DATASET-GENERATING", color="36m")
         LOGGER.global_color = "36m"
 
         axes = axes if type(axes) is list else [axes]
         LOGGER.log(f"Trying to generate {number} images using simulation {self.name} on faces {axes}.")
-
-        column_density = [None, None, None]
-        volume_density = [None, None, None]
-        for ax in axes:
-            column_density[ax] = compute_column_density(self.data['RHO'], self.cell_size, axis=ax)
-
-            if what_to_compute["vdens"] is not None:
-                volume_density[ax] = self._compute_v_density(what_to_compute["vdens"], axis=ax)
-
-        if beam != None:
-            LOGGER.warn(f"Column and volume density maps convolved to beam size: {beam[0]} arcsec at distance: {beam[1]} pc.")
-            column_density = [convolve_map(c, self.cell_size*3.24078e-19, beam_size=beam[0], distance=beam[1]) if c is not None else None for c in column_density]
-            volume_density = [convolve_map(v, self.cell_size*3.24078e-19, beam_size=beam[0], distance=beam[1]) if v is not None else None for v in volume_density]
 
         flag_cospectra = False
         if "cospectra" in what_to_compute and what_to_compute["cospectra"] is not None:
@@ -574,13 +586,11 @@ class Simulation_DC():
                 co_spectra = [smap.map for smap in co_spectra]
         flag_number_density = what_to_compute["density"] if "density" in what_to_compute else False
         flag_density_methods = what_to_compute["density_methods"] is not None and isinstance(what_to_compute["density_methods"], dict)
-        flag_context = (what_to_compute["context"] is not None and what_to_compute["context"]) if "context" in what_to_compute else False
         flag_physize = True
         flag_cores = "cores" in what_to_compute and what_to_compute["cores"]
 
         order = ["cdens"]
-        if what_to_compute["vdens"] is not None:
-            order.append("vdens")
+        order.append("vdens")
         if flag_cospectra:
             order.append("cospectra")
         if flag_density_methods:
@@ -588,8 +598,6 @@ class Simulation_DC():
                 order.append("density_"+dens_method_name)
         if flag_number_density:
             order.append("density")
-        if flag_context:
-            order.append("cdens_context")
         if flag_physize:
             order.append("physize")
         if flag_cores:
@@ -608,55 +616,54 @@ class Simulation_DC():
         iteration = 0
         while img_generated < number and iteration < number*100 :
             iteration += 1
-            print(f'{iteration}', end = "\r")
+            printProgressBar(img_generated, number+1, prefix=iteration, length=20)
             if iteration >= number*100:
                 LOGGER.warn("Failed to generated all the requested random batches, nbr of imgs generated:"+str(img_generated))
                 break
 
+
             face = axes[int(np.floor(np.random.random()*len(axes)))]
-            c_dens = column_density[face]
-            v_dens = volume_density[face]
             if flag_cospectra:
                 co_spec = co_spectra[face]  
             
             limits = limit_area[face]
             if limits is None:
-                limits = [0,self.global_size,0,self.global_size]
+                limits =  []
+                for i in range(len(self.bbox)):
+                    if i != face:
+                        limits.append(self.bbox[i])
+                limits = np.array(limits).flatten()
             center = np.array([limits[0]+(limits[1]-limits[0])*np.random.random(),limits[2]+(limits[3]-limits[2])*np.random.random()])
             c_x, c_y = center
-            c_x = convert_pc_to_index(c_x, self.nres,self.size,start=self.bbox[0][0],flip=False)
-            c_y = convert_pc_to_index(c_y, self.nres,self.size,start=self.bbox[0][0],flip=False)
-            if(c_x < 0 or c_y < 0):
-                continue
             
-            s = img_size
-            i_size = size
-            if type(i_size) is list:
-                i_size = np.min(size) + np.random.random()*(np.max(size)-np.min(size))
-            s = max(convert_pc_to_index(i_size, self.nres, self.size, clip=False)+1, img_size)
-            i_size = self.from_index_to_scale(s)/PC_TO_CM
+            s_pc = size
+            if type(s_pc) is list:
+                s_pc = np.min(size) + np.random.random()*(np.max(size)-np.min(size))
+            if s_pc <= 0:
+                s_pc = self.from_index_to_scale(img_size)/PC_TO_CM
 
-            #Verify if the region is already covered by a previous generated image
             flag = False
             for point in areas_explored[face]:
-                if np.linalg.norm(center-point) < nearest_size_factor * i_size:
+                if np.linalg.norm(center-point) < nearest_size_factor * s_pc:
                     flag = True
                     break
             if flag:
                 continue
 
-            start_x = c_x - s // 2
-            start_y = c_y - s // 2
-            end_x = c_x + s // 2 + s%2
-            end_y = c_y + s // 2 + s%2
+            start_x = c_x - s_pc / 2
+            start_y = c_y - s_pc / 2
+            end_x = c_x + s_pc / 2
+            end_y = c_y + s_pc / 2
 
-            if(start_x < 0 or start_y < 0 or end_x >= self.nres or end_y >= self.nres):
+            if(start_x <= limits[0] or start_y <= limits[2] or end_x >= limits[1] or end_y >= limits[3]):
                 continue
 
-            def _process_img(img, k, skip_crop=False):
+            densities = self.get_region_datacube('RHO', axis=face, bbox=[start_x, end_x, start_y, end_y],res=img_size)
+            c_dens = compute_column_density(densities, (self.bbox[face][1]-self.bbox[face][0])/densities.shape[-1], axis=-1)
+            v_dens = what_to_compute["vdens"](densities, axis=-1)
+
+            def _process_img(img, k):
                 p_img = img
-                if not(skip_crop):
-                    p_img = p_img[start_y:end_y, start_x:end_x]
                 #downsample
                 if p_img.shape[0] > img_size:
                     factors = []
@@ -685,75 +692,30 @@ class Simulation_DC():
 
             k = np.random.choice([0, 1, 2, 3]) if random_rotate else 0
             b = [_process_img(c_dens,k)]
-            if v_dens is not None:
-                b.append(_process_img(v_dens,k))
+            b.append(_process_img(v_dens,k))
 
             score = compute_img_score(b[0],b[1])
-            if(np.random.random() > RANDOM_BATCH_SCORE_fct(score[0])):
-                continue
+            #if(np.random.random() > RANDOM_BATCH_SCORE_fct(score[0])):
+            #    continue
 
             if flag_cospectra:
                 b.append(_process_img(co_spec,k))
 
-            if flag_number_density:
-                if face == 0:
-                    densities = self.data['RHO'][:, start_y:end_y, start_x:end_x]
-                elif face == 1:
-                    densities = self.data['RHO'][start_y:end_y, :, start_x:end_x]
-                elif face == 2:
-                    densities = self.data['RHO'][start_y:end_y, start_x:end_x, :]
-
-                if densities.shape[0] == self.nres:
-                    densities = np.moveaxis(densities, 0, -1)
-                elif densities.shape[1] == self.nres:
-                    densities = np.moveaxis(densities, 1, -1)
             if flag_density_methods:
-                if not(flag_number_density):
-                    if face == 0:
-                        densities = self.data['RHO'][:, start_y:end_y, start_x:end_x]
-                    elif face == 1:
-                        densities = self.data['RHO'][start_y:end_y, :, start_x:end_x]
-                    elif face == 2:
-                        densities = self.data['RHO'][start_y:end_y, start_x:end_x, :]
-
-                    if densities.shape[0] == self.nres:
-                        densities = np.moveaxis(densities, 0, -1)
-                    elif densities.shape[1] == self.nres:
-                        densities = np.moveaxis(densities, 1, -1)
                 for dens_method_name in what_to_compute["density_methods"]:
                     dens_method = what_to_compute["density_methods"][dens_method_name]
                     d_result:np.ndarray = dens_method(densities)
-                    d_result = _process_img(d_result, k, skip_crop=True)
+                    d_result = _process_img(d_result, k)
                     b.append(d_result)
             if flag_number_density:
-                densities = _process_img(densities, k, skip_crop=True)
+                densities = _process_img(densities, k)
                 b.append(densities)
 
-
-            if flag_context:
-                assert column_density[face].shape[0]//s, LOGGER.error("Datacube dimension need to be divisible by size asked to generate context.")
-                context_size = what_to_compute["context"] if type(what_to_compute["context"]) is float or type(what_to_compute["context"]) is int else size
-                if(context_size < i_size*2):
-                    context_size = i_size*2
-                context_size_idx = convert_pc_to_index(context_size, self.nres,self.size, clip=False)+1
-                context_cdens = column_density[face].copy()
-                context_x1,context_y1,context_x2,context_y2 = find_context(canvas=context_cdens, region=(start_x,start_y,end_x,end_y), context_size=context_size_idx)
-                #crop to context
-                context_cdens = context_cdens[context_y1:context_y2,context_x1:context_x2]
-                context_cropmask = np.zeros_like(context_cdens)
-                context_cropmask[start_y-context_y1:end_y-context_y1, start_x-context_x1:end_x-context_x1] = 1.
-                context_mat = np.zeros((2,img_size,img_size))
-                context_mat[0,:,:] = _process_img(context_cdens,k,skip_crop=True)
-                context_mat[1,:,:] = _process_img(context_cropmask,k,skip_crop=True)
-                b.append(context_mat)
-
             if flag_physize:
-                b.append(np.array([size]))
+                b.append(np.array([s_pc]))
 
             if flag_cores:
-                cx_max, cy_max = (center) + i_size/2
-                cx_min, cy_min = (center) - i_size/2
-                cores, cores_pos = self.get_cores(axis=face, box=([cx_min,cx_max,cy_min,cy_max]),just_center=True,flip_y=False)
+                cores, cores_pos = self.get_cores(axis=face, box=([start_x,end_x,start_y,end_y]),just_center=True,flip_y=False)
                 #if len(cores) <= 0:
                 #    continue
                 catalog_cores = {}
@@ -761,9 +723,9 @@ class Simulation_DC():
                     core = {}
                     core['index'] = c['index']
                     c_pos = np.array([cores_pos[0][i],cores_pos[1][i],cores_pos[2][i]])
-                    cx_idx = convert_pc_to_index(c_pos[0], img_size, i_size, start=cx_min)
-                    cy_idx = convert_pc_to_index(c_pos[1], img_size, i_size, start=cy_min)
-                    c_pos[2] = convert_pc_to_index(c_pos[2], self.nres, self.size, start=self.bbox[0][0])
+                    cx_idx = convert_pc_to_index(c_pos[0], img_size, s_pc, start=start_x)
+                    cy_idx = convert_pc_to_index(c_pos[1], img_size, s_pc, start=start_y)
+                    c_pos[2] = convert_pc_to_index(c_pos[2], densities.shape[-1], self.bbox[face][1]-self.bbox[face][0], start=self.bbox[face][0])
 
                     c_pos[1], c_pos[0] = rotate_index(cy_idx, cx_idx, (img_size, img_size), k)
                     c_pos = c_pos.astype(int)
@@ -811,7 +773,7 @@ class Simulation_DC():
             "order": order,
             "what_was_computed": what_to_compute,
             "img_number": img_generated,
-            "img_size": i_size,
+            "img_size": s_pc,
             "areas_explored":areas_explored,
             "scores": scores,
             "scores_fct": inspect.getsourcelines(RANDOM_BATCH_SCORE_fct)[0][0],
@@ -1007,7 +969,7 @@ class Simulation_DC():
 
         return fig, axes
 
-    def plot_correlation(self,ax=None, method:Callable=compute_mass_weighted_density, axis:int=-1, force_compute:bool=False, lines:List[int]=[0,1,2], colorbar=True)->Tuple:
+    def plot_correlation(self,ax=None, method:Callable=compute_mass_weighted_density, axis:int=-1, force_compute:bool=False, lines:List[int]=[0,1,2], colorbar=True):
 
         """
         Plot correlation between the column density and the volumic density

@@ -208,7 +208,8 @@ class Simulation_AMR(Simulation_DC):
         self.nres = AMR_BASE_RESOLUTION
         self.cell_size = self.size/self.nres*PC_TO_CM
         
-    def to_datacube(self, key, filling_method:Optional[Callable]=fill_zeros_nearest, res:Union[List[int],int]=128, smoothing:float=0, bbox:Optional[List[float]]=None, store:bool=False, force:bool=False):
+    def to_datacube(self, key, filling_method:Optional[Callable]=fill_zeros_nearest, res:Union[List[int],int]=128, smoothing:float=0, bbox:Optional[List[float]]=None,
+                    store:bool=False, force:bool=False, log:bool=True):
         bbox_was_none = bbox is None
         if bbox is not None:
             force=True
@@ -224,31 +225,37 @@ class Simulation_AMR(Simulation_DC):
         t = [*bbox[1]]
         bbox[1] = bbox[0]
         bbox[0] = t
+
+        if isinstance(res, (int, float)):
+            res = [int(res),int(res),int(res)]
+        else:
+            tr = res[1]
+            res[1] = res[0]
+            res[0] = tr
+
         if (key[0] == "p" and key[1] == "_"):
             query_key = "p_"+key[2:].upper()
             key = key[2:]
         else:
             query_key = "p_"+key.upper()
-        LOGGER.log(f"Making a datacube of {query_key} with a resolution of {res}")
+        if log:
+            LOGGER.log(f"Making a datacube of {query_key} with a resolution of {res}")
 
         assert query_key in self.data, LOGGER.error(f"Can't construct datacube from {query_key} -> No such key loaded in data.")
         assert self.yt is not None, LOGGER.error(f"Mising yt streaming dataset.")
-        if key in self.data and not(force) and self.data[key].shape[0] == res:
+        if key in self.data and not(force) and self.data[key].shape[0] == res[0]:
             return self.data[key]
         
-        if isinstance(res, (int, float)):
-            res = [int(res),int(res),int(res)]
-
         bbox[0,:] = self.global_size*PC_TO_CM-bbox[0,:] #dont know why but this is needed (y flipped and matplotlib plot y,x)
         bbox[0,:] = np.sort(bbox[0,:])
 
         cg = self.yt.arbitrary_grid(
             left_edge=bbox[:,0],
             right_edge=bbox[:,1],
-            dims=(res[0], res[1], res[2])
+            dims=res
         )
 
-        if 'VOLUME' in self.data and self.data['VOLUME'].shape[0] == res and bbox_was_none:
+        if 'VOLUME' in self.data and self.data['VOLUME'].shape[0] == res[0] and bbox_was_none:
             volume_tensor = self.data['VOLUME']
         else:
             volume_tensor = cg["deposit", "all_sum_volume"].to_ndarray()
@@ -273,4 +280,26 @@ class Simulation_AMR(Simulation_DC):
             self.data[key.upper()] = datacube
 
         return datacube
+    
+    def get_region_datacube(self, key, axis, bbox, res):
+        if axis == -1:
+            insert_axis = len(bbox)
+        else:
+            insert_axis = axis
+
+        grid_axis = axis
+        if axis == 0:
+            grid_axis = 1
+        elif axis == 1:
+            grid_axis = 0
+
+        bbox=[[bbox[0], bbox[1]], [bbox[2], bbox[3]]]
+        bbox.insert(insert_axis, None)
+        rres = [res,res]
+        rres.insert(insert_axis, 512)
+        data = self.to_datacube(key.upper(), res=rres, bbox=bbox,
+                                filling_method=lambda t: fill_zeros_slice(t, method=lambda x:fill_zeros_idw(x, k=3, power=1), axis=grid_axis), smoothing=0.5, force=True, log=False)
+        data = np.moveaxis(data, grid_axis, -1)
+        data += 1e-3
+        return data
     

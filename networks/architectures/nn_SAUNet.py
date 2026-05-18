@@ -81,7 +81,8 @@ class SizeAwareUNet(BaseModule):
         Args
             x: tensor shape [(B,1,H,W),(B,1)] ; i.e [region, physical_size]
         """
-        size_x = x[1]
+        size_x = torch.ones((1, 1, 1), device=self.device)*2. #x[1]
+
         x = x[0]
 
         # Encoders forward pass
@@ -114,9 +115,3 @@ class SizeAwareUNet(BaseModule):
         # Output
         rslt = self.final_conv[0](decoded_x[0])
         return rslt
-    
-if __name__ == "__main__":
-    #Test shape
-    model = SizeAwareUNet(num_layers=3)
-    x = [torch.randn(2, 1, 32, 32), torch.randn(2,1)]
-    print(model(x).shape)
