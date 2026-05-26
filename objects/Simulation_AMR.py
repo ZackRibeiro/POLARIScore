@@ -20,7 +20,9 @@ import glob
 from typing import *
 
 KEY_H5_TO_SIM = {
-    "RHO": "scalars/density"
+    "RHO": "scalars/density",
+    "TEMP": "scalars/temperature",
+    "VEL": "vectors/velocity"
 }
 
 def fill_zeros_nearest(arr):
@@ -45,7 +47,7 @@ def fill_zeros_slice(arr, method=fill_zeros_nearest, axis=-1):
 def fill_zeros_idw(arr, k=8, power=2):
     arr = np.asarray(arr)
 
-    valid_mask = arr > 0
+    valid_mask = arr != 0
 
     if valid_mask.all():
         return arr.copy()
@@ -84,6 +86,61 @@ def fill_zeros_idw(arr, k=8, power=2):
 
     return out
 
+
+def amr_leaf_to_datacube(points,sizes,values,bbox,res,dtype=np.float64):
+    if isinstance(res, int):
+        res = (res, res, res)
+
+    nx, ny, nz = res
+
+    cube = np.zeros((nx, ny, nz), dtype=dtype)
+
+    bbox = np.asarray(bbox, dtype=dtype)
+
+    xmin, ymin, zmin = bbox[:,0]
+    xmax, ymax, zmax = bbox[:,1]
+
+    dx = (xmax - xmin) / nx
+    dy = (ymax - ymin) / ny
+    dz = (zmax - zmin) / nz
+
+    for i, (p, h, val) in enumerate(zip(points, sizes, values)):
+
+        if (i + 1) % int(len(values)/1e3) == 0:            
+            printProgressBar(i, len(values), "AMR Leaves to Datacube", length=30)
+
+        half = 0.5 * h
+
+        x0 = p[2] - half
+        x1 = p[2] + half
+
+        y0 = p[1] - half
+        y1 = p[1] + half
+
+        z0 = p[0] - half
+        z1 = p[0] + half
+
+        ix0 = int((x0 - xmin) / dx)
+        ix1 = int((x1 - xmin) / dx)
+
+        iy0 = int((y0 - ymin) / dy)
+        iy1 = int((y1 - ymin) / dy)
+
+        iz0 = int((z0 - zmin) / dz)
+        iz1 = int((z1 - zmin) / dz)
+
+        ix0 = max(0, min(nx - 1, ix0))
+        iy0 = max(0, min(ny - 1, iy0))
+        iz0 = max(0, min(nz - 1, iz0))
+
+        ix1 = max(0, min(nx - 1, ix1))
+        iy1 = max(0, min(ny - 1, iy1))
+        iz1 = max(0, min(nz - 1, iz1))
+
+        cube[ix0:ix1+1,iy0:iy1+1,iz0:iz1+1] = val
+
+    return cube
+
 class Simulation_AMR(Simulation_DC):
     
     def __init__(self, name, global_size, init=True, init_datacubes:bool=True):
@@ -108,9 +165,7 @@ class Simulation_AMR(Simulation_DC):
         else:
             assert self.load_h5(key="RHO", path="datatree", unit=(1/(1.673e-24 *1.4)))
             self.load_h5(key="TEMP", path="datatree_temp", unit=1, str_unit="K")
-            self.load_h5(key="VX1", path="datatree_velx", unit=1e5)
-            self.load_h5(key="VX2", path="datatree_vely", unit=1e5)
-            self.load_h5(key="VX3", path="datatree_velz", unit=1e5)
+            self.load_h5(key="VEL", path="datatree_vel", unit=1, str_unit="cm/s")
 
         self.bbox = self.bbox*self.global_size
         self.init_yt()
@@ -143,6 +198,7 @@ class Simulation_AMR(Simulation_DC):
             data["particle_"+k[2:]] = self.data["p_"+k[2:].upper()]
         self.yt = yt.load_particles(data, bbox=self.bbox*PC_TO_CM, length_unit=1)
         for k in p_keys:
+            LOGGER.log(f"Adding {k} to particle fields.")
             self.yt.add_deposited_particle_field(("all", "particle_"+k[2:]), "sum")
         return self.yt
 
@@ -153,6 +209,7 @@ class Simulation_AMR(Simulation_DC):
         if not(os.path.exists(path)):
             LOGGER.error(f"Data {key} not loaded in simulation {self.name} -> File not found")
             return False
+        key_to_verify = key
         with h5py.File(path, "r") as f:
             points = f['points'][:]
             if "points" in self.data:
@@ -160,7 +217,7 @@ class Simulation_AMR(Simulation_DC):
                 if len(points) != len(self.data["points"]):
                     LOGGER.error(f"Data {key} not loaded in simulation {self.name} -> The points are not the same that the previous file loaded.")
                     return False
-                if any([points[0][i] != self.data["points"][0][i] for i in range(len(points))]):
+                if any([points[i][0] != self.data["points"][i][0] for i in range(len(points))]):
                     LOGGER.error(f"Data {key} not loaded in simulation {self.name} -> The points are not the same that the previous file loaded.")
                     return False
             else:
@@ -171,9 +228,11 @@ class Simulation_AMR(Simulation_DC):
                 self.data["points"] = points*PC_TO_CM*self.global_size
                 
                 eps = 1e-10
-                self.bbox = np.array([[x0-eps,x1+eps],[y0-eps,y1+eps],[z0-eps,z1+eps]])
                 if x1-x0 != y1-y0 or x1-x0 != z1-z0 or z1-z0 != y1-y0:
-                   LOGGER.warn("The simulation is not a cube, self.size is the maximum length.") 
+                    LOGGER.warn(f"The simulation is not a cube, self.size is the maximum length. ({x0},{x1};{y0},{y1};{z0},{z1}) -> Cube forced") 
+                    x0,y0,z0 = np.min([x0,y0,z0]),np.min([x0,y0,z0]),np.min([x0,y0,z0])
+                    x1,y1,z1 = np.max([x1,y1,z1]),np.max([x1,y1,z1]),np.max([x1,y1,z1])
+                self.bbox = np.array([[x0-eps,x1+eps],[y0-eps,y1+eps],[z0-eps,z1+eps]])
                 self.size = np.max([x1-x0,y1-y0,z1-z0])*self.global_size
                 self.relative_size = self.size/self.global_size
             if "p_SIZE" not in self.data:
@@ -191,25 +250,39 @@ class Simulation_AMR(Simulation_DC):
                 if volume_weighted:
                     assert "p_SIZE" in self.data, LOGGER.error("Can't volume weight the particle volumes if there is no size data.")
                     factor *= (self.data["p_SIZE"][0])**3
-                self.data["p_"+key] = (f[query_key][:]*factor, str_unit)
-        if self.data["p_"+key] is None:
-            LOGGER.warn(f"Data {key} not loaded in simulation {self.name} -> file empty")
-            return False
+                if "vectors" in query_key:
+                    key_to_verify = []
+                    for i in range(f[query_key][:].shape[-1]):
+                        #v_key = key[0]+"X"+str(f[query_key][:].shape[-1]-i)
+                        v_key = key[0]+"X"+str(i+1)
+                        self.data["p_"+v_key] = (f[query_key][:,i]*factor, str_unit)
+                        LOGGER.log(f"{key}: vmin={np.min(f[query_key][:,i])}, vmax={np.max(f[query_key][:,i])}")
+                        key_to_verify.append(v_key)
+                else:
+                    self.data["p_"+key] = (f[query_key][:]*factor, str_unit)
+                    key_to_verify = key
+        if not(isinstance(key_to_verify, list)):
+            key_to_verify = [key_to_verify]
+        for k in key_to_verify:
+            if self.data["p_"+k] is None:
+                LOGGER.warn(f"Data {k} not loaded in simulation {self.name} -> file empty")
+                return False
         return True
     
-    def init_datacubes(self, res=AMR_BASE_RESOLUTION, force:bool=True):
+    def init_datacubes(self, res=AMR_BASE_RESOLUTION, force:bool=True, filling_method=amr_leaf_to_datacube):
         keys = list(self.data.keys())
         for k in keys:
             k = k.lower()
             if not(isinstance(k, str)):
                 continue
             if k[0]=="p" and k[1]=="_":
-                self.to_datacube(key=k, res=res, store=True, force=force)
+                self.to_datacube(key=k, res=res, store=True, cache=True, force=force, filling_method=filling_method)
         self.nres = AMR_BASE_RESOLUTION
         self.cell_size = self.size/self.nres*PC_TO_CM
         
-    def to_datacube(self, key, filling_method:Optional[Callable]=fill_zeros_nearest, res:Union[List[int],int]=128, smoothing:float=0, bbox:Optional[List[float]]=None,
-                    store:bool=False, force:bool=False, log:bool=True):
+    def to_datacube(self, key, filling_method:Optional[Callable]=amr_leaf_to_datacube, res:Union[List[int],int]=128, smoothing:float=0, bbox:Optional[List[float]]=None,
+                    store:bool=False, force:bool=False, log:bool=True, cache:bool=False, dtype=np.float64):
+        
         bbox_was_none = bbox is None
         if bbox is not None:
             force=True
@@ -241,41 +314,54 @@ class Simulation_AMR(Simulation_DC):
         if log:
             LOGGER.log(f"Making a datacube of {query_key} with a resolution of {res}")
 
+        if cache and bbox_was_none:
+            path_key = os.path.join(self.folder, "datacube_"+key+"_"+str(res[0])+"_"+filling_method.__name__+".npy")
+            if os.path.exists(path_key):
+                LOGGER.log(f"Datacube {key} loaded using cache.")
+                if store:
+                    self.data[key.upper()] = np.load(path_key, mmap_mode="r+")
+                return self.data[key.upper()]
+
         assert query_key in self.data, LOGGER.error(f"Can't construct datacube from {query_key} -> No such key loaded in data.")
-        assert self.yt is not None, LOGGER.error(f"Mising yt streaming dataset.")
-        if key in self.data and not(force) and self.data[key].shape[0] == res[0]:
-            return self.data[key]
-        
-        bbox[0,:] = self.global_size*PC_TO_CM-bbox[0,:] #dont know why but this is needed (y flipped and matplotlib plot y,x)
+        bbox[0,:] = self.global_size*PC_TO_CM-bbox[0,:]
         bbox[0,:] = np.sort(bbox[0,:])
 
-        cg = self.yt.arbitrary_grid(
-            left_edge=bbox[:,0],
-            right_edge=bbox[:,1],
-            dims=res
-        )
-
-        if 'VOLUME' in self.data and self.data['VOLUME'].shape[0] == res[0] and bbox_was_none:
-            volume_tensor = self.data['VOLUME']
-        else:
-            volume_tensor = cg["deposit", "all_sum_volume"].to_ndarray()
-            if (bbox_was_none):
-                self.data['VOLUME'] = volume_tensor
-
-        if key.upper() == "VOLUME":
-            return volume_tensor
-
-        datacube = cg["deposit", "all_sum_"+key.lower()].to_ndarray()
 
         if key.upper() != "SIZE":
+            if 'VOLUME' in self.data and self.data['VOLUME'].shape[0] == res[0] and bbox_was_none:
+                volume_tensor = self.data['VOLUME']
+            else:
+                if key.upper() != "VOLUME":
+                    volume_tensor = self.to_datacube("VOLUME", filling_method=filling_method, res=res, smoothing=smoothing, bbox=bbox, store=store, force=False, log=log, cache=cache, dtype=dtype)
+
+        if key in self.data and not(force) and self.data[key].shape[0] == res[0]:
+            return self.data[key]
+        if filling_method.__name__ == amr_leaf_to_datacube.__name__:
+            points = self.data["points"]
+            sizes = self.data["p_SIZE"][0]
+            values = self.data[query_key][0]
+            datacube = amr_leaf_to_datacube(points=points,sizes=sizes,values=values,bbox=bbox,res=res, dtype=dtype)
+            datacube = fill_zeros_nearest(datacube)
+        else:
+            assert self.yt is not None, LOGGER.error(f"Mising yt streaming dataset.")
+            cg = self.yt.arbitrary_grid(left_edge=bbox[:,0],right_edge=bbox[:,1],dims=res)
+            datacube = cg["deposit", "all_sum_"+key.lower()].to_ndarray()
+
+        if key.upper() != "SIZE" and key.upper() != "VOLUME":
             datacube = np.divide(datacube,volume_tensor,out=np.zeros_like(datacube),
-                where=(volume_tensor > 0) & (datacube > 0)
+                where=(volume_tensor > 0) & (datacube != 0)
             )
-        if filling_method is not None:
+        if filling_method.__name__ != amr_leaf_to_datacube.__name__ and filling_method is not None:
             datacube = filling_method(datacube)
         if smoothing > 0:
             datacube = gaussian_filter(datacube, sigma=smoothing)
 
+        if cache and bbox_was_none:
+            path_key = os.path.join(self.folder, "datacube_"+key+"_"+str(res[0])+"_"+filling_method.__name__+".npy")
+            np.save(path_key, datacube)
+            LOGGER.log(f"Datacube {key} saved at {path_key}.")
+            del datacube
+            datacube = np.load(path_key, mmap_mode="r+")
         if store:
             self.data[key.upper()] = datacube
 

@@ -423,61 +423,72 @@ def predict_map_reduced(data, model_trainer:'Trainer', method:Literal["mean","ma
     return output_matrix
 
 from POLARIScore.objects.SpectrumMap import SpectrumMap
-def open_samples_as_spectrummap(path:str, bins:int=32, is_in_cache_folder:bool=True)->'SpectrumMap':
-    if is_in_cache_folder and CACHES_FOLDER not in path:
-        path = os.path.join(CACHES_FOLDER, path)
-    if ".npy" not in path:
-        path += ".npy"
-    if not(os.path.exists(path)):
-        LOGGER.error(f"Can't open samples because there is no such file: {path}.") 
-    kernel_path = path.split(".npy")[0]+"_weight.npy"
-    has_kernel = os.path.exists(kernel_path)
-    if has_kernel:
-        weight_tensor = np.load(kernel_path, mmap_mode='r')
+def open_samples_as_spectrummap(path:str, bins:int=32, cache:bool=True)->'SpectrumMap':
+    """Returns spectrum map and x axis normalization"""
+
+    x_norm_max_tensor = None
+    x_norm_min_tensor = None 
+    path = os.path.join(CACHES_FOLDER, path)
+    cache_name = os.path.basename(path).split(".npy")[0]+"_map"
+    if  SpectrumMap.exists(cache_name):
+        return SpectrumMap(cache_name)
     else:
-        weight_tensor = None
-    samples_tensor = np.load(path, mmap_mode='r')
-    count_tensor = np.sum(~np.isnan(samples_tensor), axis=-1)
+        if ".npy" not in path:
+            path += ".npy"
+        assert os.path.exists(path), LOGGER.error(f"Can't open samples because there is no such file: {path}.") 
+        kernel_path = path.split(".npy")[0]+"_weight.npy"
+        has_kernel = os.path.exists(kernel_path)
+        if has_kernel:
+            weight_tensor = np.load(kernel_path, mmap_mode='r')
+        else:
+            weight_tensor = None
+        samples_tensor = np.load(path, mmap_mode='r')
+        count_tensor = np.sum(~np.isnan(samples_tensor), axis=-1)
+        x_norm_min_tensor = np.zeros(samples_tensor.shape[:2])
+        x_norm_max_tensor = np.zeros(samples_tensor.shape[:2])
+
+        H,W,C = samples_tensor.shape
+        pdf_map = np.zeros((H,W,bins))
+        for y in range(H):
+            for x in range(W):
+                printProgressBar(y*W+x,W*H,prefix="Transforming samples tensor to a pdf tensor")
+                n = count_tensor[y, x]
+                if n == 0:
+                    continue
+                vals = samples_tensor[y, x, :n]
+                                
+                finite_mask = np.isfinite(vals)
+                vals = vals[finite_mask]
+
+                if has_kernel:
+                    w = weight_tensor[y, x, :n][finite_mask]
+                else:
+                    w = None
+
+                if len(vals) == 0:
+                    continue
+
+                vmin = np.min(vals)
+                vmax = np.max(vals)
+                if not np.isfinite(vmin) or not np.isfinite(vmax):
+                    continue
+
+                if np.isclose(vmin, vmax, rtol=1e-6, atol=1e-12):
+                    continue
+                hist, bin_edges = np.histogram(vals, bins=min(bins, max(8, int(np.sqrt(n)))), density=True, weights=w)
+                x_norm_min_tensor[y,x] = bin_edges.min()
+                x_norm_max_tensor[y,x] = bin_edges.max()
+                if len(hist) < bins:
+                    hist = np.pad(hist, (0, bins - len(hist)), mode='constant') 
+                del vals
+                max_bin = np.argmax(hist)
+                #Multiply by the likeliest value to have a good looking integrated map when opened with SpectrumMap.
+                hist *= .5*(bin_edges[max_bin] + bin_edges[max_bin + 1])/np.sum(hist)
+                pdf_map[y,x] = hist
     
-    H,W,C = samples_tensor.shape
-    pdf_map = np.zeros((H,W,bins))
-    for y in range(H):
-        for x in range(W):
-            printProgressBar(y*W+x,W*H,prefix="Transforming samples tensor to a pdf tensor")
-            n = count_tensor[y, x]
-            if n == 0:
-                continue
-            vals = samples_tensor[y, x, :n]
-                            
-            finite_mask = np.isfinite(vals)
-            vals = vals[finite_mask]
-
-            if has_kernel:
-                w = weight_tensor[y, x, :n][finite_mask]
-            else:
-                w = None
-
-            if len(vals) == 0:
-                continue
-
-            vmin = np.min(vals)
-            vmax = np.max(vals)
-            if not np.isfinite(vmin) or not np.isfinite(vmax):
-                continue
-
-            if np.isclose(vmin, vmax, rtol=1e-6, atol=1e-12):
-                continue
-            hist, bin_edges = np.histogram(vals, bins=min(bins, max(8, int(np.sqrt(n)))), density=True, weights=w)
-            if len(hist) < bins:
-                hist = np.pad(hist, (0, bins - len(hist)), mode='constant') 
-            del vals
-            max_bin = np.argmax(hist)
-            #Multiply by the likeliest value to have a good looking integrated map when opened with SpectrumMap.
-            hist *= .5*(bin_edges[max_bin] + bin_edges[max_bin + 1])/np.sum(hist)
-            pdf_map[y,x] = hist
-    
-    map = SpectrumMap(name="pdf_map", map=pdf_map, load=False)
- 
+    map = SpectrumMap(name=cache_name, map=pdf_map, load=False)
+    map.x_norm_min = x_norm_min_tensor
+    map.x_norm_max = x_norm_max_tensor
     map.output_settings['velocity_channels'] = bins
     map.output_settings['velocity_resolution'] = 1
     map.output_settings['v_function'] = lambda lsr,chan,res: np.array(range(chan))
@@ -485,6 +496,10 @@ def open_samples_as_spectrummap(path:str, bins:int=32, is_in_cache_folder:bool=T
     map.output_settings['velocity_name'] = "Channels"
     map.output_settings['intensity_unit'] = ""
     map.output_settings['intensity_name'] = "Prediction"
+
+    if cache:
+        LOGGER.log(f"PDF saved as spectrum map {cache_name}")
+        map.save(cache_name)
 
     return map
     

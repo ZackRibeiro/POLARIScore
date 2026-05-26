@@ -1201,7 +1201,7 @@ class Observation():
                 all_pred_dcmfs = []
                 for mc in range(monte_carlo):
                     printProgressBar(mc, monte_carlo, prefix="MC-DCMF", length=20)
-                    random_predicted_masses = np.array([c.compute_mass(method=method, density_error=self.network_error) for c in cores])[mask]
+                    random_predicted_masses = np.array([c.compute_mass(method=method, density_error=self.network_error, correction=correction) for c in cores])[mask]
                     _dcmf, _bin_centers = _get_dcmf(random_predicted_masses)
                     all_pred_dcmfs.append(_dcmf)
                 print("")

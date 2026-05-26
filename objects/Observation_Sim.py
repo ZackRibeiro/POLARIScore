@@ -26,8 +26,8 @@ class Observation_Sim(Observation):
 
     def skycoord_to_pixel(self,coords, _=None):
         x_pc, y_pc = coords
-        x_idx = convert_pc_to_index(x_pc, len(self.data), self.simulation.size, start=self.simulation.axis[0][0], clip=False)
-        y_idx = convert_pc_to_index(y_pc, len(self.data), self.simulation.size, start=self.simulation.axis[0][0], clip=False)
+        x_idx = convert_pc_to_index(x_pc, len(self.data), self.simulation.size, start=self.simulation.bbox[0][0], clip=False)
+        y_idx = convert_pc_to_index(y_pc, len(self.data), self.simulation.size, start=self.simulation.bbox[0][0], clip=False)
         return (x_idx, y_idx)
 
     def get_cores(self):

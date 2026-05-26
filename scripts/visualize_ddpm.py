@@ -10,7 +10,7 @@ from matplotlib.colors import Normalize
 
 trainer:DDPTrainer = DDPTrainer.load("DDPM")
 #trainer.set_scheduler(timesteps=1000, beta_schedule="quadratic", beta_start=1e-4, beta_end=0.2)
-trainer.inference_timestep =  1
+trainer.inference_timestep =  20
 
 INDEX = 2
 
@@ -23,7 +23,7 @@ for i, k in enumerate(list(new_ds.batch.keys())):
 new_ds.remove(indexes_to_remove)
 trainer.validation_set = new_ds
 
-trainer.save_intermediaries_steps = True
+trainer.save_intermediaries_steps = False
 trainer.norms = { 
     "cdens": DATA_NORMALIZATION_CDENS,
     "vdens": DATA_NORMALIZATION_VDENS,
@@ -31,10 +31,11 @@ trainer.norms = {
 
 
 #trainer.plot_intermediaries_steps()
-trainer.plot_pdf_trajectory()
-trainer.plot_degeneracy(300, bins=10)
-new_ds.delete()
+#trainer.plot_pdf_trajectory()
+trainer.plot_sampling(1000, bins=None)
+#trainer.plot_degeneracy(100, bins=10)
 
+new_ds.delete()
 plt.show()
 
 """

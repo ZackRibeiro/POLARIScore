@@ -32,10 +32,17 @@ from POLARIScore.objects.Spectrum import Spectrum
 from POLARIScore.networks.utils.nn_utils import open_samples_as_spectrummap
 
 #sim = SimulationArray(name="sim_512_A_3")
+#sim = Simulation_DC("orionMHD_lowB_0.39_512", global_size=66.0948)
 #sim = openSimulation("orionMHD_lowB_multi_", global_size=66.0948+0.12,keys=['RHO'],cache_name="orion") #offset bcs without dense cores have an offset :/
-#sim.plot(axis=-1)
+#sim.plot(plot_pdf=True, norm=LogNorm(vmin=1e21, vmax=3e24))
+#sim.plot(norm=LogNorm(vmin=1e21, vmax=3e24))
 
-#sim = Simulation_AMR("orionMHD_lowB_AMR", global_size=66.0948+0.12, init_datacubes=False)
+
+#sim = Simulation_AMR("orion_MHD_lowB_AMR", global_size=66.0948, init=False)
+#sim.init(init_datacubes=False)
+#sim.init_datacubes(res=1024)
+#sim.plot(norm=LogNorm(vmin=1e21, vmax=3e24), plot_pdf=True)
+#sim.plot_slice()
 #sim.generate_dataset(name="cube_256px", img_size=256, number=300)
 #ds = getDataset("cube_256px")
 #ds1, ds2 = ds.split(0.8)
@@ -55,6 +62,7 @@ from POLARIScore.networks.utils.nn_utils import open_samples_as_spectrummap
 #training_ds.merge([ds1, ds1_2], name="sa_training_set", save=True)
 #validation_ds.merge([ds2, ds2_2], name="sa_validation_set", save=True)
 
+"""
 training_ds = getDataset("sa_training_set")
 validation_ds = getDataset("sa_validation_set")
 
@@ -91,15 +99,16 @@ trainer.optimizer_name = "Adam"
 trainer.target_names = ["vdens"]
 trainer.input_names = ["cdens",'physize']
 trainer.auto_save = 250
-trainer.scheduler = None
+#trainer.scheduler = None
 #trainer.init()
 #trainer.train(1000,batch_number=8,compute_validation=10,early_stopping=False)
 #trainer.save()
-trainer.get_validation_error()
+#trainer.get_validation_error()
 
+#trainer.plot_residuals()
 #trainer.plot(save=True)
 #trainer.plot_validation(save=True, number=16, number_per_row=4)
-
+"""
 
 
 #sim.load_cores()
@@ -131,10 +140,9 @@ sim.cores = new_cores"""
 #obs = Observation_Sim(sim, axis=AXIS)
 #path_samples = "pdf_orionb_cached"
 
-obs = Observation("OrionB", "column_density_map")
+#obs = Observation("OrionB", "column_density_map")
 
 #obs.catalog_name = "Ntormousi & Hennebelle"
-#trainer = load_trainer("DDPM")
 #trainer = load_trainer("DDPM", trainer_class=DDPTrainer)
 #trainer.norms = {
 #    "cdens": DATA_NORMALIZATION_CDENS,
@@ -142,18 +150,29 @@ obs = Observation("OrionB", "column_density_map")
 #}
 #trainer.get_validation_error()
 #trainer.plot_residuals()
-_, error = obs.predict(trainer, method="mean", repeat=1, overlap=0., downsample_factor=obs.find_scale(2.,256,400), nan_value=1e19, apply_baseline=True, kernel="uniform", save_samples="pdf_orionb_amr", skip_using_saved_samples=True, only_error=False, patch_size=(256,256))
+#_, error = obs.predict(trainer, method="likeliest", repeat=4, overlap=0.8, downsample_factor=obs.find_scale(3.30474,128,obs.distance), nan_value=1e19, apply_baseline=False, kernel="gaussian", save_samples="pdf_orionb_ddpm_2_wout_baseline", skip_using_saved_samples=True, only_error=False, patch_size=(128,128))
 
-#obs.save("_unet_amr")
-#obs.load("_unet_amr")
+#obs.save("_ddpm_2_wout_baseline")
+#obs.save("_cinn_2")
+#obs.load("_ddpm")
 #obs.plot_cores_error(show_errors=False, label="cinn",correction="blurred", log_average=30)
+
 
 #obs.plot(error/obs.prediction, norm=None)
 #obs.load_error("DDPM")
 #obs.prediction = obs.rectify_error_baseline()
-obs.plot(obs.prediction, norm=LogNorm(1e2, 4e5))
-obs.plot_dcmf(correction="fixed")
-obs.plot_cores_error(correction="fixed")
+#_, ax =obs.plot_cores_error(correction="fixed", label="fixed")
+#obs.load("_ddpm_2")
+#_, ax =obs.plot_cores_error(ax=ax, correction="blurred", label="blurred")
+#obs.plot(obs.prediction, norm=LogNorm(1e2, 3e5))
+#_, ax =obs.plot_cores_error(correction="blurred", label="blurred")
+#obs.convolved_data = np.load(os.path.join(CACHES_FOLDER,"convolved_orionb.npy"))
+#obs.plot(obs.convolved_data, norm=None)
+#obs.plot_dcmf(correction="blurred")
+#obs.plot_cores_error(ax=ax, correction="fixed", label="fixed")
+
+#factor 25 to kernel size : 1 pc
+#median in area and not just the convolued value on peak
 
 #----------------------------------------
 #Blurred correction vs Fixed correction vs No correction
@@ -165,7 +184,6 @@ obs.plot_cores_error(correction="fixed")
 #_, ax = obs.plot_cores_error(ax=ax, show_errors=False, label="no correction",correction=None, log_average=30)
 #obs.plot(obs.data)
 #obs.plot(obs.convolved_data)
-
 #obs.plot_dcmf()
 
 #_, ax = obs.plot_dcmf()
@@ -197,8 +215,45 @@ obs.plot_cores_error(correction="fixed")
 #    new_arr = np.moveaxis(arr, 0, -1)
 #    np.save(path, new_arr)
 
-#smap = open_samples_as_spectrummap(path_samples, 16)
+from scipy.signal import find_peaks
+smap = open_samples_as_spectrummap("pdf_orionb_ddpm_2", 32)
 #smap.plot()
+plt.imshow(smap.x_norm_max, norm=LogNorm())
+plt.imshow(smap.x_norm_min, norm=LogNorm())
+
+def _worker_maximums(job):
+    job_index, job = job
+    max_components = 10
+    spectrum = job['data']
+    peaks, _ = find_peaks(spectrum, distance=1)
+    peaks = list(peaks)
+    if len(peaks) < max_components:
+        for i in range(max_components-len(peaks)):
+            peaks.append(np.nan)
+    else:
+        peaks = peaks[:max_components]
+    peaks = np.array(peaks)
+    return job_index, peaks
+
+def _worker_degeneracy(job):
+    job_index, job = job
+    degeneracy = 0
+    spectrum = job['data']
+
+    spectrum = (spectrum-spectrum.min())/(spectrum.max()-spectrum.min())
+
+    
+    peaks, _ = find_peaks(spectrum, distance=1)
+    
+    for p_index in peaks:
+        p_value = spectrum[p_index]
+
+    return job_index, [degeneracy]
+
+#result = np.sum(~np.isnan(smap.compute(remove_lambda_functions=True, method=_worker_maximums, save=False, stride=1)), axis=-1)
+#plt.imshow(result)
+
+#temp = gaussian_filter(result, sigma=10)
 
 #obs.load()
 #obs.plot_error_histogram()
@@ -631,3 +686,4 @@ sim.plot_slice(slice=100,)
 from POLARIScore.utils.utils import compute_mass_weighted_density, compute_volume_weighted_density
 """
 plt.show()
+breakpoint()

@@ -69,6 +69,7 @@ def _worker_get_gaussians_params(job:Dict)->Tuple[int, np.ndarray]:
         props['params'] = np.array(new_params)
         gaussian_params = props['params']
     return index, gaussian_params
+    
 
 def _worker_ray_radiative_transfer(cube_dimension, position, direction, last_step, extra_args):
     
@@ -146,6 +147,8 @@ class SpectrumMap():
         self.name:str = name
 
         self.map:np.ndarray = map
+        self.x_norm_min:np.ndarray = None
+        self.x_norm_max:np.ndarray = None
         
         self.line_settings:Dict = DEFAULT_LINE_SETTINGS
         self.output_settings:Dict = DEFAULT_OUTPUT_SETTINGS
@@ -190,6 +193,13 @@ class SpectrumMap():
                 S.get_X(self.output_settings)
                 formatted_intensity_map[x].append(S)
         return formatted_intensity_map
+    
+    @staticmethod
+    def exists(name):
+        folder = os.path.join(SPECTRA_FOLDER, name)
+        flag = os.path.exists(folder)
+        flag = flag and os.path.exists(os.path.join(folder, "spectrum.npy"))
+        return flag
 
     def load(self, name=None):
         name = self.name if name is None else name
@@ -227,6 +237,11 @@ class SpectrumMap():
             return None
         self.map = np.load(spectra_file, mmap_mode='r')
 
+        if (os.path.exists(os.path.join(folder, 'x_norm_max.npy'))):
+            self.x_norm_max = np.load(os.path.join(folder, 'x_norm_max.npy'))
+        if (os.path.exists(os.path.join(folder, 'x_norm_min.npy'))):
+            self.x_norm_min = np.load(os.path.join(folder, 'x_norm_min.npy'))
+
         return self
     
     def save(self, name=None, replace=True):
@@ -249,6 +264,10 @@ class SpectrumMap():
             os.mkdir(folder)
 
         np.save(os.path.join(folder, 'spectrum.npy'), self.map)
+        if self.x_norm_min is not None:
+            np.save(os.path.join(folder, 'x_norm_min.npy'), self.x_norm_min)
+        if self.x_norm_max is not None:
+            np.save(os.path.join(folder, 'x_norm_max.npy'), self.x_norm_max)
 
         with open(os.path.join(folder,'global_settings.json'), 'w') as file:
             json.dump(self.global_settings, file, indent=4)
@@ -479,7 +498,7 @@ class SpectrumMap():
                 return scores.reshape(nx, ny, nv)
         return components, variance, scores
 
-    def compute(self, method, save=True, used_cpu=1., stride=1, extra_args:Dict={}):
+    def compute(self, method, save=True, used_cpu=1., stride=1, extra_args:Dict={}, remove_lambda_functions:bool=False):
         """
         Compute "method" over the sprectra map, i.e each spectrum in the map is processed using method.
 
@@ -493,18 +512,22 @@ class SpectrumMap():
         """
         LOGGER.global_color = LOGGER._init_gc
         LOGGER.border("Spectrum-Computing", level=1)
-        LOGGER.log(f"Compute method {method.__name__} on map")
+        LOGGER.log(f"Computing method {method.__name__} on map")
 
         stride = int(stride)
 
         used_cpu = max(used_cpu,1.)
 
+        output_settings = self.output_settings
+        if remove_lambda_functions:
+            output_settings = copy.deepcopy(self.output_settings)
+            output_settings.pop("v_function", None)
         jobs = [
             (i, {
                 "data": self.map[x][y],
                 "x": x,
                 "y": y,
-                "output": self.output_settings,
+                "output": output_settings,
                 "extra_args": extra_args
             })
             for i, (y, x) in enumerate(
@@ -525,7 +548,13 @@ class SpectrumMap():
                 completed += 1
                 printProgressBar(completed, total_jobs, prefix="Computing", length=30)
         LOGGER.reset()
-        results = np.array(results).reshape((len(self.map),len(self.map),len(results[0])))
+
+        x_indices = range(0, len(self.map), stride)
+        y_indices = range(0, len(self.map[0]), stride)
+        nx = len(x_indices)
+        ny = len(y_indices)
+        results = np.array(results).reshape((ny, nx, -1))
+        #   results = np.array(results).reshape((len(self.map)//stride,len(self.map[0])//stride,len(results[0])))
 
         if save:
             if not(os.path.exists(CACHES_FOLDER)):
@@ -719,7 +748,7 @@ class SpectrumMap():
                 x_click, y_click = event.xdata, event.ydata
                 ax2.cla()
                 x0, y0 = _convert_to_phys(x_click,y_click, invert=True)
-                spectrum_used = self.get_spectra(intensity_map[x0,y0],(x0,y0))
+                spectrum_used = self.get_spectra(intensity_map[y0,x0],(y0,x0))
                 if fit is not None:
                     spectrum_used.fit(method=fit)
                 #spectrum_used.spectrum = spectrum_used.add_noise(10)

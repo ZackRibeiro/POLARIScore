@@ -112,13 +112,17 @@ def format_time(seconds:float)->str:
 
 import time
 _time_0 = 0
+last_iteration = 0
 def printProgressBar(iteration,total,prefix='',suffix='',decimals=1,length=50,fill='█',printEnd="\r",show_tr=True,show_speed=True,disable_done=False):
     global _time_0
+    global last_iteration
     delta_time = 0.
-    if iteration==0 or iteration==1:
+    if last_iteration > iteration:
+        last_iteration = 0
+    if iteration==0 or iteration==1 or last_iteration == 0:
         _time_0 = time.time()
     else:  
-        delta_time = (time.time()-_time_0)/iteration * (total-iteration)
+        delta_time = (time.time()-_time_0)/(iteration) * (total-iteration)
 
     if delta_time != 0:
         speed = (total-iteration)/delta_time
@@ -155,7 +159,9 @@ def printProgressBar(iteration,total,prefix='',suffix='',decimals=1,length=50,fi
 
     print(string, end=printEnd)
         
+    last_iteration = iteration
     if iteration >= total-1 and not(disable_done):
+        last_iteration = 0
         print(f'\r{prefix} - Done in {format_time(time.time()-_time_0)}'+' '*(length+10))
 
 def divide_matrix_to_sub(matrix:np.ndarray,final_dim:int=128)->List[np.ndarray]:

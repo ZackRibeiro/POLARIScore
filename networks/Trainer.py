@@ -186,6 +186,7 @@ class Trainer():
             eval_model = ema_model
         else:
             eval_model = self.model
+        eval_model.eval()
         return eval_model
 
     def train(self, epoch_number:int=100, batch_number:int=32, compute_validation:int=10, cache:bool=True, early_stopping:bool=True, training_mode:Literal["accumulation","normal"]="normal"):
@@ -238,6 +239,7 @@ class Trainer():
             self.validation_loss_method = self.loss_method
 
         for epoch in range(epoch_number):
+            self.model.train()
             total_epoch += 1
             epoch_loss = 0
             shuffled_indices = torch.randperm(batch_size)
@@ -933,7 +935,7 @@ def load_trainer(model_name, load_model=True, trainer_class=Trainer, model_class
 
     trainer._modify_loaded_settings(settings)
 
-    ema_state_path = os.path.join(model_path, f"{folder_model_name}_ema.pth")
+    ema_state_path = os.path.join(model_path, f"{folder_model_name}_epoch{trainer.last_epoch}_ema.pth")
     if os.path.exists(ema_state_path):
         trainer.ema = True
 

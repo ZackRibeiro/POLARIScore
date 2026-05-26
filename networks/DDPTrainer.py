@@ -16,6 +16,7 @@ from POLARIScore.utils.utils import compute_pdf, printProgressBar
 from scipy.stats import wasserstein_distance
 from scipy.ndimage import gaussian_filter
 from POLARIScore.utils.utils import plot_map, plot_rect_bg
+from POLARIScore.networks.ProbabilisticTrainer import ProbabilisticTrainer
 
 
 import matplotlib.colors as mcolors
@@ -28,7 +29,7 @@ def _symmetrical_cmap(cmap_settings, n=128):
     new_map = mcolors.LinearSegmentedColormap.from_list(new_name, colors)
     return new_map
 
-class DDPTrainer(Trainer):
+class DDPTrainer(ProbabilisticTrainer):
     """
     Extension of Trainer class to train Denoising Diffusion Probabilistic Models.
     """
@@ -254,7 +255,7 @@ class DDPTrainer(Trainer):
 
         if self.intermediaries_steps is None:
             self.save_intermediaries_steps = True
-            self.get_prediction_batch(force_compute=True)
+            self.get_prediction_batch(force_compute=True, sample_number=1)
             if self.intermediaries_steps is None or len(self.intermediaries_steps) <= 0:
                 LOGGER.error("Can't plot intermediaries steps because nothing was saved in inference time.")
                 return
@@ -283,11 +284,11 @@ class DDPTrainer(Trainer):
         if self.intermediaries_steps is None:
             self.save_intermediaries_steps = True
             printProgressBar(0, sample_number, prefix="Predicting")
-            self.get_prediction_batch(force_compute=True)
+            self.get_prediction_batch(force_compute=True, sample_number=1)
             if self.intermediaries_steps is None or len(self.intermediaries_steps) <= 0:
                 LOGGER.error("Can't plot intermediaries steps because nothing was saved in inference time.")
                 return
-        pred_batch = self.get_prediction_batch(force_compute=False)
+        pred_batch = self.get_prediction_batch(force_compute=False, sample_number=1)
     
         sample_number = int(sample_number)
         sample_number = max(sample_number, 1)
@@ -321,7 +322,7 @@ class DDPTrainer(Trainer):
         values_low_px.append(steps[:, 0, low_y, low_x].copy())
         for i in range(sample_number-1):
             printProgressBar(i+1, sample_number, prefix="Predicting")
-            self.get_prediction_batch(force_compute=True)
+            self.get_prediction_batch(force_compute=True, sample_number=1)
             i_steps = np.array(self.intermediaries_steps)
             steps += i_steps
             squared_steps += i_steps**2
@@ -368,14 +369,21 @@ class DDPTrainer(Trainer):
         colors = plt.cm.viridis(np.linspace(0, 1, len(selected_times)))
 
         for i, (c, t) in enumerate(zip(colors, selected_times)):
+            label_pdf_high = None
+            label_pdf_low = None
             if i == len(selected_times)-1:
                 c = "black"
-            n, bins, _ = ax_pdf_high.hist(self.norms['vdens'][1](values_high_px[:, t]),bins="auto" if bins is None else bins,density=True,histtype="step",linewidth=2,color=c,label=f"t={t/(len(steps)-1):.2f}",)
-            bins = 0.5 * (bins[:-1] + bins[1:])
-            ax_pdf_high.axvline(np.sum(n*bins)/np.sum(n), color="red")
-            n, bins, _ = ax_pdf_low.hist(self.norms['vdens'][1](values_low_px[:, t]),bins="auto" if bins is None else bins,density=True,histtype="step",linewidth=2,color=c,label=f"t={t/(len(steps)-1):.2f}",)
-            bins = 0.5 * (bins[:-1] + bins[1:])
-            ax_pdf_high.axvline(np.sum(n*bins)/np.sum(n), color="cyan")
+                label_pdf_high = r"High density pixel pdf ($t_{end}$)"
+                label_pdf_low = r"Low density pixel pdf ($t_{end}$)"
+
+            n, hist_bins, _ = ax_pdf_high.hist(self.norms['vdens'][1](values_high_px[:, t]),bins="auto" if bins is None else bins,density=True,histtype="step",linewidth=2,color=c,label=label_pdf_high)
+            hist_bins = 0.5 * (hist_bins[:-1] + hist_bins[1:])
+            if i == len(selected_times)-1:
+                ax_pdf_high.axvline(np.sum(n*hist_bins)/np.sum(n), color="red", linewidth=1.5)
+            n, hist_bins, _ = ax_pdf_low.hist(self.norms['vdens'][1](values_low_px[:, t]),bins="auto" if bins is None else bins,density=True,histtype="step",linewidth=2,color=c,label=label_pdf_low)
+            hist_bins = 0.5 * (hist_bins[:-1] + hist_bins[1:])
+            if i == len(selected_times)-1:
+                ax_pdf_low.axvline(np.sum(n*hist_bins)/np.sum(n), color="cyan", linewidth=1.5)
 
         ax_pdf_low.set_xscale('log')
         ax_pdf_high.set_xscale('log')
@@ -387,8 +395,8 @@ class DDPTrainer(Trainer):
         ax_pdf_high.set_xlabel(r"$<n_H>_m$")
         ax_pdf_low.set_xlabel(r"$<n_H>_m$")
 
-        #ax_pdf_high.legend()
-        #ax_pdf_low.legend()
+        ax_pdf_high.legend()
+        ax_pdf_low.legend()
 
         if plot_boxes:
             plot_rect_bg(fig=fig, axes=[ax_pdf_high, ax_pdf_low], color="tab:green", pad=0.001, text="Pixel distributions", text_pos="top", show_bbox=True)
@@ -398,9 +406,11 @@ class DDPTrainer(Trainer):
 
     def plot_pdf_trajectory(self, traj_number:int=20, same_pdf_lims:bool=True, plot_boxes:bool=True, cmap="viridis"):
 
+        #ADD MONTE CARLO ERROR
+
         if self.intermediaries_steps is None:
             self.save_intermediaries_steps = True
-            self.get_prediction_batch(force_compute=True)
+            self.get_prediction_batch(force_compute=True, sample_number=1)
             if self.intermediaries_steps is None or len(self.intermediaries_steps) <= 0:
                 LOGGER.error("Can't plot intermediaries steps because nothing was saved in inference time.")
                 return
@@ -435,7 +445,7 @@ class DDPTrainer(Trainer):
             axes[key].imshow(map[0], label=time_index, norm=Normalize(vmin=-0.5, vmax=0.5), cmap=cmap)
             axes[key].set_xlabel(f"$t={time_index/(len(steps)-1):.2f}$")
         #Truth map
-        target_tensor, _ = self.norms["vdens"][0](self.get_prediction_batch()[-1])
+        target_tensor, _ = self.norms["vdens"][0](self.get_prediction_batch(sample_number=1)[-1])
         axes["True"].imshow(target_tensor, label="Truth", norm=Normalize(vmin=-0.5, vmax=0.5), cmap=cmap)
         axes["True"].set_xlabel("Truth / Simulation")
         #plot_map(target_tensor, ax=axes["True"], cmap=cmap, norm=Normalize(vmin=-0.5, vmax=0.5), toplabel="Truth")

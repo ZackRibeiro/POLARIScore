@@ -796,10 +796,13 @@ class Simulation_DC():
     
         return ds
     
-    def plot_slice(self, axis:int=0, slice:int=0, N_arrows:int=20, show_velocity:bool=True, enable_slider:bool=True):
+    def plot_slice(self, axis:int=0, slice:int=0, N_arrows:int=50, show_velocity:bool=True, enable_slider:bool=True, data:Optional[np.ndarray] = None, vector_size:float=1000):
 
-            assert 'RHO' in self.data, LOGGER.error(f"There is no density stored in data. Keys actually stored in data: {self.data.keys()}")
-            data_rho = self.data['RHO']
+            if data is None:
+                assert 'RHO' in self.data, LOGGER.error(f"There is no density stored in data. Keys actually stored in data: {self.data.keys()}")
+                data_rho = self.data['RHO']
+            else:
+                data_rho = data
             assert slice < data_rho.shape[axis], LOGGER.error(f"Slice index ({str(slice)}) can't be higher than data matrix size ({data_rho.shape[axis]}).")
             
             if not(axis in [0,1,2]):
@@ -842,8 +845,8 @@ class Simulation_DC():
                     step_x = max(Ny // N_arrows, 1)
                     step_y = max(Nx // N_arrows, 1)
 
-                    X_sub = X[::step_y, ::step_x]/self.nres*(self.bbox[0][1]-self.bbox[0][1])+self.bbox[0][1]
-                    Y_sub = Y[::step_y, ::step_x]/self.nres*(self.bbox[0][1]-self.bbox[0][1])+self.bbox[0][1]
+                    X_sub = X[::step_y, ::step_x]/data_rho.shape[0]*(self.bbox[0][1]-self.bbox[0][0])+self.bbox[0][0]
+                    Y_sub = Y[::step_y, ::step_x]/data_rho.shape[0]*(self.bbox[0][1]-self.bbox[0][0])+self.bbox[0][0]
                     Ux_sub = Ux[::step_y, ::step_x]
                     Uy_sub = Uy[::step_y, ::step_x]
 
@@ -861,7 +864,7 @@ class Simulation_DC():
 
                 if not(velocity[0] is None):
                     if artists["qui"] is None:
-                        artists["qui"] = ax.quiver(X_sub, Y_sub, Ux_sub, Uy_sub, color="white", scale=200)
+                        artists["qui"] = ax.quiver(X_sub, self.global_size-Y_sub, Ux_sub, Uy_sub, color="white", scale=vector_size)
                     else:
                         artists["qui"].set_UVC(Ux_sub, Uy_sub)
 

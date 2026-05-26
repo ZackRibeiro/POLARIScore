@@ -116,23 +116,24 @@ def pca_denoise(batch_spectra, n_components=20):
         reconstructed = reconstructed.reshape(B, C, L)
 
     return torch.tensor(reconstructed, dtype=torch.float32)
+noise_spectra = torch.stack([torch.tensor(p[0]) for p in pred_batch])
 pred_spectra = torch.stack([torch.tensor(p[1]) for p in pred_batch])
-pca_pred = pca_denoise(pred_spectra, n_components=10)
+pca_pred = pca_denoise(noise_spectra, n_components=10)
 
 from POLARIScore.objects.Spectrum import Spectrum
 def _plot_spectrum(index:int=0):
     ds = trainer.validation_set
-    data = ds.get(index+inter[0])
-    spectrum = data[ds.get_element_index("noisy_spectrum")]
+    data = ds.get(list(ds.batch.keys())[index+inter[0]])
+    spectrum = pred_batch[index][0]
     spect = Spectrum(spectrum, name="test")
     spect.X = data[ds.get_element_index("channels")]
-    _, ax =spect.plot(show_fit=False, show_dendrogram=False)
+    _, ax =spect.plot(show_fit=False, show_dendrogram=False, label="noisy spectrum (input, snr=10)")
     spect.spectrum = data[ds.get_element_index("spectrum")]
-    spect.plot(ax=ax, color="red", show_dendrogram=False)
+    spect.plot(ax=ax, color="red", show_dendrogram=False, label="true spectrum")
     spect.spectrum = pred_batch[index][1]
-    spect.plot(ax=ax, color="green", show_dendrogram=False)
+    spect.plot(ax=ax, color="green", show_dendrogram=False, label="DDPM prediction")
     spect.spectrum = pca_pred[index]
-    spect.plot(ax=ax, color="purple", show_dendrogram=False)
+    spect.plot(ax=ax, color="purple", show_dendrogram=False, label="PCA")
 
 _plot_spectrum(0)
 _plot_spectrum(1)

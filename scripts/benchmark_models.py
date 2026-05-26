@@ -20,12 +20,13 @@ Generate full benchmark of trained models with plots.
 Usage example:
 #python -m POLARIScore.scripts.benchmark_models --models UNet cINN DDPM --obs_name OrionB --obs_suffixes unet cinn ddpm  --name Benchmark_OrionB --toplot distribution
 
+POLARIScore.scripts.benchmark_models --obs_name OrionB --obs_suffixes unet_2 cinn_2 ddpm_2 --models UNet cINN DDPM  --name Benchmark_OrionB_likeliest
 """
 
 #If you want to add zoom in regions
 from astropy.coordinates import Angle
 REGIONS = [
-#[Angle("5h50m").deg, Angle("5h45").deg, Angle("-0d19m").deg, Angle("0d53m").deg],[Angle("5h48m").deg, Angle("5h39m").deg, Angle("-3d10m").deg, Angle("-0d58m").deg]
+[Angle("5h50m").deg, Angle("5h45").deg, Angle("-0d19m").deg, Angle("0d53m").deg],[Angle("5h48m").deg, Angle("5h39m").deg, Angle("-3d10m").deg, Angle("-0d58m").deg]
 ]
 
 MONTE_CARLO = 20
@@ -53,16 +54,14 @@ parser.add_argument("--extra_suffixes", required=False, nargs="+", default=None,
 parser.add_argument("--ds", required=False, default=None, help="Force choose the validation set, can also be a simulation if there is a prefix as: 'sim:sim_name' ")
 parser.add_argument("--ds_imgs", required=False, nargs="+", default=[], help="Indexes, Plot validation dataset imgs.")
 parser.add_argument("--format", required=False, default="jpg", help="Image format (default: jpg)")
-parser.add_argument("--density_correction", required=False, default="yes", help="Apply two medius approx to go from the mass-weighted density to core volume density.")
+parser.add_argument("--density_correction", required=False, default="fixed", help="Apply two mediums approx to go from the mass-weighted density to core volume density.")
 
 parser.add_argument("--name", required=False, default=str(uuid.uuid1()), help="Name of the benchmark (default: uuid1)")
 parser.add_argument("--output", required=False, default=EXPORT_FOLDER, help="Benchmark will be generate in this folder (default POLARIScore export folder).")
 args = parser.parse_args()
 
 if(str.lower(args.density_correction) in ["false","no","n"]):
-    args.density_correction = False
-else:
-    args.density_correction = True
+    args.density_correction = None
 
 if args.trainers is None:
     auto_list = []
@@ -408,7 +407,9 @@ if observation is not None:
                 region_figs[i].colorbar(sub_axes[0].images[0],ax=sub_axes[-1],orientation="vertical",location="right",fraction=0.03,pad=0.02, label=r"clipped diff in log10")
 
                 plot_rect_bg(region_figs[i], axes=sub_axes, color="tab:orange", text="Differences between NN")
-                plot_rect_bg(region_figs[i], axes=region_axes[i][1:(len(region_axes[i])-len(args.extra_suffixes))], color="tab:blue", text="Predictions by NN")
+                plot_rect_bg(region_figs[i],
+                             axes=region_axes[i][1:(len(region_axes[i])-len(args.extra_suffixes))] if args.extra_suffixes is not None else region_axes[i][1:(len(region_axes[i]))]
+                             , color="tab:blue", text="Predictions by NN")
 
                 region_figs[i].savefig(os.path.join(BENCHMARK_PATH,f"region_{str(i)}."+args.format))
 

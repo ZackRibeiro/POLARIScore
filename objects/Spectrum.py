@@ -77,14 +77,14 @@ class Spectrum():
         
         return self.spectrum
 
-    def plot(self, ax=None, channels:Optional[np.ndarray]=None, show_fit:bool=False, show_fit_gaussians:bool=False, show_dendrogram:bool=True, color="black", units:Dict={}):
+    def plot(self, ax=None, channels:Optional[np.ndarray]=None, show_fit:bool=False, label="data", show_fit_gaussians:bool=False, show_dendrogram:bool=False, color="black", units:Dict={}):
         if ax is None:
             fig, ax = plt.subplots()
         else:
             fig = ax.figure
         channels = self.get_X() if channels is None else channels
 
-        ax.plot(channels,self.spectrum, color=color, label="data")
+        ax.plot(channels,self.spectrum, color=color, label=label)
         unit_x = units.get("velocity_unit",r"m s$^{-1}$")
         unit_x_name = units.get("velocity_name","Velocity")
         unit_y = units.get("intensity_unit","K")
