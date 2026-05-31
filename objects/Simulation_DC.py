@@ -87,7 +87,8 @@ class Simulation_DC():
         elif len(glob.glob(os.path.join(self.folder,"*.fits"))) > 0:
             init_ramses(self, **kwargs)
         else:
-            LOGGER.warn(f"Can't initialize simulation {self.name}, verify if the folder exists and if there is data files in it.")
+            LOGGER.error(f"Can't initialize simulation {self.name}, verify if the folder exists and if there is data files in it.")
+            raise FileNotFoundError()
         
         for k in self.data.keys():
             d = self.data[k]

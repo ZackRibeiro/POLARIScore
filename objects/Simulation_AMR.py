@@ -18,6 +18,7 @@ from scipy.spatial import cKDTree
 from scipy import ndimage
 import glob
 from typing import *
+from copy import deepcopy
 
 KEY_H5_TO_SIM = {
     "RHO": "scalars/density",
@@ -87,7 +88,7 @@ def fill_zeros_idw(arr, k=8, power=2):
     return out
 
 
-def amr_leaf_to_datacube(points,sizes,values,bbox,res,dtype=np.float64):
+def amr_leaf_to_datacube(points,sizes,values,bbox,res,dtype=np.float64,log:bool=False):
     if isinstance(res, int):
         res = (res, res, res)
 
@@ -104,12 +105,36 @@ def amr_leaf_to_datacube(points,sizes,values,bbox,res,dtype=np.float64):
     dy = (ymax - ymin) / ny
     dz = (zmax - zmin) / nz
 
-    for i, (p, h, val) in enumerate(zip(points, sizes, values)):
+    indexes_to_keep = []
 
-        if (i + 1) % int(len(values)/1e3) == 0:            
+    for i, (p, h) in enumerate(zip(points, sizes)):
+        half = h / 2
+        x0 = p[2] - half
+        x1 = p[2] + half
+        y0 = p[1] - half
+        y1 = p[1] + half
+        z0 = p[0] - half
+        z1 = p[0] + half
+
+        inside = ((x1 >= xmin) and (x0 <= xmax) and(y1 >= ymin) and (y0 <= ymax) and(z1 >= zmin) and (z0 <= zmax))
+
+        if inside:
+            indexes_to_keep.append(i)
+
+    sorted_indexes = np.argsort(sizes[indexes_to_keep])[::-1]
+    kept_indexes = np.asarray(indexes_to_keep)[sorted_indexes]
+
+    sorted_indexes = np.argsort(sizes)[::-1]
+    for i, idx in enumerate(kept_indexes):
+
+        p = points[idx]
+        h = sizes[idx]
+        val = values[idx]
+
+        if log and (i + 1) % int(len(values)/1e3) == 0:            
             printProgressBar(i, len(values), "AMR Leaves to Datacube", length=30)
 
-        half = 0.5 * h
+        half = h / 2
 
         x0 = p[2] - half
         x1 = p[2] + half
@@ -122,6 +147,7 @@ def amr_leaf_to_datacube(points,sizes,values,bbox,res,dtype=np.float64):
 
         ix0 = int((x0 - xmin) / dx)
         ix1 = int((x1 - xmin) / dx)
+
 
         iy0 = int((y0 - ymin) / dy)
         iy1 = int((y1 - ymin) / dy)
@@ -137,7 +163,9 @@ def amr_leaf_to_datacube(points,sizes,values,bbox,res,dtype=np.float64):
         iy1 = max(0, min(ny - 1, iy1))
         iz1 = max(0, min(nz - 1, iz1))
 
-        cube[ix0:ix1+1,iy0:iy1+1,iz0:iz1+1] = val
+        if val < 0:
+            LOGGER.warn(f"Negative value: {val}")
+        cube[ix0:ix1+1,iy0:iy1+1,iz0:iz1+1] += val
 
     return cube
 
@@ -237,8 +265,8 @@ class Simulation_AMR(Simulation_DC):
                 self.relative_size = self.size/self.global_size
             if "p_SIZE" not in self.data:
                 LOGGER.log(f"AMR Simulation {self.name} resolution goes from {int(1/np.max(f["scalars/size"][:]))} to {int(1/np.min(f["scalars/size"][:]))}")
-                self.data["p_SIZE"] = (f["scalars/size"][:]*self.size*PC_TO_CM, "cm")
-                self.data["p_VOLUME"] = ((f["scalars/size"][:]*self.size*PC_TO_CM)**3, "cm**3")
+                self.data["p_SIZE"] = (f["scalars/size"][:]*self.global_size*PC_TO_CM, "cm")
+                self.data["p_VOLUME"] = ((f["scalars/size"][:]*self.global_size*PC_TO_CM)**3, "cm**3")
             query_key = "scalars/density"
             if key in KEY_H5_TO_SIM:
                 query_key = KEY_H5_TO_SIM[key]
@@ -269,8 +297,8 @@ class Simulation_AMR(Simulation_DC):
                 return False
         return True
     
-    def init_datacubes(self, res=AMR_BASE_RESOLUTION, force:bool=True, filling_method=amr_leaf_to_datacube):
-        keys = list(self.data.keys())
+    def init_datacubes(self, res=AMR_BASE_RESOLUTION, force:bool=True, filling_method=amr_leaf_to_datacube, keys:Optional[List[str]]=None):
+        keys = list(self.data.keys()) if keys is None else keys
         for k in keys:
             k = k.lower()
             if not(isinstance(k, str)):
@@ -286,7 +314,8 @@ class Simulation_AMR(Simulation_DC):
         bbox_was_none = bbox is None
         if bbox is not None:
             force=True
-        bbox = self.bbox.copy() if bbox is None else bbox            
+        init_bbox = deepcopy(list(self.bbox)) if bbox is None else deepcopy(list(bbox))        
+        bbox = deepcopy(init_bbox)    
         if len(bbox) < 3:
             for _ in range(3-len(bbox)):
                 bbox.append(None)
@@ -332,7 +361,7 @@ class Simulation_AMR(Simulation_DC):
                 volume_tensor = self.data['VOLUME']
             else:
                 if key.upper() != "VOLUME":
-                    volume_tensor = self.to_datacube("VOLUME", filling_method=filling_method, res=res, smoothing=smoothing, bbox=bbox, store=store, force=False, log=log, cache=cache, dtype=dtype)
+                    volume_tensor = self.to_datacube("VOLUME", filling_method=filling_method, res=res, smoothing=smoothing, bbox=init_bbox, store=store, force=False, log=log, cache=cache, dtype=dtype)
 
         if key in self.data and not(force) and self.data[key].shape[0] == res[0]:
             return self.data[key]
@@ -383,8 +412,11 @@ class Simulation_AMR(Simulation_DC):
         bbox.insert(insert_axis, None)
         rres = [res,res]
         rres.insert(insert_axis, 512)
+        #data = self.to_datacube(key.upper(), res=rres, bbox=bbox,
+        #                        filling_method=lambda t: fill_zeros_slice(t, method=fill_zeros_nearest, axis=grid_axis), smoothing=0.5, force=True, log=False)
         data = self.to_datacube(key.upper(), res=rres, bbox=bbox,
-                                filling_method=lambda t: fill_zeros_slice(t, method=lambda x:fill_zeros_idw(x, k=3, power=1), axis=grid_axis), smoothing=0.5, force=True, log=False)
+                                filling_method=amr_leaf_to_datacube, smoothing=0., force=True, log=False)
+        
         data = np.moveaxis(data, grid_axis, -1)
         data += 1e-3
         return data

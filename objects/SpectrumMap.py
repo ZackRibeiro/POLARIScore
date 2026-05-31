@@ -498,7 +498,7 @@ class SpectrumMap():
                 return scores.reshape(nx, ny, nv)
         return components, variance, scores
 
-    def compute(self, method, save=True, used_cpu=1., stride=1, extra_args:Dict={}, remove_lambda_functions:bool=False):
+    def compute(self, method, save=True, used_cpu=1., stride=1, extra_args:Dict={}, remove_lambda_functions:bool=False, use_cache:bool=True):
         """
         Compute "method" over the sprectra map, i.e each spectrum in the map is processed using method.
 
@@ -514,6 +514,14 @@ class SpectrumMap():
         LOGGER.border("Spectrum-Computing", level=1)
         LOGGER.log(f"Computing method {method.__name__} on map")
 
+        folder = os.path.join(SPECTRA_FOLDER, self.name)
+        cache_path = os.path.join(folder, "method"+f"_{method.__name__}_{stride}")
+        if "method" in extra_args:
+            cache_path += f"_{extra_args["method"]}"
+        cache_path += ".npy"
+        if use_cache and os.path.exists(cache_path):
+            return np.load(cache_path, mmap_mode="r")
+
         stride = int(stride)
 
         used_cpu = max(used_cpu,1.)
@@ -527,6 +535,7 @@ class SpectrumMap():
                 "data": self.map[x][y],
                 "x": x,
                 "y": y,
+                "x_norm": (self.x_norm_min[x][y], self.x_norm_max[x][y]) if self.x_norm_max is not None else None,
                 "output": output_settings,
                 "extra_args": extra_args
             })
@@ -557,16 +566,16 @@ class SpectrumMap():
         #   results = np.array(results).reshape((len(self.map)//stride,len(self.map[0])//stride,len(results[0])))
 
         if save:
-            if not(os.path.exists(CACHES_FOLDER)):
-                os.mkdir(CACHES_FOLDER)
-            try:
-                path = os.path.join(CACHES_FOLDER, self.name+f"_{method.__name__}_cache.npy")
-                if os.path.exists(path):
-                    os.remove(path)
-                    LOGGER.warn("A previous cache for this spectrum map and method was found and removed.")
-                np.save(path,results)
-            except:
-                LOGGER.error("Can't save the result of compute operation in cache.")
+            if not(os.path.exists(folder)):
+                LOGGER.warn(f"Can't save method file in folder {folder} because it don't exist. Use spectrummap.save() before.")
+            else:
+                try:
+                    if os.path.exists(cache_path):
+                        os.remove(cache_path)
+                        LOGGER.warn("A previous cache for this spectrum map and method was found and removed.")
+                    np.save(cache_path,results)
+                except:
+                    LOGGER.error("Can't save the result of compute operation in cache.")
 
         return results
 

@@ -29,12 +29,14 @@ class DenseCore():
             """Coordinates of the dense core"""
 
 
-    def get_center_density(self, correction:Optional[Literal['blurred','fixed']]=None, column_density=False, custom_data:Optional[np.ndarray]=None):
-        """Get volume density predicted at the presumed 2D core center
+    def get_center_density(self, correction:Optional[Literal['blurred','fixed']]=None, column_density=False, custom_data:Optional[np.ndarray]=None,
+                           median:int=0):
+        """Get volume density predicted (or an data passed as 'custom_data') at the presumed 2D core center
         Args:
             correction(bool): Apply correction by making the assumption of two mediums: dense core and diffuse along the l.o.s
             column_density(bool, default:False): Return the column density instead.
             custom_data: if not None, use this map instead of data
+            median: if > 0, take the median of a region of length 'median'.
         """
         if column_density:
             assert self.obs.data is not None, LOGGER.error(f"No column density on the observation: {self.obs.name}.")
@@ -50,6 +52,25 @@ class DenseCore():
         x_pix, y_pix = self.obs.skycoord_to_pixel(self.coord, self.wcs)
         
         x_int, y_int = int(np.floor(float(x_pix))), int(np.floor(float(y_pix)))
+
+        if densities.shape[0] != self.obs.data.shape[0]:
+            downsample_x = self.obs.data.shape[0]/densities.shape[0]
+            x_int = int(np.floor(x_int/downsample_x))
+        if densities.shape[1] != self.obs.data.shape[1]:
+            downsample_y = self.obs.data.shape[1]/densities.shape[1]
+            y_int = int(np.floor(y_int/downsample_y))
+
+        if median > 0:
+            x_min = max(0, x_int - median)
+            x_max = min(densities.shape[1], x_int + median + 1)
+
+            y_min = max(0, y_int - median)
+            y_max = min(densities.shape[0], y_int + median + 1)
+
+            region = densities[y_min:y_max, x_min:x_max]
+
+            return np.nanmedian(region)
+
         if (0 <= y_int < densities.shape[0]) and (0 <= x_int < densities.shape[1]):
             return densities[y_int, x_int]
         else:

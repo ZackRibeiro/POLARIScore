@@ -28,6 +28,8 @@ from POLARIScore.utils.physics_utils import CONVERT_massn_TO_n_coldens, power_sp
 from POLARIScore.objects.DenseCore import DenseCore
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 import matplotlib.font_manager as fm
+from scipy.signal import find_peaks
+
 
 def _crop(wcs, lims):
     ra_min, ra_max, dec_min, dec_max = lims
@@ -38,6 +40,81 @@ def _crop(wcs, lims):
     x_min, x_max = int(np.min(x_pix)), int(np.max(x_pix))
     y_min, y_max = int(np.min(y_pix)), int(np.max(y_pix))
     return (x_min,x_max,y_min,y_max)
+
+def _worker_degeneracy(job):
+    job_index, job = job
+    method:Literal["entropy","variance"] = job['extra_args'].get('method','variance')
+
+    degeneracy = 0
+    error_x = job["extra_args"]["error_x"]
+    error_q = job["extra_args"]["error_q"]
+    spectrum = job['data']
+    if np.sum(spectrum) <= 1e-5:
+        return job_index, [0]
+    spectrum /= np.sum(spectrum)
+    x_norm_min, x_norm_max = job['x_norm']
+    x = np.linspace(0, 1, len(spectrum))
+    x = x * (x_norm_max-x_norm_min) + x_norm_min
+
+    q1_interp = np.interp(np.log10(x), error_x, error_q[0])
+    q2_interp = np.interp(np.log10(x), error_x, error_q[1])
+    sigma_error = (q2_interp-q1_interp)/(2*1.64485)
+
+    if method == "variance":
+        mu = np.sum(spectrum * np.log10(x))
+        degeneracy = np.sum(spectrum * ((np.log10(x) - mu)/(np.maximum(sigma_error, 1e-3)))**2)
+    elif method == "entropy":
+        degeneracy = 0
+        for i in range(len(spectrum)):
+            if spectrum[i] > 0:
+                degeneracy += spectrum[i]*np.log(spectrum[i])
+        degeneracy = np.exp(-degeneracy)
+    elif method == "peaks":
+        degeneracy = 0
+        peaks, _ = find_peaks(spectrum, distance=1)
+        if len(peaks) > 0:
+            max_peak_index = peaks[np.argmax([spectrum[p] for p in peaks])]
+            for p_index in peaks:
+                p_value = spectrum[p_index]
+                p_x = x[p_index]
+
+                last_y = p_value
+                right_index = p_index
+                left_index = p_index
+                ite = 0
+                while ite < len(spectrum):
+                    right_index += 1
+                    if right_index >= len(spectrum):
+                        right_index -= 1
+                        break
+                    y = spectrum[right_index]
+                    if y > last_y:
+                        right_index -= 1
+                        break
+                    last_y = y
+                    ite += 1
+                ite = 0
+                last_y = p_value
+                while ite < len(spectrum):
+                    left_index -= 1
+                    if left_index < 0:
+                        left_index += 1
+                        break
+                    y = spectrum[left_index]
+                    if y > last_y:
+                        left_index += 1
+                        break
+                    last_y = y
+                    ite += 1
+
+                prom = max(p_value-spectrum[right_index],p_value-spectrum[left_index])
+                offset = abs(np.log10(x[max_peak_index])-np.log10(p_x))
+                if prom > 0.1:# and offset/sigma_error[p_index] > 1.:
+                    degeneracy += 1
+    else:
+        raise NotImplementedError()
+    
+    return job_index, np.array([degeneracy])
 
 class Observation():
     """Observation object contains multiple tools to read observations and apply models on them."""
@@ -115,7 +192,7 @@ class Observation():
 
     def predict(self, model_trainer:'Trainer', method:Literal['mean','max_value','likeliest','median','min_value','sampling']="likeliest",
                  repeat=1, patch_size:Tuple[int,int]=(128, 128),
-                 nan_value:float=-1.0, overlap:float=0.5, downsample_factor:float=1., apply_baseline:bool=True, **args)->np.ndarray:
+                 nan_value:float=0.0, overlap:float=0.5, downsample_factor:float=1., apply_baseline:bool=True, **args)->np.ndarray:
         prediction, prediction_pdf_std = predict_map(self.data ,model_trainer=model_trainer, method=method, repeat=repeat, patch_size=patch_size,
                                   nan_value=nan_value, overlap=overlap, downsample_factor=downsample_factor, apply_baseline=apply_baseline, give_error=True, **args)
         self.prediction = prediction
@@ -367,9 +444,9 @@ class Observation():
             predicted_densities = CONVERT_massn_TO_n_coldens(column_densities,10,predicted_densities,radius,is_density=False)
         elif method == "blurred":
             if self.convolved_data is None:
-                self.convolved_data = self.apply_filter(method="median_min", factor=10, replace=False)
+                self.convolved_data = self.apply_filter(method="gaussian", factor=25, replace=False)
             if dense_core is not None:
-                background_densities = float(dense_core.get_center_density(correction=None, custom_data=self.convolved_data))
+                background_densities = float(dense_core.get_center_density(correction=None, custom_data=self.convolved_data, median=5))
             else:
                 background_densities = np.array(self.get_predicted_density_at_cores(custom_data=self.convolved_data))
                 background_densities = background_densities if mask is None else background_densities[mask]
@@ -1385,13 +1462,42 @@ class Observation():
 
         return fig, ax
     
+    def plot_cores_data(self, data_x:np.ndarray, data_y:np.ndarray, ax:Optional["axes.Axes"] = None, mov_average:int=0, log_average:int=50, show_deviation:bool=False,
+                        color=None, linestyle=None, label=None, x_is_map:bool=True, y_is_map:bool=True
+                        ):
+        if ax is None:
+            fig, ax = plt.subplots()
+        else:
+            fig = ax.figure
+
+        cores = self.get_cores()
+
+        x = np.array([c.get_center_density(custom_data=data_x) for c in cores]) if x_is_map else np.array(data_x)
+        y = np.array([c.get_center_density(custom_data=data_y) for c in cores]) if y_is_map else np.array(data_y)
+
+        if mov_average > 1:
+            y, y_std = moving_average(y, n=mov_average, return_std=True)
+            x = moving_average(x, n=mov_average)
+        if log_average > 1:
+            x, y, x_std, y_std = bin_mean(x, y, dx=None,min_per_bin=2, nbins=log_average, return_deviation=True, method="median")
+
+        line, = ax.plot(x,y, marker="+", label=self.name if label is None else label, color=color, linestyle=linestyle if linestyle is not None else "-")
+        if (mov_average > 1 or log_average > 1) and show_deviation:
+            ax.fill_between(x,y-y_std,y+y_std, color=line.get_color(), alpha=0.2)
+
+        ax.legend()
+
+        if (x.max()/x.min() > 1e3):
+            ax.set_xscale("log")
+
+        return fig, ax
+    
     def plot_cores_error(self, ax:Optional["axes.Axes"]=None, region:Union[Tuple[float,float,float,float],None]=None, alpha:float=1.,
                           mov_average:int=0, log_average:int=50 ,show_errors:bool=True, show_model_errors:bool=False,
                             correction:Optional[Literal["blurred","fixed"]]="blurred", color=None, linestyle=None, label=None):
         """
         Args:
             ax: matplotlib axis
-            region: [ra_max, ra_min, dec_min, dec_max]
             alpha (float): opacity
             mov_average (int): data is downsampled/smoothed using moving average method.
             log_average (int): data is smoothed using average of log bins, this controls the number of bins.
@@ -1412,8 +1518,8 @@ class Observation():
             predicted_densities = moving_average(predicted_densities, n=mov_average) 
             column_densities = moving_average(column_densities, n=mov_average)
         if log_average > 1:
-            _, predicted_densities = bin_mean(10**column_densities, predicted_densities, dx=None,min_per_bin=2, nbins=log_average)
-            column_densities, residuals = bin_mean(10**column_densities, residuals, dx=None,min_per_bin=2, nbins=log_average)
+            _, predicted_densities = bin_mean(10**column_densities, predicted_densities, dx=None,min_per_bin=2, nbins=log_average, method="median")
+            column_densities, residuals, _, residuals_std = bin_mean(10**column_densities, residuals, dx=None,min_per_bin=2, nbins=log_average, return_deviation=True, method="median")
             column_densities = np.log10(column_densities)
 
         ax.axhline(0., color="red")
@@ -1430,7 +1536,7 @@ class Observation():
             #ax.errorbar(column_densities,residuals,yerr=[yerr_lower, yerr_upper],fmt='none', color="black",alpha=0.8)
             ax.fill_between(column_densities, residuals-yerr_lower, yerr_upper+residuals, color="black", alpha=0.2)
         line, = ax.plot(column_densities,residuals, marker="+", alpha=alpha, label=self.name if label is None else label, color=color, linestyle=linestyle if linestyle is not None else "-")
-        if mov_average > 1 and show_errors:
+        if (mov_average > 1 or log_average > 1) and show_errors:
             ax.fill_between(column_densities,residuals-residuals_std,residuals+residuals_std, color=line.get_color(), alpha=0.2)
 
         ax.set_xlabel(r"$N_{H}(\mathrm{cm}^{-2})$")

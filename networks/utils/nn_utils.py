@@ -106,7 +106,7 @@ def predict_map(data, model_trainer:'Trainer',
                 kernel:Union[Literal['gaussian','quadratic','uniform'],Callable[[float],float]]='uniform',
                 repeat:int=1, repeat_batch:int=1,
                 save_samples:Optional[str]=None, skip_using_saved_samples:bool=False, only_error:bool=True,
-                patch_size:Tuple[int,int]=(128, 128), nan_value:float=-1.0, overlap:float=0.5, downsample_factor:float=1., apply_baseline:bool=True, give_error:bool=False):
+                patch_size:Tuple[int,int]=(128, 128), nan_value:float=0.0, overlap:float=0.5, downsample_factor:float=1., apply_baseline:bool=True, give_error:bool=False):
     """
     Predict a quantity by applying a neural network to a map (2D tensor).
     Args:
@@ -423,7 +423,7 @@ def predict_map_reduced(data, model_trainer:'Trainer', method:Literal["mean","ma
     return output_matrix
 
 from POLARIScore.objects.SpectrumMap import SpectrumMap
-def open_samples_as_spectrummap(path:str, bins:int=32, cache:bool=True)->'SpectrumMap':
+def open_samples_as_spectrummap(path:str, bins:int=32, cache:bool=True, use_kernel:bool=True)->'SpectrumMap':
     """Returns spectrum map and x axis normalization"""
 
     x_norm_max_tensor = None
@@ -438,7 +438,7 @@ def open_samples_as_spectrummap(path:str, bins:int=32, cache:bool=True)->'Spectr
         assert os.path.exists(path), LOGGER.error(f"Can't open samples because there is no such file: {path}.") 
         kernel_path = path.split(".npy")[0]+"_weight.npy"
         has_kernel = os.path.exists(kernel_path)
-        if has_kernel:
+        if has_kernel and use_kernel:
             weight_tensor = np.load(kernel_path, mmap_mode='r')
         else:
             weight_tensor = None

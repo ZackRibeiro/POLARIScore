@@ -3,7 +3,7 @@ from scipy.ndimage import rotate
 from POLARIScore.config import LOGGER
 import matplotlib.pyplot as plt
 import platform
-from typing import List, Tuple, Callable, Union, Dict
+from typing import *
 try:
     import psutil
     psutil_available = True
@@ -18,6 +18,8 @@ except ImportError:
 from POLARIScore.config import LOGGER
 import inspect
 import ast, re
+import matplotlib.patheffects as pe
+
 
 def convert_pc_to_index(pc:float,nres:int,size:float,start:float=0.,clip:bool=True,flip:bool=False)->int:
     """
@@ -212,7 +214,7 @@ def moving_minimum(l, n=5, exclude_zeros=False):
         result.append(min(window))
     return np.array(result, dtype=object)
 
-def bin_mean(x, y, dx=None, nbins=None, logspace=True, stat='mean', min_per_bin=1):
+def bin_mean(x, y, dx=None, nbins=None, logspace=True, method:Literal['mean','median']='mean', min_per_bin=1, return_deviation:bool=False):
     x = np.asarray(x)
     y = np.asarray(y)
     mask = (~np.isnan(x)) & (~np.isnan(y)) & (x > 0) #& (y > 0)
@@ -240,15 +242,22 @@ def bin_mean(x, y, dx=None, nbins=None, logspace=True, stat='mean', min_per_bin=
         which_bin = np.digitize(x, bins) - 1
 
     x_binned, y_binned = [], []
+    x_std, y_std = [], []
     for i in range(len(bin_centers)):
         in_bin = which_bin == i
         if np.sum(in_bin) >= min_per_bin:
-            if stat == 'mean':
+            if method == 'mean':
                 x_binned.append(np.mean(x[in_bin]))
                 y_binned.append(np.mean(y[in_bin]))
-            elif stat == 'median':
+            elif method == 'median':
                 x_binned.append(np.median(x[in_bin]))
                 y_binned.append(np.median(y[in_bin]))
+            x_std.append(np.std(x[in_bin]))
+            y_std.append(np.std(y[in_bin]))
+        
+    if return_deviation:
+        return np.array(x_binned), np.array(y_binned), np.array(x_std), np.array(y_std)
+
     return np.array(x_binned), np.array(y_binned)
 
 
@@ -533,7 +542,8 @@ def step_fill(x, y_lower, y_upper, log_bins=False, offset=1):
     
     return x_step, y_lower_step, y_upper_step
 
-def plot_map(map, ax=None, cmap=None, norm=None, toplabel=None, show_ax_labels=True, return_im=True):
+def plot_map(map, ax=None, cmap=None, norm=None, toplabel:Optional[str]=None, show_ax_labels:bool=True, return_im:bool=True,
+             contour:Optional[np.ndarray]=None, contour_levels=10, contour_sigma=0):
     if ax is None:
         fig = plt.figure()
         ax = fig.add_subplot()
@@ -542,6 +552,16 @@ def plot_map(map, ax=None, cmap=None, norm=None, toplabel=None, show_ax_labels=T
 
     im = ax.imshow(map, norm=norm, cmap=cmap)
 
+    if contour is not None:
+        if contour_sigma > 0:
+            contour = gaussian_filter(contour, sigma=contour_sigma)
+        cs = ax.contour(contour,levels=contour_levels,linewidths=2,alpha=1., colors="black")
+        cs = ax.contour(contour,levels=contour_levels,linewidths=1,alpha=1, cmap="autumn")
+        texts = ax.clabel(cs, inline=False, fontsize=8)
+        for t in texts:
+            t.set_path_effects([
+                pe.withStroke(linewidth=2, foreground="black")
+            ])
     if not(show_ax_labels):
         ax.get_xaxis().set_visible(False)
         ax.get_yaxis().set_visible(False)

@@ -81,8 +81,8 @@ class SizeAwareUNet(BaseModule):
         Args
             x: tensor shape [(B,1,H,W),(B,1)] ; i.e [region, physical_size]
         """
-        size_x = torch.ones((1, 1, 1), device=self.device)*2. #x[1]
-
+        size_x = torch.ones((1, 1, 1), device=self.device)*3. #x[1]
+        #size_x = x[1]
         x = x[0]
 
         # Encoders forward pass
