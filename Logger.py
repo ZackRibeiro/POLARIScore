@@ -80,8 +80,14 @@ class Logger():
         self.print_borders = True
         self.print_date = True
         self.print_caller = True
+        self.is_enabled:bool = True
 
         self._init_gc = self.global_color
+
+    def disable(self):
+        self.is_enabled=False
+    def enable(self):
+        self.is_enabled=True
 
     def reset(self):
         """Reset logger to initial state"""
@@ -110,10 +116,11 @@ class Logger():
             except:
                 caller = None
         string += message
-        print(string)
-        self.messages.append(string)
-        if self.auto_save > 0 and len(self.messages) % self.auto_save == 0:
-            self.save()
+        if self.is_enabled:
+            print(string)
+            self.messages.append(string)
+            if self.auto_save > 0 and len(self.messages) % self.auto_save == 0:
+                self.save()
         return string
     
     def border(self, message:str="", color:str=None, level:int=2)->str:

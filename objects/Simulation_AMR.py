@@ -19,6 +19,7 @@ from scipy import ndimage
 import glob
 from typing import *
 from copy import deepcopy
+import heapq
 
 KEY_H5_TO_SIM = {
     "RHO": "scalars/density",
@@ -88,13 +89,17 @@ def fill_zeros_idw(arr, k=8, power=2):
     return out
 
 
-def amr_leaf_to_datacube(points,sizes,values,bbox,res,dtype=np.float64,log:bool=False):
+def amr_leaf_to_datacube(points,sizes,values,bbox,res,dtype=np.float64,log:bool=True, volume_weighted:bool=True, out_file:Optional[str]="cached_amr_cube.mem"):
     if isinstance(res, int):
         res = (res, res, res)
 
     nx, ny, nz = res
 
-    cube = np.zeros((nx, ny, nz), dtype=dtype)
+    cube = np.zeros((nx, ny, nz), dtype=dtype) if out_file is None else np.memmap(out_file,dtype=dtype,mode="w+",shape=(nx, ny, nz),order="C")
+
+    if out_file is not None:
+        cube[:] = 0
+        cube.flush()
 
     bbox = np.asarray(bbox, dtype=dtype)
 
@@ -124,7 +129,6 @@ def amr_leaf_to_datacube(points,sizes,values,bbox,res,dtype=np.float64,log:bool=
     sorted_indexes = np.argsort(sizes[indexes_to_keep])[::-1]
     kept_indexes = np.asarray(indexes_to_keep)[sorted_indexes]
 
-    sorted_indexes = np.argsort(sizes)[::-1]
     for i, idx in enumerate(kept_indexes):
 
         p = points[idx]
@@ -145,27 +149,72 @@ def amr_leaf_to_datacube(points,sizes,values,bbox,res,dtype=np.float64,log:bool=
         z0 = p[0] - half
         z1 = p[0] + half
 
-        ix0 = int((x0 - xmin) / dx)
-        ix1 = int((x1 - xmin) / dx)
+        ix0 = int(np.floor((x0 - xmin) / dx))
+        ix1 = int(np.ceil((x1 - xmin) / dx))
 
 
-        iy0 = int((y0 - ymin) / dy)
-        iy1 = int((y1 - ymin) / dy)
+        iy0 = int(np.floor((y0 - ymin) / dy))
+        iy1 = int(np.ceil((y1 - ymin) / dy))
 
-        iz0 = int((z0 - zmin) / dz)
-        iz1 = int((z1 - zmin) / dz)
+        iz0 = int(np.floor((z0 - zmin) / dz))
+        iz1 = int(np.ceil((z1 - zmin) / dz))
 
-        ix0 = max(0, min(nx - 1, ix0))
-        iy0 = max(0, min(ny - 1, iy0))
-        iz0 = max(0, min(nz - 1, iz0))
+        if iz1==iz0:
+            iz1+=1
+        if ix1==ix0:
+            ix1+=1
+        if iy1==iy0:
+            iy1+=1
 
-        ix1 = max(0, min(nx - 1, ix1))
-        iy1 = max(0, min(ny - 1, iy1))
-        iz1 = max(0, min(nz - 1, iz1))
+        ix0 = max(0, min(nx, ix0))
+        iy0 = max(0, min(ny, iy0))
+        iz0 = max(0, min(nz, iz0))
 
-        if val < 0:
-            LOGGER.warn(f"Negative value: {val}")
-        cube[ix0:ix1+1,iy0:iy1+1,iz0:iz1+1] += val
+        ix1 = max(0, min(nx, ix1))
+        iy1 = max(0, min(ny, iy1))
+        iz1 = max(0, min(nz, iz1))
+
+        #if val < 0:
+        #    LOGGER.warn(f"Negative value: {val}")        
+        
+        """
+        amr_vol = h**3
+
+        for ix in range(ix0, ix1):
+            vx0 = xmin + ix * dx
+            vx1 = vx0 + dx
+
+            ox = max(0.0, min(x1, vx1) - max(x0, vx0))
+            if ox == 0:
+                continue
+
+            for iy in range(iy0, iy1):
+                vy0 = ymin + iy * dy #cm
+                vy1 = vy0 + dy #cm
+
+                oy = max(0.0, min(y1, vy1) - max(y0, vy0))
+                if oy == 0:
+                    continue
+
+                for iz in range(iz0, iz1):
+                    vz0 = zmin + iz * dz
+                    vz1 = vz0 + dz
+
+                    oz = max(0.0, min(z1, vz1) - max(z0, vz0))
+                    if oz == 0:
+                        continue
+
+                    overlap_vol = ox * oy * oz
+
+                    if volume_weighted:
+                        cube[ix, iy, iz] += val * overlap_vol / amr_vol #maybe this is the inverse of this
+                    else:
+                        cube[ix, iy, iz] += val
+        """
+        cube[ix0:ix1, iy0:iy1, iz0:iz1] = val / (h**3)
+
+    if volume_weighted and False:
+        cube /= (dx*dy*dz)
 
     return cube
 
@@ -179,7 +228,7 @@ class Simulation_AMR(Simulation_DC):
             self.init(init_datacubes=init_datacubes)
 
     
-    def init(self, init_datacubes:bool=True):
+    def init(self, init_datacubes:bool=True, init_yt:bool=True):
         LOGGER.log(f"Initing simulation {self.name}")
         paths = glob.glob(os.path.join(self.folder,"*.h5"))
 
@@ -194,9 +243,13 @@ class Simulation_AMR(Simulation_DC):
             assert self.load_h5(key="RHO", path="datatree", unit=(1/(1.673e-24 *1.4)))
             self.load_h5(key="TEMP", path="datatree_temp", unit=1, str_unit="K")
             self.load_h5(key="VEL", path="datatree_vel", unit=1, str_unit="cm/s")
+            #self.load_h5(key="GRAV", path="datatree_grav", unit=1, str_unit="cm**2/s**2")
+            #self.load_h5(key="B", path="datatree_mag", unit=1, str_unit="G")
+            #self.load_h5(key="M", path="datatree_mom", unit=1, str_unit="g/cm**2/s")
 
         self.bbox = self.bbox*self.global_size
-        self.init_yt()
+        if init_yt:
+            self.init_yt()
         self.nres = AMR_BASE_RESOLUTION
         self.cell_size = self.size/self.nres*PC_TO_CM
         if init_datacubes:
@@ -297,20 +350,33 @@ class Simulation_AMR(Simulation_DC):
                 return False
         return True
     
-    def init_datacubes(self, res=AMR_BASE_RESOLUTION, force:bool=True, filling_method=amr_leaf_to_datacube, keys:Optional[List[str]]=None):
+    def init_datacubes(self, res=AMR_BASE_RESOLUTION, force:bool=True, filling_method=amr_leaf_to_datacube, keys:Optional[List[str]]=None, use_mem_cache:bool=False):
         keys = list(self.data.keys()) if keys is None else keys
         for k in keys:
             k = k.lower()
             if not(isinstance(k, str)):
                 continue
             if k[0]=="p" and k[1]=="_":
-                self.to_datacube(key=k, res=res, store=True, cache=True, force=force, filling_method=filling_method)
-        self.nres = AMR_BASE_RESOLUTION
+                self.to_datacube(key=k, res=res, store=True, cache=True, force=force, filling_method=filling_method, out_file="cached_amr_cube.mem" if use_mem_cache else None)
+        self.nres = res
         self.cell_size = self.size/self.nres*PC_TO_CM
         
-    def to_datacube(self, key, filling_method:Optional[Callable]=amr_leaf_to_datacube, res:Union[List[int],int]=128, smoothing:float=0, bbox:Optional[List[float]]=None,
-                    store:bool=False, force:bool=False, log:bool=True, cache:bool=False, dtype=np.float64):
+    def to_datacube(self, key:Union[str,List[str]], filling_method:Optional[Callable]=amr_leaf_to_datacube, res:Union[List[int],int]=128, smoothing:float=0, bbox:Optional[List[float]]=None,
+                    store:bool=False, force:bool=False, log:bool=True, cache:bool=False, dtype=np.float64, out_file:Optional[str]="cached_amr_cube.mem"):
         
+        if isinstance(out_file, bool):
+            if out_file:
+                out_file = "cached_amr_cube.mem"
+            else:
+                out_file = None
+        if isinstance(key, list):
+            result_list = []
+            for k in key:
+                result_list.append(self.to_datacube(
+                    k, filling_method=filling_method, res=res, smoothing=smoothing, bbox=bbox, force=True, log=log, dtype=dtype, out_file=None
+                ))
+            return result_list
+
         bbox_was_none = bbox is None
         if bbox is not None:
             force=True
@@ -355,31 +421,31 @@ class Simulation_AMR(Simulation_DC):
         bbox[0,:] = self.global_size*PC_TO_CM-bbox[0,:]
         bbox[0,:] = np.sort(bbox[0,:])
 
-
-        if key.upper() != "SIZE":
-            if 'VOLUME' in self.data and self.data['VOLUME'].shape[0] == res[0] and bbox_was_none:
-                volume_tensor = self.data['VOLUME']
-            else:
-                if key.upper() != "VOLUME":
-                    volume_tensor = self.to_datacube("VOLUME", filling_method=filling_method, res=res, smoothing=smoothing, bbox=init_bbox, store=store, force=False, log=log, cache=cache, dtype=dtype)
-
         if key in self.data and not(force) and self.data[key].shape[0] == res[0]:
             return self.data[key]
         if filling_method.__name__ == amr_leaf_to_datacube.__name__:
             points = self.data["points"]
             sizes = self.data["p_SIZE"][0]
             values = self.data[query_key][0]
-            datacube = amr_leaf_to_datacube(points=points,sizes=sizes,values=values,bbox=bbox,res=res, dtype=dtype)
-            datacube = fill_zeros_nearest(datacube)
+            datacube = amr_leaf_to_datacube(points=points,sizes=sizes,values=values,bbox=bbox,res=res, dtype=dtype, out_file=out_file)
+            #datacube = fill_zeros_nearest(datacube)
         else:
             assert self.yt is not None, LOGGER.error(f"Mising yt streaming dataset.")
+            
+            if key.upper() != "SIZE":
+                if 'VOLUME' in self.data and self.data['VOLUME'].shape[0] == res[0] and bbox_was_none:
+                    volume_tensor = self.data['VOLUME']
+                else:
+                    if key.upper() != "VOLUME":
+                        volume_tensor = self.to_datacube("VOLUME", filling_method=filling_method, res=res, smoothing=smoothing, bbox=init_bbox, store=store, force=False, log=log, cache=cache, dtype=dtype, out_file="cached_amr_cube_volume.mem" if out_file is not None else None)
+
             cg = self.yt.arbitrary_grid(left_edge=bbox[:,0],right_edge=bbox[:,1],dims=res)
             datacube = cg["deposit", "all_sum_"+key.lower()].to_ndarray()
 
-        if key.upper() != "SIZE" and key.upper() != "VOLUME":
-            datacube = np.divide(datacube,volume_tensor,out=np.zeros_like(datacube),
-                where=(volume_tensor > 0) & (datacube != 0)
-            )
+            if key.upper() != "SIZE" and key.upper() != "VOLUME":
+                datacube = np.divide(datacube,volume_tensor,out=datacube,
+                    where=(volume_tensor > 0) & (datacube != 0)
+                )
         if filling_method.__name__ != amr_leaf_to_datacube.__name__ and filling_method is not None:
             datacube = filling_method(datacube)
         if smoothing > 0:
@@ -396,7 +462,9 @@ class Simulation_AMR(Simulation_DC):
 
         return datacube
     
-    def get_region_datacube(self, key, axis, bbox, res):
+    def get_region_datacube(self, key, axis, bbox, res, use_datacube:bool=False):
+        if use_datacube:
+            return super().get_region_datacube(key, axis, bbox, res)
         if axis == -1:
             insert_axis = len(bbox)
         else:
@@ -408,16 +476,117 @@ class Simulation_AMR(Simulation_DC):
         elif axis == 1:
             grid_axis = 0
 
-        bbox=[[bbox[0], bbox[1]], [bbox[2], bbox[3]]]
-        bbox.insert(insert_axis, None)
-        rres = [res,res]
-        rres.insert(insert_axis, 512)
+        is_a_cube=False
+        if len(bbox == 4):
+            bbox=[[bbox[0], bbox[1]], [bbox[2], bbox[3]]]
+            bbox.insert(insert_axis, None)
+            rres = [res,res]
+            rres.insert(insert_axis, 1024)
+        elif len(bbox == 6):
+            bbox=[[bbox[0], bbox[1]], [bbox[2], bbox[3]], [bbox[4], bbox[5]]]
+            rres = [res,res,res]
+            is_a_cube = True
+
         #data = self.to_datacube(key.upper(), res=rres, bbox=bbox,
         #                        filling_method=lambda t: fill_zeros_slice(t, method=fill_zeros_nearest, axis=grid_axis), smoothing=0.5, force=True, log=False)
         data = self.to_datacube(key.upper(), res=rres, bbox=bbox,
-                                filling_method=amr_leaf_to_datacube, smoothing=0., force=True, log=False)
+                                filling_method=amr_leaf_to_datacube, smoothing=0., force=True, log=False, out_file=None)
         
-        data = np.moveaxis(data, grid_axis, -1)
-        data += 1e-3
+        if not(is_a_cube):
+            data = np.moveaxis(data, grid_axis, -1)
+        data += 1e-1
         return data
+    
+    def _get_core_volume(self, core:Dict, use_datacube:bool=False, res=256, amr_method=amr_leaf_to_datacube, box_size=4.):
+        if use_datacube:
+            return super()._get_core_volume(core)
+        
+        pos = np.array([core['pos_x'],core['pos_y'],core['pos_z']])
+        x0, x1 = pos-box_size/2, pos+box_size/2
+        bbox = np.array([x0,x1]).T
+        rho = self.get_region_datacube("RHO",res=res+1, bbox=bbox.flatten()[:4], axis=0)
+        return rho, 0.
+
+
+        data = self.to_datacube(["RHO","VX1","VX2","VX3"],
+                                               res=[res+1,res+1,res+1], bbox=bbox, filling_method=amr_method, force=True, out_file=None,
+                                               log=False)
+        rho = data[0]
+        vx = data[1]
+        vy = data[2]
+        vz = data[3]
+
+        shape = rho.shape
+
+        pos = np.floor(res//2, res//2, res//2)
+        dx = box_size/res
+        peak = tuple(pos)
+
+        neighbors = [(1, 0, 0), (-1, 0, 0),(0, 1, 0), (0, -1, 0),(0, 0, 1), (0, 0, -1)]
+        visited = {peak}
+        heap = [(-rho[peak], peak)]
+
+        region = []
+
+        best_alpha = np.inf
+        best_region = None
+
+        peak_xyz = np.array(peak)
+
+        while heap:
+
+            _, cell = heapq.heappop(heap)
+            region.append(cell)
+
+            idx = np.array(region)
+
+            x, y, z = idx.T
+
+            m = rho[x, y, z]*(1.673e-24 *1.4) * dx**3
+            M = np.sum(m)
+
+            if M <= 0:
+                continue
+
+            pos = idx.astype(float)
+            r2 = np.sum((pos - peak_xyz[None, :])**2,axis=1) * dx**2
+            R = np.sqrt(np.sum(m * r2) / M)
+
+            vx_reg = vx[x, y, z]
+            vy_reg = vy[x, y, z]
+            vz_reg = vz[x, y, z]
+
+            vx_cm = np.sum(m * vx_reg) / M
+            vy_cm = np.sum(m * vy_reg) / M
+            vz_cm = np.sum(m * vz_reg) / M
+
+            sigma2 = np.sum(m * ((vx_reg - vx_cm)**2 +(vy_reg - vy_cm)**2 +(vz_reg - vz_cm)**2)) / (3 * M)
+
+            alpha = 5.0 * sigma2 * R / (6.67430e-8 * M)
+            if len(region) > 5:
+                if alpha < best_alpha:
+                    best_alpha = alpha
+                    best_region = region.copy()
+                else:
+                    break
+
+            for dx_, dy_, dz_ in neighbors:
+                nx = cell[0] + dx_
+                ny = cell[1] + dy_
+                nz = cell[2] + dz_
+
+                if not (0 <= nx < shape[0] and 0 <= ny < shape[1] and 0 <= nz < shape[2]):
+                    continue
+
+                p = (nx, ny, nz)
+
+                if p in visited:
+                    continue
+
+                visited.add(p)
+
+                heapq.heappush(heap,(-rho[p], p))
+
+        return np.array(best_region), best_alpha
+
     

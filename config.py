@@ -31,12 +31,21 @@ from .Logger import Logger
 LOGGER = Logger(level=2, auto_save=0, save_path=EXPORT_FOLDER)
 
 FIGURE_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)),"paper/figure/")
-
 CACHES_FOLDER = os.path.join(EXPORT_FOLDER,"caches/")
-
+TUNING_FOLDER = os.path.join(EXPORT_FOLDER, "tuning/")
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)),"data/")
-
 OBSERVATIONS_FOLDER = os.path.join(DATA_FOLDER,"observations/")
+
+if not(os.path.exists(FIGURE_FOLDER)):
+    os.mkdir(FIGURE_FOLDER)
+if not(os.path.exists(CACHES_FOLDER)):
+    os.mkdir(CACHES_FOLDER)
+if not(os.path.exists(TUNING_FOLDER)):
+    os.mkdir(TUNING_FOLDER)
+if not(os.path.exists(DATA_FOLDER)):
+    os.mkdir(DATA_FOLDER)
+if not(os.path.exists(OBSERVATIONS_FOLDER)):
+    os.mkdir(OBSERVATIONS_FOLDER)
 
 #Normalization functions are tuples of (lambda,lambda). First one is to normalize, second one is the invert function to recover the physical scale
 DATA_NORMALIZATION_CDENS = (lambda x: (np.log10(x)-19.)/6.*2.-1., lambda y: np.power(10.,(1.+y)/2*6.+19.) )

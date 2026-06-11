@@ -96,14 +96,16 @@ class Encoder(nn.Module):
 class _SubNetwork(nn.Module):
     def __init__(self, split_dim, cond_dim):
         super().__init__()
-        hidden_features = max(32,(split_dim+cond_dim)*2)
+        hidden_features = max(32, (split_dim + cond_dim) * 2)
+        hidden_features = ((hidden_features + 7) // 8) * 8
         self.nn = nn.Sequential(
             nn.Conv2d(split_dim+cond_dim, hidden_features, 3, padding=1),
-            #nn.GroupNorm(hidden_features),
+            nn.GroupNorm(8, hidden_features),
             nn.ReLU(),
             nn.Conv2d(hidden_features, hidden_features, 3, padding=1),
+            nn.GroupNorm(8, hidden_features),
             nn.ReLU(),
-            nn.BatchNorm2d(hidden_features),
+            #nn.BatchNorm2d(hidden_features),
             nn.Conv2d(hidden_features, 2*split_dim, 3, padding=1),
         )
 
@@ -126,7 +128,8 @@ class _SubNetwork(nn.Module):
         """
         x = self.nn(x)
         s, t = x.chunk(2, dim=1)
-        s = 2.*self.alpha_s/torch.pi * torch.arctan(s/self.alpha_s)
+        #s = 2.*self.alpha_s/torch.pi * torch.arctan(s/self.alpha_s)
+        s = 0.5 * torch.tanh(s)
         return s, t
     
 class _FixedSubNetwork(nn.Module):
@@ -172,7 +175,7 @@ class ConditionalCouplingLayer(nn.Module):
         self.split_dim = dim // 2
         self.sub1 = _SubNetwork(self.split_dim, cond_dim)
         self.sub2 = _SubNetwork(self.split_dim, cond_dim)
-        self.perm = RandomPermutation(dim)
+        self.perm = Invertible1x1Conv(dim)
 
 
     def forward(self, x, c, reverse=False):
@@ -192,10 +195,10 @@ class ConditionalCouplingLayer(nn.Module):
             s2, t2 = self.sub2(torch.cat([y1, c], dim=1))
             y2 = x2 * torch.exp(s2) + t2
             y = torch.cat([y1, y2], dim=1)
-            y = self.perm(y, reverse=False)
-            log_det_jac = torch.sum(s1, dim=[1,2,3]) + torch.sum(s2, dim=[1,2,3])
+            y, ld_perm = self.perm(y, reverse=False)
+            log_det_jac = torch.sum(s1, dim=[1,2,3]) + torch.sum(s2, dim=[1,2,3]) + ld_perm
         else:
-            x = self.perm(x, reverse=True)
+            x, ld_perm = self.perm(x, reverse=True)
             x1, x2 = x[:, :self.split_dim], x[:, self.split_dim:]
             s2, t2 = self.sub2(torch.cat([x1, c], dim=1))
             y2 = (x2 - t2) * torch.exp(-s2)
@@ -203,7 +206,7 @@ class ConditionalCouplingLayer(nn.Module):
             y1 = (x1 - t1) * torch.exp(-s1)
             log_det_jac = -(torch.sum(s1, dim=[1, 2, 3]) + torch.sum(s2, dim=[1, 2, 3]))
             y = torch.cat([y1, y2], dim=1)
-            log_det_jac = -(torch.sum(s1, dim=[1,2,3]) + torch.sum(s2, dim=[1,2,3]))
+            log_det_jac = -(torch.sum(s1, dim=[1,2,3]) + torch.sum(s2, dim=[1,2,3])) + ld_perm
 
         return y, log_det_jac
 

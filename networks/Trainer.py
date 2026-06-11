@@ -189,7 +189,7 @@ class Trainer():
         eval_model.eval()
         return eval_model
 
-    def train(self, epoch_number:int=100, batch_number:int=32, compute_validation:int=10, cache:bool=True, early_stopping:bool=True, training_mode:Literal["accumulation","normal"]="normal"):
+    def train(self, epoch_number:int=100, batch_number:int=32, compute_validation:int=10, cache:bool=True, early_stopping:bool=True, training_mode:Literal["accumulation","normal"]="normal", print_epoch_progress_bar:bool=False):
         """
         Train the model (check trainer variables for settings)
 
@@ -248,7 +248,8 @@ class Trainer():
             minbatch_nbr = int(np.floor(batch_size/batch_number))
             epoch_time = time.time()
             for b in range(minbatch_nbr if minbatch_nbr > 1 else 1):
-                printProgressBar(b, minbatch_nbr, length=10, prefix=f"{b}/{minbatch_nbr}", disable_done=True)
+                if not(print_epoch_progress_bar):
+                    printProgressBar(b, minbatch_nbr, length=10, prefix=f"{b}/{minbatch_nbr}", disable_done=True)
                 if training_mode == "normal":
                     self.optimizer.zero_grad()
                 used_batch = self.training_set.get(indexes=shuffled_indices[b*batch_number:(b+1)*batch_number if minbatch_nbr >= 1 else -1])
@@ -297,6 +298,7 @@ class Trainer():
                 self.scheduler.step(epoch_loss)
             if training_mode == "normal":
                 epoch_loss /= max(minbatch_nbr,1)
+            assert np.isfinite(epoch_loss), LOGGER.error("Training stopped > Training loss was not finite")
             self.training_losses.append((total_epoch, epoch_loss))
             val_total_loss = None
             if compute_validation>0 and total_epoch % compute_validation == 0:
@@ -305,7 +307,8 @@ class Trainer():
                     val_total_loss = 0
                     eval_model = self._get_eval_model(epoch=total_epoch)
                     for b in range(minbatch_nbr if minbatch_nbr > 1 else 1):
-                        printProgressBar(b, minbatch_nbr, length=10, prefix=f"{b}/{minbatch_nbr}", disable_done=True)
+                        if not(print_epoch_progress_bar):
+                            printProgressBar(b, minbatch_nbr, length=10, prefix=f"{b}/{minbatch_nbr}", disable_done=True)
                         used_batch = self.validation_set.get(indexes=list(range(len(self.validation_set.batch)))[b*batch_number:(b+1)*batch_number if minbatch_nbr >= 1 else -1])
                         if batch_number == 1:
                             used_batch = [used_batch]
@@ -363,6 +366,13 @@ class Trainer():
                 e_loss_color = ""
             e_loss_str = f"{e_loss_color}{epoch_loss:.2e}\033[0m"
 
+            if print_epoch_progress_bar:
+                bar_prefix = print_epoch_progress_bar if isinstance(print_epoch_progress_bar, str) else "Training model"
+                last_loss = 0.
+                if len(self.validation_losses) > 0:
+                    last_loss = self.validation_losses[-1][1]
+                bar_prefix += f" {last_loss:.2e}"
+                printProgressBar(epoch, epoch_number, bar_prefix)
 
             LOGGER.print(
                 f"Epoch {total_epoch}/{l_ep + epoch_number} | "

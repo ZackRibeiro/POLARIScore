@@ -10,6 +10,7 @@ BOLTZMANN_CONSTANT = 1.380649e-23
 """Boltzmann constant in J/K"""
 PC_TO_CM = 3.086e+18
 """How many centimeters in a parsec"""
+GRAV_CONSTANT = 6.67430e-11
 
 BLACKBODY_EMISSION = lambda nu,T: (2*PLANCK_CONSTANT*np.power(nu,3)/(LIGHT_SPEED**2))*(1/(np.exp(PLANCK_CONSTANT*nu/(BOLTZMANN_CONSTANT*T))-1))
 """Emmision of a blackbody in function of the frequency and temperature"""

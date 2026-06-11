@@ -25,6 +25,7 @@ from POLARIScore.utils.sim_utils import init_idefix, init_ramses
 from POLARIScore.objects.SpectrumMap import SpectrumMap
 import json
 from scipy.ndimage import distance_transform_edt
+import heapq
 
 class Simulation_DC():
     """
@@ -213,7 +214,7 @@ class Simulation_DC():
                     c[key_name] = data[key][index]
 
 
-                keys_to_invert = []#[('pos_x','pos_z'),('vel_x','vel_z'),('B_x','B_z')]
+                keys_to_invert = [('pos_x','pos_z'),('vel_x','vel_z'),('B_x','B_z')]
                 for key in keys_to_invert:
                     temp = c[key[0]]
                     c[key[0]] = c[key[1]]
@@ -258,17 +259,17 @@ class Simulation_DC():
         invert_z = False
 
         if axis == 0:
-            key_1 += "x"
+            key_1 += "z"
             key_2 += "y"
-            key_3 += "z"
+            key_3 += "x"
         elif axis == 1:
-            key_1 += "x"
-            key_2 += "z"
+            key_1 += "z"
+            key_2 += "x"
             key_3 += "y"
         elif axis == 2:
             key_1 += "y"
-            key_2 += "z"
-            key_3 += "x"
+            key_2 += "x"
+            key_3 += "z"
 
         x_c = np.array([c[key_1] for c in self.cores])
         y_c = np.array([c[key_2] for c in self.cores])
@@ -345,21 +346,22 @@ class Simulation_DC():
                     break
         return multiplicities/len_cores
 
-    def get_core_volumes(self, indexes:Union[int, List[int]],plot:bool=False, density_threshold=4e5):
+    def get_core_volumes(self, indexes:Union[int, List[int]],plot:bool=False, peak_distance=0.):
 
         indexes = indexes if isinstance(indexes, (np.ndarray, list, tuple)) else [indexes]
 
         cores = []
         for i,c in enumerate(self.load_cores()):
             if i in indexes:
-                print(c['n_max'])
                 cores.append(c)
         
+        #peak_distance = np.floor(peak_distance/(self.relative_size*self.global_size))*self.nres
+
         volumes = []
         for c in cores:
-            pos = np.array([c['pos_x'],c['pos_y'],c['pos_z']])
-            pos = np.astype(np.floor(((pos-self.bbox[0][0]) / (self.relative_size*self.global_size))*self.nres),int)
-            volumes.append(contour_3d(self.data['RHO'], pos=pos,threshold=density_threshold))
+            volume, alpha_vir = self._get_core_volume(c)
+            print(alpha_vir, c["alpha_vir"])
+            volumes.append(volume)
 
         if plot:
             coords = np.array(volumes[0])
@@ -374,6 +376,86 @@ class Simulation_DC():
             ax.voxels(voxels, edgecolor='k')
 
         return volumes
+    
+    def _get_core_volume(self, core:Dict):
+        
+        rho = self.data["RHO"]
+        shape = rho.shape
+        dx, dy, dz = self.global_size*self.relative_size/shape*PC_TO_CM
+        pos = np.array([core['pos_x'],core['pos_y'],core['pos_z']])
+        pos = np.floor(((pos-self.bbox[:,0]) / (self.relative_size*self.global_size))*shape).astype(int)  
+        peak = tuple(pos)
+
+        neighbors = [(1, 0, 0), (-1, 0, 0),(0, 1, 0), (0, -1, 0),(0, 0, 1), (0, 0, -1)]
+        visited = {peak}
+        heap = [(-rho[peak], peak)]
+
+        region = []
+
+        best_alpha = np.inf
+        best_region = None
+
+        peak_xyz = np.array(peak)
+
+        while heap:
+
+            _, cell = heapq.heappop(heap)
+            region.append(cell)
+
+            idx = np.array(region)
+
+            x, y, z = idx.T
+
+            m = rho[x, y, z]*(1.673e-24 *1.4) * dx*dy*dz
+            M = np.sum(m)
+
+            if M <= 0:
+                continue
+
+            pos = idx.astype(float)
+            r2 = np.sum((pos - peak_xyz[None, :])**2,axis=1) * max([dx,dy,dz])**2
+            R = np.sqrt(np.sum(m * r2) / M)
+
+            vx = self.data["VX1"]
+            vy = self.data["VX2"]
+            vz = self.data["VX3"]
+
+            vx_reg = vx[x, y, z]
+            vy_reg = vy[x, y, z]
+            vz_reg = vz[x, y, z]
+
+            vx_cm = np.sum(m * vx_reg) / M
+            vy_cm = np.sum(m * vy_reg) / M
+            vz_cm = np.sum(m * vz_reg) / M
+
+            sigma2 = np.sum(m * ((vx_reg - vx_cm)**2 +(vy_reg - vy_cm)**2 +(vz_reg - vz_cm)**2)) / (3 * M)
+
+            alpha = 5.0 * sigma2 * R / (6.67430e-8 * M)
+            if len(region) > 5:
+                if alpha < best_alpha:
+                    best_alpha = alpha
+                    best_region = region.copy()
+                else:
+                    break
+
+            for dx_, dy_, dz_ in neighbors:
+                nx = cell[0] + dx_
+                ny = cell[1] + dy_
+                nz = cell[2] + dz_
+
+                if not (0 <= nx < shape[0] and 0 <= ny < shape[1] and 0 <= nz < shape[2]):
+                    continue
+
+                p = (nx, ny, nz)
+
+                if p in visited:
+                    continue
+
+                visited.add(p)
+
+                heapq.heappush(heap,(-rho[p], p))
+
+        return np.array(best_region), best_alpha
             
     def get_core_distance_map(self, axis:int=0, method:Literal["normal","sorted_peak"]="normal", plot:bool=False):
 
@@ -852,7 +934,7 @@ class Simulation_DC():
                     Uy_sub = Uy[::step_y, ::step_x]
 
                 if artists["im"] is None:
-                    artists["im"] = ax.imshow(density, cmap="jet", extent=[self.bbox[0][0], self.bbox[0][1], self.bbox[1][0],self.bbox[1][1]], norm=LogNorm(vmin=np.min(self.data['RHO']),vmax=np.max(self.data['RHO'])))
+                    artists["im"] = ax.imshow(density, cmap="jet", extent=[self.bbox[0][0], self.bbox[0][1], self.bbox[1][0],self.bbox[1][1]], norm=LogNorm(vmin=np.nanmin(self.data['RHO'])+1e-3,vmax=np.nanmax(self.data['RHO'])))
                 else:
                     artists["im"].set_data(density)
 
@@ -873,7 +955,10 @@ class Simulation_DC():
                 fig.canvas.draw_idle()
 
             _plotData(slice=slice)
-            plt.colorbar(artists["im"], ax=ax, label="Density")
+            try:
+                plt.colorbar(artists["im"], ax=ax, label="Density")
+            except:
+                pass
 
             if enable_slider:
                 ax_slider = fig.add_axes([0.2, 0.05, 0.6, 0.03])
@@ -1202,7 +1287,7 @@ class Simulation_DC():
             data = self.data['RHO']
             label = r"$n_H$" if label is None else label
 
-        mask = (~np.isnan(data))
+        mask = np.isfinite(data)
         if is_log:
             mask = mask & (data > 0)
 

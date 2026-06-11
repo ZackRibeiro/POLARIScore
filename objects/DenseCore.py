@@ -38,10 +38,11 @@ class DenseCore():
             custom_data: if not None, use this map instead of data
             median: if > 0, take the median of a region of length 'median'.
         """
-        if column_density:
-            assert self.obs.data is not None, LOGGER.error(f"No column density on the observation: {self.obs.name}.")
-        else:
-            assert self.obs.prediction is not None, LOGGER.error(f"No predicted density on the observation: {self.obs.name}.")
+        if custom_data is None:
+            if column_density:
+                assert self.obs.data is not None, LOGGER.error(f"No column density on the observation: {self.obs.name}.")
+            else:
+                assert self.obs.prediction is not None, LOGGER.error(f"No predicted density on the observation: {self.obs.name}.")
 
         if correction is not None and not(column_density):
             return self.obs._from_massweighted_to_core_densities(method=correction, dense_core=self)

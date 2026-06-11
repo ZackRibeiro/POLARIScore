@@ -19,7 +19,20 @@ from POLARIScore.config import LOGGER
 import inspect
 import ast, re
 import matplotlib.patheffects as pe
+import threading
 
+def ask_to_user(sentence: str, seconds: int = 10, default=None):
+    result = {"value": default}
+
+    def get_input():
+        result["value"] = input(sentence)
+
+    thread = threading.Thread(target=get_input, daemon=True)
+    thread.start()
+
+    thread.join(timeout=seconds)
+
+    return result["value"]
 
 def convert_pc_to_index(pc:float,nres:int,size:float,start:float=0.,clip:bool=True,flip:bool=False)->int:
     """
@@ -99,7 +112,10 @@ def compute_pdf(data_slice:np.ndarray, bins:int=100, func:Callable=lambda x: np.
     Returns:
         probabilities, edges
     """
-    hist = np.histogram(func(data_slice.flatten()[~np.isnan(data_slice.flatten())]),bins=bins, density=density)
+    mask = np.isfinite(data_slice.flatten())
+    if np.any(~np.isfinite(func(data_slice.flatten()[mask]))):
+        mask = mask & (data_slice.flatten() > 0)
+    hist = np.histogram(func(data_slice.flatten()[mask]),bins=bins, density=density)
     probabilities = hist[0]
     edges = hist[1]
     if(center):
@@ -652,7 +668,7 @@ def find_roots(X, Y, interp="linear"):
 def contour_3d(data_cube: np.ndarray, pos: Tuple[int, int, int], threshold: float) -> List[np.ndarray]:
     pos = tuple(pos)
     init_value = data_cube[*pos]
-    print(init_value)
+    threshold = threshold*init_value
 
     shape = data_cube.shape
     stack = [pos]
@@ -672,9 +688,7 @@ def contour_3d(data_cube: np.ndarray, pos: Tuple[int, int, int], threshold: floa
         for dx, dy, dz in neighbors:
             nx, ny, nz = cell[0] + dx, cell[1] + dy, cell[2] + dz
 
-            if not (0 <= nx < shape[0] and
-                    0 <= ny < shape[1] and
-                    0 <= nz < shape[2]):
+            if not (0 <= nx < shape[0] and 0 <= ny < shape[1] and 0 <= nz < shape[2]):
                 continue
 
             new_pos = (nx, ny, nz)
