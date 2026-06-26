@@ -18,6 +18,7 @@ from typing import Dict,List,Tuple,Callable,Union, Literal, Optional
 from matplotlib.widgets import Slider
 from scipy.ndimage import zoom
 from scipy.optimize import curve_fit
+from scipy.stats import linregress
 import matplotlib.cm as cm
 import matplotlib.axes
 import glob
@@ -971,7 +972,7 @@ class Simulation_DC():
 
                 fig._slice_slider.on_changed(update_slice)
 
-    def plot(self,method:Callable=compute_column_density,fig=None,axis:Union[List[int],int]=[0,1,2],plot_pdf:bool=False,color_bar:bool=True,derivate:int=0,norm=None,label=None):
+    def plot(self,method:List[Callable]|Callable=compute_column_density,axis:Union[List[int],int]=[0,1,2],plot_pdf:bool=False,color_bar:bool=True,derivate:int=0,norm=None,label:List[str]|str=None, tight_layout:bool=True, plot_titles:bool=False):
         """
         Plot simulations faces with probabiliy density function
 
@@ -991,71 +992,84 @@ class Simulation_DC():
         axis = np.array(axis)
         axis = axis[np.argsort(axis)]
 
-        if fig is not None:
-            color_bar = False
+        if not(isinstance(method, (list, tuple))):
+            method = [method]
+        if not(isinstance(label, (list, tuple))):
+            label = [label for _ in range(len(method))]
+        if not(isinstance(norm, (list, tuple))):
+            norm = [norm for _ in range(len(method))]
 
-        densities = []
+        densities = [] 
         for ax in axis:
-            if len(inspect.signature(method).parameters) == 3:
-                d = method(self.data['RHO'], self.cell_size, axis=ax)
-            else:
-                d = method(self.data['RHO'], axis=ax)
-            d = compute_derivative(d, order=derivate)
-            d = np.abs(d)
-            densities.append(d)  
+            temp_d = []
+            for m in method:
+                if len(inspect.signature(m).parameters) == 3:
+                    d = m(self.data['RHO'], self.cell_size, axis=ax)
+                else:
+                    d = m(self.data['RHO'], axis=ax)
+                d = compute_derivative(d, order=derivate)
+                d = np.abs(d)
+                temp_d.append(d)  
+            densities.append(temp_d)
+        densities = np.array(densities) # (AXES, METHODS, H, W)
+        for i,n in enumerate(norm):
+            if n is None:
+                norm[i] = LogNorm(vmin=np.min(densities[:, i]),vmax=np.max(densities[:, i]))
 
-        if fig is None:
-            fig = plt.figure(figsize=(4 * len(axis), 6 if plot_pdf else 3.5))
-
-        nrows = 2 if plot_pdf else 1
-        ncols = len(axis)
-
-        axes = fig.subplots(nrows, ncols)
-
-        if ncols == 1:
-            axes = [axes]
-        if not plot_pdf:
-            axes = [axes]
-
-        def _plot(column, data, ax):
-            plt_ax:matplotlib.axes.Axes = axes[0][column]
-            cd = plt_ax.imshow(data, extent=[self.bbox[0][0], self.bbox[0][1], self.bbox[1][0],self.bbox[1][1]], cmap="jet", norm=LogNorm() if norm is None else norm)
-            
-            if self.cores is not None:
-                cores_in, cores_in_pos = self.get_cores(axis=ax, box=[self.bbox[0][0], self.bbox[0][1], self.bbox[1][0],self.bbox[1][1]])
-                plt_ax.scatter(cores_in_pos[0], cores_in_pos[1], marker="+", color="white")
-            
+        axes_str = []
+        for j,m in enumerate(method):
+            axes_str.append([str(j)+"MAP_"+str(i) for i in range(len(axis))])
             if plot_pdf:
-                pdf = compute_pdf(data/np.mean(data))
-                pdf[1] = pdf[1]/np.sum(pdf[1])
-                plt_ax_2:matplotlib.axes.Axes = axes[1][column]
-                plt_ax_2.plot([(pdf[1][i+1]+pdf[1][i])/2 for i in range(len(pdf[1])-1)],pdf[0],color='black')
-                plt_ax_2.set_xlabel("s")
-                plt_ax_2.set_ylabel("p")
-                plt_ax_2.set_title("PDF")
-                plt_ax_2.set_yscale("log")
-                plt_ax_2.grid()
-            return cd
+                axes_str.append([str(j)+"PDF_"+str(i) for i in range(len(axis))])
+        fig, axes = plt.subplot_mosaic(axes_str, figsize=(len(axis)*3,6*len(method) if plot_pdf else 3*len(method)), gridspec_kw={"hspace": 0.1, "wspace": 0} if tight_layout else {})
+
+        def _plot(column, data_list, ax):
+            cds = []
+            for j,_ in enumerate(method):
+                data = data_list[j]
+                plt_ax:matplotlib.axes.Axes = axes[str(j)+"MAP_"+str(column)]
+                cd = plt_ax.imshow(data, extent=[self.bbox[0][0], self.bbox[0][1], self.bbox[1][0],self.bbox[1][1]], cmap="jet", norm=norm[j])
+                
+                if self.cores is not None:
+                    cores_in, cores_in_pos = self.get_cores(axis=ax, box=[self.bbox[0][0], self.bbox[0][1], self.bbox[1][0],self.bbox[1][1]])
+                    plt_ax.scatter(cores_in_pos[0], cores_in_pos[1], marker="+", color="white")
+                
+                if plot_pdf:
+                    pdf = compute_pdf(data/np.mean(data))
+                    pdf[1] = pdf[1]/np.sum(pdf[1])
+                    plt_ax_2:matplotlib.axes.Axes = axes[str(j)+"PDF_"+str(column)]
+                    plt_ax_2.plot([(pdf[1][i+1]+pdf[1][i])/2 for i in range(len(pdf[1])-1)],pdf[0],color='black')
+                    plt_ax_2.set_xlabel("s")
+                    plt_ax_2.set_ylabel("p")
+                    plt_ax_2.set_title("PDF")
+                    plt_ax_2.set_yscale("log")
+                    plt_ax_2.grid()
+                cds.append(cd)
+            return cds
 
         for i, ai in enumerate(axis):
             cd = _plot(i,densities[i], ai)
-            if ai == 0:
-                axes[0][i].set_title("Top-Down View (XY Projection)")
-                axes[0][i].set_xlabel("X (pc)")
-                axes[0][i].set_ylabel("Y (pc)")
-            elif ai == 1:
-                axes[0][i].set_title("Side View (XZ Projection)")
-                axes[0][i].set_xlabel("X (pc)")
-                axes[0][i].set_ylabel("Z (pc)")
-            elif ai == 2:
-                axes[0][i].set_title("Front View (YZ Projection)")
-                axes[0][i].set_xlabel("Y (pc)")
-                axes[0][i].set_ylabel("Z (pc)")
+            if plot_titles:
+                if ai == 0:
+                    axes["0MAP_"+str(i)].set_title("XY Projection")
+                elif ai == 1:
+                    axes["0MAP_"+str(i)].set_title("XZ Projection")
+                elif ai == 2:
+                    axes["0MAP_"+str(i)].set_title("YZ Projection")
+            for j in range(len(method)):
+                axes[str(len(method)-1)+"MAP_"+str(i)].set_ylabel("(pc)" if i == 0 else "")
+            axes[str(len(method)-1)+"MAP_"+str(i)].set_xlabel("(pc)")
+        
 
         if color_bar:
-            cbar = plt.colorbar(cd, ax=axes[0], orientation="vertical", fraction=0.02, pad=0.02)
-            cbar.set_label(r"$N_H$ ($cm^{-2}$)" if label is None else label)
+            for j,_ in enumerate(method):
+                cbar = plt.colorbar(cd[j], ax=[axes[str(j)+"MAP_"+str(i)] for i in range(len(axis))], orientation="vertical", fraction=0.02, pad=0.02)
+                cbar.set_label(r"$N_H$ ($cm^{-2}$)" if label[j] is None else label[j])
 
+        for i in range(len(axis)-1):
+            for j in range(len(method)):
+                axes[str(j)+"MAP_"+str(i+1)].tick_params(left=False, labelleft=False)
+ 
         return fig, axes
 
     def plot_correlation(self,ax=None, method:Callable=compute_mass_weighted_density, axis:int=-1, force_compute:bool=False, lines:List[int]=[0,1,2], colorbar=True):
@@ -1109,6 +1123,63 @@ class Simulation_DC():
         #fig.tight_layout()
         return fig, ax
     
+    def plot_conditionnal_pdf(self, bins:int=4**2, method:Callable=compute_mass_weighted_density, force:bool=False):
+
+        per_row = int(np.ceil(np.sqrt(bins)))
+        fig, axes = plt.subplot_mosaic(
+        [[str((i*per_row+j)) for j in range(per_row)] for i in range(per_row)],
+        figsize=(per_row*3, per_row*3), gridspec_kw={"hspace": 0., "wspace": 0}
+        )
+
+        column_density = np.array([compute_column_density(self.data['RHO'], self.cell_size, axis=i) for i in range(3)]).flatten()
+        volume_density = np.array([self._compute_v_density(method=method, axis=i,force=force) for i in range(3)]).flatten()
+            
+        logx = np.log10(column_density)
+        logy = np.log10(volume_density)
+
+        xbins = np.logspace(logx.min(), logx.max(), bins)
+        ybins = np.logspace(logy.min(), logy.max(), bins)
+
+
+        H, xedges, yedges = np.histogram2d(logx, logy, (bins, 128))
+        ycenters = (yedges[:-1]+yedges[1:])/2
+        ycenters = 10**ycenters
+        xcenters = (xedges[:-1]+xedges[1:])/2
+        xcenters = 10**xcenters
+        
+        nx, ny = H.shape
+        cmap = plt.cm.plasma
+        colors = cmap(np.linspace(0, 1, nx))
+        for i in range(bins):
+            ax = axes[str(i)]
+
+            if i % per_row != 0:
+                ax.tick_params(left=False, labelleft=False)
+            if i+1 < bins-per_row:
+                ax.tick_params(bottom=False, labelbottom=False)
+            counts = np.sum(H[i]) 
+            hist = H[i].copy()
+            hist /= counts
+            cdens = xcenters[i]
+            c = (counts-np.min(np.sum(H, axis=1)))/(np.max(np.sum(H, axis=1))-np.min(np.sum(H, axis=1)))
+            ax.plot(ycenters ,hist, color=cmap(c), label=rf"$N_H$={cdens:.2e}")
+            ax.set_xscale("log")
+            ax.set_yscale("log")
+            ax.set_ylim([1e-4, None])
+            stat_error = np.sqrt(H[i,:])/H[i,:] * hist
+            ax.fill_between(ycenters,hist-stat_error,hist+stat_error,color="black",alpha=0.3)
+            ax.grid()
+            ax.legend(loc="upper right")
+
+        #fig.colorbar(cm.ScalarMappable(norm=LogNorm(vmin=column_density.min(), vmax=column_density.max()),cmap=cmap) ,label=r"$N_H$ (cm$^{-2}$)", ax=list(axes.values()))
+
+        #ax.set_ylabel(r"$P(<n_H>_m | N_H)$")
+        #ax.set_xlabel(r"$<n_H>_m$ (cm$^{-3}$)")
+
+        #ax.legend()
+
+        return fig, axes
+    
     def plot_pdf_2D(self):
         fig, axes = plt.subplot_mosaic(
         [
@@ -1118,11 +1189,9 @@ class Simulation_DC():
         ],
         figsize=(7, 7)
         )
-
         #axes["O"].remove()
-
-        self.plot_pdf(ax=axes["A"], what="cdens", color="black", legend=False, offset_method='none', scatter=False, bins=40)
-        self.plot_pdf(ax=axes["C"], what="vdens", color="black", legend=False, offset_method='none', scatter=False, swap_axes=True, bins=40)
+        self.plot_pdf(ax=axes["A"], what="cdens", color="black", legend=False, offset_method='none', bins=40)
+        self.plot_pdf(ax=axes["C"], what="vdens", color="black", legend=False, offset_method='none', swap_axes=True, bins=40)
         axes["A"].set_ylabel(r"$P_{N_H}$")
         axes["C"].set_xlabel(r"$P_{<n_H>_m}$")
         axes["C"].set_ylabel("")
@@ -1265,8 +1334,8 @@ class Simulation_DC():
         return fig, ax
 
     def plot_pdf(self,ax=None,bins: int = 20,offset_method: Literal["mean", "max", "none"] = "none",what: Literal["cdens", "vdens", "rho", "vel"] = "rho",
-                 color=None, legend=True, scatter=True, label:Optional[str]=None,drawstyle:Optional[str]="steps-mid",
-                 vdens_method:Optional[Callable]=compute_mass_weighted_density, swap_axes=False):
+                 color=None, legend=True, label:Optional[str]=None,drawstyle:Optional[str]="steps-mid", marker:Optional[str]=None, axis:Optional[int]=None,
+                 vdens_method:Optional[Callable]=compute_mass_weighted_density, swap_axes:bool=False, fit_powerlaw:Optional[float]=None, center:bool=True):
         if ax is None:
             fig, ax = plt.subplots()
         else:
@@ -1274,10 +1343,16 @@ class Simulation_DC():
 
         is_log = True
         if what.lower() in ("cdens", "column_density"):
-            data = np.array([compute_column_density(self.data['RHO'], self.cell_size, axis=i) for i in range(3)]).flatten()
-            label = r"$<N_H>$" if label is None else label
+            if axis is None:
+                data = np.array([compute_column_density(self.data['RHO'], self.cell_size, axis=i) for i in range(3)]).flatten()
+            else:
+                data = compute_column_density(self.data['RHO'], self.cell_size, axis=axis)
+            label = r"$N_H$" if label is None else label
         elif what.lower() in ("vdens", "average_density"):
-            data = np.array([self._compute_v_density(method=vdens_method, axis=i, force=True) for i in range(3)]).flatten()
+            if axis is None:
+                data = np.array([self._compute_v_density(method=vdens_method, axis=i, force=True) for i in range(3)]).flatten()
+            else:
+                data = self._compute_v_density(method=vdens_method, axis=axis, force=True)
             label = r"$<n_H>_m$" if label is None else label
         elif what.lower() in ("vel","velocity"):
             data = np.array([*self.data['VX1'].flatten(),*self.data['VX2'].flatten(),*self.data['VX3'].flatten()])
@@ -1287,10 +1362,14 @@ class Simulation_DC():
             data = self.data['RHO']
             label = r"$n_H$" if label is None else label
 
+        if center:
+            label_used = label.strip("$")
+            label = r"$"+label_used+r"/\langle "+label_used+r" \rangle$"
+        label = r"$\eta=$" + label
+
         mask = np.isfinite(data)
         if is_log:
             mask = mask & (data > 0)
-
 
         def _normalize_x(hist, bin_centers):
             if offset_method == "mean":
@@ -1301,19 +1380,39 @@ class Simulation_DC():
                     (np.max(bin_centers) - np.min(bin_centers))
             else:
                 return bin_centers
+            
         data = data[mask]
-        data = np.log10(data) if is_log else data
+        if center:
+            data = np.log10(data/np.mean(data)) if is_log else data-np.mean(data)
+        else:
+            data = np.log10(data) if is_log else data
         bin_edges = np.linspace(np.min(data), np.max(data), bins + 1)
-        hist, _ = np.histogram(data, bins=bin_edges, density=False)
+        hist, _ = np.histogram(data, bins=bin_edges, density=True)
         hist_stats_error = np.sqrt(hist) / hist
         bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
         bin_centers = _normalize_x(hist, bin_centers)
+
         if is_log:
             bin_centers = 10**bin_centers
-        ax.plot(hist if swap_axes else bin_centers, bin_centers if swap_axes else hist, drawstyle=drawstyle, marker="+" if scatter else None, color=color, label=label)
-        if not(swap_axes):
-            ax.errorbar(bin_centers, hist, yerr=hist_stats_error * hist, fmt='none', color="black")
+        if fit_powerlaw is not None and is_log:
+            assert isinstance(fit_powerlaw, (float, int)), LOGGER.error("If fit_powerlaw is not None then this is the minimum x-axis threshold where the fit will be applied.")
+            valid = (hist > 0) & (bin_centers > 0)
+            xfit = bin_centers[valid]
+            yfit = hist[valid]
+            tail_mask = xfit >= fit_powerlaw
+            x_tail = xfit[tail_mask]
+            y_tail = yfit[tail_mask]
+            if len(x_tail) >= 3:
+                lx = np.log10(x_tail)
+                ly = np.log10(y_tail)
+                slope, intercept, r_value, _, _ = linregress(lx, ly)
+                y_model = 10**(intercept + slope * lx)
+                ax.plot(x_tail,y_model,"--",color=color,lw=2,label=rf"power-law $\alpha={slope:.2f}$")
 
+        ax.plot(hist if swap_axes else bin_centers, bin_centers if swap_axes else hist, drawstyle=drawstyle, marker=marker, color=color, label=label)
+        if not(swap_axes):
+            #ax.errorbar(bin_centers, hist, yerr=hist_stats_error * hist, fmt='none', color="black")
+            pass
         set_xlabel = ax.set_ylabel if swap_axes else ax.set_xlabel
         set_ylabel = ax.set_xlabel if swap_axes else ax.set_ylabel
 
@@ -1324,7 +1423,7 @@ class Simulation_DC():
         else:
             set_xlabel(label)
 
-        set_ylabel("pdf")
+        set_ylabel(r"P($\eta$)")
 
         if is_log:
             ax.set_xscale("log")

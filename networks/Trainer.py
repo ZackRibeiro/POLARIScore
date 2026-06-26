@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 
 from POLARIScore.networks.architectures.nn_BaseModule import BaseModule
 from POLARIScore.networks.architectures.nn_SAUNet import SizeAwareUNet
-from POLARIScore.networks.architectures.nn_cINN import cINN
+from POLARIScore.networks.architectures.nn_oldcINN import cINN
 from POLARIScore.networks.architectures.nn_DDPM import DDPMUnet
 from POLARIScore.utils.batch_utils import *
 from POLARIScore.config import *
@@ -28,6 +28,7 @@ import json
 from POLARIScore.objects.Dataset import getDataset, Dataset
 import shutil
 from typing import List, Dict, Union, Tuple, Callable
+import copy
 
 NETWORK_OPTIONS = {
     "UNet" : UNet,
@@ -189,7 +190,7 @@ class Trainer():
         eval_model.eval()
         return eval_model
 
-    def train(self, epoch_number:int=100, batch_number:int=32, compute_validation:int=10, cache:bool=True, early_stopping:bool=True, training_mode:Literal["accumulation","normal"]="normal", print_epoch_progress_bar:bool=False):
+    def train(self, epoch_number:int=100, batch_number:int=32, compute_validation:int=10, cache:bool=True, early_stopping:bool=True, training_mode:Literal["accumulation","normal"]="normal", print_epoch_progress_bar:bool=False, modify_learning_rate:bool=True):
         """
         Train the model (check trainer variables for settings)
 
@@ -385,7 +386,8 @@ class Trainer():
             )
 
         self.last_epoch = total_epoch
-        self.learning_rate = self.scheduler.get_last_lr()[0] if self.scheduler is not None else self.learning_rate
+        if modify_learning_rate:
+            self.learning_rate = self.scheduler.get_last_lr()[0] if self.scheduler is not None else self.learning_rate
 
     def get_validation_error(self, n:int=100, conf_lvl=0.9, save=True):
         LOGGER.log("Computing validation errors.")
@@ -487,7 +489,7 @@ class Trainer():
 
         return d_prediction
 
-    def get_prediction_batch(self,force_compute=False,batch_number:int=1):
+    def get_prediction_batch(self,force_compute=False,batch_number:int=1, remove_residuals_baseline:bool=False):
         """
         Args:
             force_compute(bool): If trainer has already a prediction batch computed then if this is True, this will be computed again.
@@ -503,6 +505,12 @@ class Trainer():
         end_time = time.time()
 
         self.inference_time = (end_time - start_time)/len(self.prediction_batch[0])
+
+        if remove_residuals_baseline:
+            pred_batch = copy.deepcopy(self.get_prediction_batch())
+            for j,c in enumerate(pred_batch):
+                pred_batch[j] = (c[0], self.apply_baseline(c[1], log=False))
+            return pred_batch
 
         return self.prediction_batch
 
@@ -618,7 +626,7 @@ class Trainer():
         if save:
             self.save_fig(fig, fig_name='validation')
 
-    def plot_residuals(self, batch=None, ax=None, plot_distribution=True, color="blue", bins_inter=(None,None), save=False):
+    def plot_residuals(self, batch=None, ax=None, plot_distribution=True, color="blue", bins_inter=(None,None), quantity_label="Pixel Value (log10)", save=False):
         """
         Plot model predictions residuals
 
@@ -672,8 +680,8 @@ class Trainer():
         ax.plot(bin_centers, mean_residuals, marker='o', linestyle='-', color='black', alpha=0.7)
 
         ax.set_xticks(bin_centers)
-        ax.set_xlabel("Pixel value (log10)")
-        ax.set_ylabel("Residuals (prediction-target)")
+        ax.set_xlabel(quantity_label)
+        ax.set_ylabel(r"Residuals log$_{10}(prediction/target)$")
         ax.grid(True, linestyle="--", alpha=0.5)
 
         if(save):
@@ -1003,21 +1011,21 @@ def plot_models_residuals(trainers:List['Trainer'] = [], ax=None, colors:Union[L
         vp[part].set_linewidth(1.2)
     ax.set_xticks(positions)
     ax.set_xticklabels(models_name)
-    ax.set_ylabel("Residuals (log(prediction)-log(target))")
+    ax.set_ylabel(r"Residuals ($\mathrm{log}_{10}$(prediction)-$\mathrm{log}_{10}$(target))")
     ax.grid(True, linestyle="--", alpha=0.5)
 
     return fig, ax, colors
 
-def plot_models_residuals_extended(trainers:List['Trainer'] = [], colors=None):
-    fig = plt.figure()
-
-    ax1 = plt.subplot2grid((len(trainers), 2), (0, 0), rowspan=len(trainers))
-    _,_, colors = plot_models_residuals(trainers=trainers, ax=ax1, colors=colors)
-    #ax1.set_title("Comparison of different models")
+def plot_models_residuals_extended(trainers:List['Trainer'] = [], colors=None, quantity_label=r"log$_{10}(<n_H>_m)$"):
+    fig, axes = plt.subplot_mosaic(
+     [["TOTAL", "T"+str(i)] for i,_ in enumerate(trainers)]
+    ,figsize=(1.5*len(trainers)*3,len(trainers)*3), gridspec_kw={"hspace": 0, "wspace": 0}
+)
+    _,_, colors = plot_models_residuals(trainers=trainers, ax=axes["TOTAL"], colors=colors)
 
     for i,t in enumerate(trainers):
-        ax = plt.subplot(len(trainers),2, (i+1)*2)
-        t.plot_residuals(ax=ax, color=colors[i], bins_inter=(1.5,7.5))
+        ax = axes["T"+str(i)]
+        t.plot_residuals(ax=ax, color=colors[i], bins_inter=(1.5,7.5), quantity_label=quantity_label)
         ax.set_ylim((-1.25, 1.25))
         ax.set_ylabel("")
         if i != len(trainers)-1:
@@ -1027,8 +1035,8 @@ def plot_models_residuals_extended(trainers:List['Trainer'] = [], colors=None):
     return fig, ax
     
 
-def plot_accuracy(trainers=[], ax=None, sigmas=(0., 1., 20), show_errors=False, bins=None, col_dens=None,
-                   use_linestyles=False, linestyle=None, color="black", marker=None, legend=True, xlabel="Error allowed (in log10)", ylabel="Accuracy" ):
+def plot_accuracy(trainers:List['Trainer']=[], ax=None, sigmas=(0., 1., 20), show_errors=False, bins=None, col_dens=None,
+                   use_linestyles=False, apply_baseline:bool=True, linestyle=None, color="black", marker=None, legend=True, xlabel="Error allowed (in log10)", ylabel="Accuracy" ):
     if ax is None:
         fig, ax = plt.subplots()
     else:
@@ -1039,10 +1047,15 @@ def plot_accuracy(trainers=[], ax=None, sigmas=(0., 1., 20), show_errors=False, 
     linestyles = ['-', '--', '-.', ':'] 
 
     for i, t in enumerate(trainers):
+        pred_batch = copy.deepcopy(t.get_prediction_batch())
+        if apply_baseline:
+            for j,c in enumerate(pred_batch):
+                pred_batch[j] = (c[0], t.apply_baseline(c[1], log=False))
+            
         if bins is None:
             accuracies, accuracies_error = [], []
             for s in sigmas:
-                acc_mean, acc_std = compute_batch_accuracy(t.get_prediction_batch(), sigma=s, bins=None, col_dens=col_dens)
+                acc_mean, acc_std = compute_batch_accuracy(pred_batch, sigma=s, bins=None, col_dens=col_dens)
                 accuracies.append(acc_mean)
                 accuracies_error.append(acc_std)
             accuracies = np.array(accuracies)
@@ -1065,7 +1078,7 @@ def plot_accuracy(trainers=[], ax=None, sigmas=(0., 1., 20), show_errors=False, 
             # Multiple bins per trainer
             all_bin_means, all_bin_stds = [], []
             for s in sigmas:
-                result = compute_batch_accuracy(t.get_prediction_batch(), sigma=s, bins=bins, col_dens=col_dens)
+                result = compute_batch_accuracy(pred_batch, sigma=s, bins=bins, col_dens=col_dens)
                 means = [r[0] for r in result]
                 stds = [r[1] for r in result]
                 all_bin_means.append(means)

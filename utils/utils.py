@@ -4,6 +4,8 @@ from POLARIScore.config import LOGGER
 import matplotlib.pyplot as plt
 import platform
 from typing import *
+import os
+
 try:
     import psutil
     psutil_available = True
@@ -230,7 +232,7 @@ def moving_minimum(l, n=5, exclude_zeros=False):
         result.append(min(window))
     return np.array(result, dtype=object)
 
-def bin_mean(x, y, dx=None, nbins=None, logspace=True, method:Literal['mean','median']='mean', min_per_bin=1, return_deviation:bool=False):
+def bin_mean(x, y, dx=None, nbins=None, logspace=True, method:Literal['mean','median']='mean', min_per_bin=1, return_deviation:bool=False, return_bins:bool=False):
     x = np.asarray(x)
     y = np.asarray(y)
     mask = (~np.isnan(x)) & (~np.isnan(y)) & (x > 0) #& (y > 0)
@@ -259,6 +261,7 @@ def bin_mean(x, y, dx=None, nbins=None, logspace=True, method:Literal['mean','me
 
     x_binned, y_binned = [], []
     x_std, y_std = [], []
+    y_bins = []
     for i in range(len(bin_centers)):
         in_bin = which_bin == i
         if np.sum(in_bin) >= min_per_bin:
@@ -268,9 +271,13 @@ def bin_mean(x, y, dx=None, nbins=None, logspace=True, method:Literal['mean','me
             elif method == 'median':
                 x_binned.append(np.median(x[in_bin]))
                 y_binned.append(np.median(y[in_bin]))
+            if return_bins:
+                y_bins.append(y[in_bin])
             x_std.append(np.std(x[in_bin]))
-            y_std.append(np.std(y[in_bin]))
+            y_std.append(np.std(y[in_bin], dtype=np.float64))
         
+    if return_bins:
+        return np.array(x_binned), np.array(y_binned), y_bins
     if return_deviation:
         return np.array(x_binned), np.array(y_binned), np.array(x_std), np.array(y_std)
 
@@ -559,9 +566,9 @@ def step_fill(x, y_lower, y_upper, log_bins=False, offset=1):
     return x_step, y_lower_step, y_upper_step
 
 def plot_map(map, ax=None, cmap=None, norm=None, toplabel:Optional[str]=None, show_ax_labels:bool=True, return_im:bool=True,
-             contour:Optional[np.ndarray]=None, contour_levels=10, contour_sigma=0):
+             contour:Optional[np.ndarray]=None, contour_levels=10, contour_sigma=0, cbar=False, cbar_separate=True, clabel="", save:Optional[str]=None):
     if ax is None:
-        fig = plt.figure()
+        fig = plt.figure(figsize=(4,4), dpi=300)
         ax = fig.add_subplot()
     else:
         fig = ax.figure
@@ -578,13 +585,32 @@ def plot_map(map, ax=None, cmap=None, norm=None, toplabel:Optional[str]=None, sh
             t.set_path_effects([
                 pe.withStroke(linewidth=2, foreground="black")
             ])
-    if not(show_ax_labels):
-        ax.get_xaxis().set_visible(False)
-        ax.get_yaxis().set_visible(False)
-
     if toplabel is not None:
         ax.text(0.02, 0.98,toplabel,transform=ax.transAxes,
         ha="left",va="top",fontsize=10,color="black", bbox=dict(facecolor="white",edgecolor="black", boxstyle="round,pad=0.2",alpha=1.))
+
+    if save is not None:
+        fig_s, _ = plot_map(map=map, ax=None, cmap=cmap, cbar=False, clabel=clabel, norm=norm, toplabel=toplabel, show_ax_labels=True, return_im=False, 
+                               contour=contour, contour_levels=contour_levels, contour_sigma=contour_sigma, save=None)
+        fig_s.tight_layout(pad=0.)
+        fig_s.savefig(save)
+        plt.close(fig_s)
+
+    if cbar:
+        if cbar_separate:
+            fig.canvas.draw()
+            pos = ax.get_position()
+            cbar_fig = plt.figure(figsize=(1.2, fig.get_figheight()), dpi=fig.dpi)
+            cax = cbar_fig.add_axes([0.2, pos.y0, 0.3, pos.height])
+            cbar_obj = cbar_fig.colorbar(im, cax=cax)
+            cbar_obj.set_label(clabel)
+            if save is not None:
+                cbar_fig.savefig(save+"_colorbar.png", bbox_inches="tight")
+        fig.colorbar(im, ax=ax, label=clabel)
+
+    if not(show_ax_labels):
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
 
     if return_im:
         return im

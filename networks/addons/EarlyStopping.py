@@ -1,4 +1,5 @@
 from typing import *
+import torch
 
 class EarlyStopping:
     def __init__(self, patience:int=5, delta:float=0., warmup:int=100, threshold:Optional[float]=999):
@@ -24,9 +25,9 @@ class EarlyStopping:
 
         if self.min_loss is None:
             _set()
-        elif val_loss > self.min_loss + self.delta:
+        elif val_loss >= self.min_loss + self.delta:
             self.counter += 1
-            if self.counter >= self.patience and val_loss < self.threshold:
+            if self.counter >= self.patience and (val_loss < self.threshold or val_loss == torch.inf):
                 self.early_stop = True
         else:
             _set()

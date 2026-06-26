@@ -186,12 +186,13 @@ class Dataset():
             else:
                 to_load = []
                 for i in indexes:
+                    i = int(i)
                     if np.int64(i) in self.batch:
                         to_load.append(self.batch[np.int64(i)])
                     elif np.int32(i) in self.batch:
-                            to_load.append(self.batch[np.int32(i)])
+                        to_load.append(self.batch[np.int32(i)])
                     else:
-                        to_load.append(self.batch[i])
+                        to_load.append(self.batch[list(self.batch.keys())[i]])
                 return self.load(to_load)
         else:
             return self.load(self.batch.values())

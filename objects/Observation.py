@@ -22,6 +22,7 @@ from typing import Dict, List, Optional, Tuple, Union, Literal
 from scipy.stats import lognorm
 from scipy.ndimage import gaussian_filter, median_filter, grey_opening
 from scipy.optimize import curve_fit
+from scipy.stats import linregress
 from POLARIScore.scripts.plotORIONsimDCMF import plot_sim_dcmf
 from POLARIScore.utils.batch_utils import compute_smoothness
 from POLARIScore.utils.physics_utils import CONVERT_massn_TO_n_coldens, power_spectrum_2d
@@ -432,7 +433,6 @@ class Observation():
             column_densities = column_densities[mask]
             radius = radius[mask]
 
-        
         if isinstance(method, bool):
             if not(method):
                 return predicted_densities
@@ -582,7 +582,7 @@ class Observation():
             wcs = self.wcs
 
         if ax is None:
-            fig = plt.figure()
+            fig = plt.figure(figsize=(4,4), dpi=300)
             ax = fig.add_subplot(projection=wcs)
         else:
             fig = ax.figure
@@ -599,15 +599,17 @@ class Observation():
             pass
         else:
             overlay = ax.get_coords_overlay('fk5')
+            ax.coords[0].set_axislabel('ra')
+            ax.coords[1].set_axislabel('dec')
+            for coord in overlay:
+                coord.set_ticks_visible(False)
+                coord.set_ticklabel_visible(False)
+                coord.set_axislabel('')
             if show_ax_labels:
                 overlay.grid(color='black', ls='dotted')
-                overlay[0].set_axislabel('ra')
-                overlay[1].set_axislabel('dec')
+                #overlay[0].set_axislabel('')
+                #overlay[1].set_axislabel('')
             else:
-                for coord in overlay:
-                    coord.set_ticks_visible(False)
-                    coord.set_ticklabel_visible(False)
-                    coord.set_axislabel('')
                 for coord in ax.coords:
                     coord.set_ticks_visible(False)
                     coord.set_ticklabel_visible(False)
@@ -684,8 +686,9 @@ class Observation():
 
             return fig, ax
 
-    def plot_density_distributions(self, ax:Optional["axes.Axes"]=None, bins:int=20, monte_carlo:int=10, offset_method:Literal["mean","max","none"]="none", what:Literal["prediction","data"]="prediction", 
-                                   color:Optional[str]="red", label:Optional[str]=None, marker:Optional[str]=None, draw_style:Optional[str]="steps-mid"):
+    def plot_pdf(self, ax:Optional["axes.Axes"]=None, bins:int=20, monte_carlo:int=10, offset_method:Literal["mean","max","none"]="none", what:Literal["prediction","data"]="prediction", 
+                                   color:Optional[str]=None, label:Optional[str]=None, marker:Optional[str]=None, draw_style:Optional[str]="steps-mid", center:bool=True,
+                                   fit_powerlaw:Optional[float]=None):
         """
         Plot PDF (histogram) of column density or predicted volume density.
         Args:
@@ -702,22 +705,26 @@ class Observation():
 
 
         data = self.data
-        xlabel = r"$N_H$ [$cm^{-2}$]"
+        xlabel = r"$N_H$"
         if what.lower() in ("prediction","vdens","pred"):
             assert self.prediction is not None, LOGGER.error("No predicted data loaded to plot.")
             data = self.prediction
-            xlabel=r"$<n_H>_m$ [$cm^{-3}$]"
+            xlabel=r"$<n_H>_m$"
         label = xlabel if label is None else label
 
+        if center:
+            label_used = label.strip("$")
+            label = r"$"+label_used+r"/\langle "+label_used+r" \rangle$"
+        label = r"$\eta=$" + label
 
         mask = (~np.isnan(data)) & (data > 0) & (~np.isnan(self.data)) & (self.data > 0)
+        data= np.log10(data[mask]/np.mean(data[mask])) if center else np.log10(data[mask])
+        data = data.flatten()
 
-        log10= np.log10(data[mask]).flatten()
-
-        bin_edges = np.linspace(np.min(log10), np.max(log10), bins + 1)
-        hist, _ = np.histogram(log10, bins=bin_edges, density=False)
+        bin_edges = np.linspace(np.min(data), np.max(data), bins + 1)
+        hist, _ = np.histogram(data, bins=bin_edges, density=False)
         hist_stats_error = np.sqrt(hist)/hist
-        hist, bin_edges = np.histogram(log10, bins=bin_edges, density=True)
+        hist, bin_edges = np.histogram(data, bins=bin_edges, density=True)
         bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
 
         def _normalize_x(hist, bin_centers):
@@ -730,28 +737,56 @@ class Observation():
         
         bin_centers = _normalize_x(hist, bin_centers)
 
-        ax.plot(10**bin_centers, hist, drawstyle=draw_style, marker=marker, color=color, label=label)
-        ax.errorbar(10**bin_centers, hist, yerr=hist_stats_error*hist, fmt='none', color=color)
+        bin_centers = 10**bin_centers
+        ax.plot(bin_centers, hist, drawstyle=draw_style, marker=marker, color=color, label=label)
+        ax.errorbar(bin_centers, hist, yerr=hist_stats_error*hist, fmt='none', color=color)
         
-        if self.network_error is not None and monte_carlo > 0:
+        if fit_powerlaw is not None:
+            
+            def _fit(fit_interval,linestyle="--"):
+                valid = (hist > 0) & (bin_centers > 0)
+                xfit = bin_centers[valid]
+                yfit = hist[valid]
+                tail_mask = (xfit >= fit_interval[0]) & (xfit <= fit_interval[1])
+                x_tail = xfit[tail_mask]
+                y_tail = yfit[tail_mask]
+                if len(x_tail) >= 3:
+                    lx = np.log10(x_tail)
+                    ly = np.log10(y_tail)
+                    slope, intercept, r_value, _, _ = linregress(lx, ly)
+                    y_model = 10**(intercept + slope * lx)
+                    ax.plot(x_tail,y_model,linestyle,color=color,lw=2,label=rf"power-law $\alpha={slope:.2f}$")
+
+
+            if isinstance(fit_powerlaw, (int, float)):
+                _fit([fit_powerlaw, np.inf])
+            elif isinstance(fit_powerlaw, (list, np.ndarray, tuple)):
+                ls = ["--","-.",".."]
+                for i in range(len(fit_powerlaw)):
+                    if i == len(fit_powerlaw)-1:
+                        _fit([fit_powerlaw[i], np.inf], linestyle=ls[i])
+                        break 
+                    _fit([fit_powerlaw[0], fit_powerlaw[1]], linestyle=ls[i])
+
+        if self.network_error is not None and monte_carlo > 0 and what.lower() in ("prediction","vdens","pred"):
             try:
                 bin_centers_pred, q1, q2, _ = self.network_error
             except:
                 LOGGER.error("Density error is not in the good format in DenseCore -> Can't sample a random density given the error.")
-            q1_interp = np.interp(log10, bin_centers_pred, q1)
-            q2_interp = np.interp(log10, bin_centers_pred, q2)
+            q1_interp = np.interp(data, bin_centers_pred, q1)
+            q2_interp = np.interp(data, bin_centers_pred, q2)
             gauss_sigma = (q2_interp-q1_interp)/(2*1.64485)
 
             all_pred_hists = []
             for mc in range(monte_carlo):
                 printProgressBar(mc, monte_carlo, prefix="MC-Dist", length=20)
-                random_predicted_densities = np.random.normal(loc=log10, scale=gauss_sigma)
+                random_predicted_densities = np.random.normal(loc=data, scale=gauss_sigma)
                 rd_hist, _ = np.histogram(random_predicted_densities, bins=bin_edges, density=True)
                 all_pred_hists.append(rd_hist)
             print("")
             all_pred_hists = np.array(all_pred_hists)
             hist_std = np.std(all_pred_hists, axis=0)
-            x_step, y_lower_step, y_upper_step = step_fill(10**bin_centers, hist - 2*hist_std,
+            x_step, y_lower_step, y_upper_step = step_fill(bin_centers, hist - 2*hist_std,
                 hist+ 2*hist_std, log_bins=True, offset=1.0)
             ax.fill_between(x_step, y_lower_step, y_upper_step, color=color, alpha=0.3)
             
@@ -761,7 +796,7 @@ class Observation():
             ax.set_xlabel(xlabel)
         else:
             ax.set_xlabel(r"($x-max(x)) / (max(x)-min(x))$")
-        ax.set_ylabel("pdf")
+        ax.set_ylabel(r"P($\eta$)")
 
         ax.set_xscale("log")
         ax.set_yscale("log")
@@ -969,87 +1004,72 @@ class Observation():
 
         return fig, ax
 
-    def plot_cores_baseline(self, ax:Optional["axes.Axes"]=None, suffixes:Optional[Union[List[str],str]]=None, derived_cores:bool=False, density_correction:bool=True,
-                             x_coldens:bool=True, invert_xy:bool=True, mov_average:int=0, fit:bool=False, cmap_color=True, forced_label=None):
+    def plot_cores_density_relation(self, suffixes:Optional[Union[List[str],str]]=None, derived_cores:bool=False, density_correction:bool=True, fit:bool=False, cmap_color=True, forced_label=None, cores_per_bin=5, bin_width=0.2, colors=None):
         """
         Plot dense cores baseline with x axis depending on args. By default this plot the predicted mass-weighted average density of cores in function of their id.
-        Args:
-            suffixes: If load multiple predictions caches, e.g _cinn to load OrionB_cinn.npy as prediction if name of observation is OrionB.
-            derived_cores: If true, also add the derived catalog cores on the plot.
-            density_correction: Transform the mass-weighted average density to core volume average density using two mediums assumptions.
-            x_coldens: If true, use column density as x axis, so this will plot n(N).
-            invert_xy: If true, this will invert x and y axes. For example if x_coldens is True then it will plot N(n).
-            mov_average: Apply moving average on the points.
-            fit: Try to fit the function using a modified power law (used for N(n) and n(N)). If this is true, the points that will be shown on the plot are the log binned average points, same points used for the fit.
         """
 
-        if ax is None:
-            fig, ax = plt.subplots()
-        else:
-            fig = ax.figure
+        plots_length = len(suffixes) if suffixes is not None else 0
+        if derived_cores:
+            plots_length += 1
+            
+        fig, axes = plt.subplot_mosaic(
+            [["VPLOT"+str(i)] for i in range(plots_length)],
+            figsize=(8,plots_length*3), gridspec_kw={"hspace": 0}
+        )
 
         if suffixes is not None:
             suffixes = suffixes if type(suffixes) is list else [suffixes]
         else:
             suffixes = [""]
 
-        colors = FIGURE_CMAP(np.linspace(FIGURE_CMAP_MIN, FIGURE_CMAP_MAX, len(suffixes)))
+        colors = FIGURE_CMAP(np.linspace(FIGURE_CMAP_MIN, FIGURE_CMAP_MAX, len(suffixes))) if colors is None else colors
 
-        def _make_baseline(densities, label, color):
-            if x_coldens:
-                col_densities = np.array([c.get_center_density(column_density=True) for c in cores])
-            x = np.array(range(len(densities)))
+        def _make_baseline(ax:'axes.Axes', densities, label, color):
+
+            if self.convolved_data is None:
+                self.convolved_data = self.apply_filter(factor=25)
+
+            y = np.array([c.get_center_density(column_density=True) for c in cores])-np.array([c.get_center_density(custom_data=self.convolved_data) for c in cores])
+            x = densities
 
             mask = (~np.isnan(densities)) & (~np.isinf(densities)) & (densities > 0.)
             densities = densities[mask]
             x = x[mask]
-            if x_coldens:
-                col_densities = col_densities[mask]
-                sorted_indexes = np.argsort(col_densities)
-                x = col_densities[sorted_indexes]
-                densities = densities[sorted_indexes]
+            y = y[mask]
+            sorted_indexes = np.argsort(x)
+            x = x[sorted_indexes]
+            y = y[sorted_indexes]
 
-            if invert_xy:
-                temp = x
-                x = densities
-                densities = temp
-            if fit and x_coldens:
-                def _fit_function(x, a, b):
-                    return x**a*np.exp(b)
-                def _fit_function_inv(x, a, b, alpha):
-                    return np.log(a*x**np.abs(alpha)+np.abs(b))
+            x, y, y_bins = bin_mean(x, y, dx=bin_width,min_per_bin=cores_per_bin, method="median", return_bins=True)
+            if fit:
 
-                binned_x, binned_y = bin_mean(x, densities, dx=0.1,min_per_bin=3)
-
-                try:
-                    if invert_xy:
-                        popt, _ = curve_fit(_fit_function_inv, binned_x, np.log(binned_y), p0=[(np.max(densities)-np.min(densities))/(np.max(x)-np.min(x)), np.min(densities), 0.5],
-                                            bounds=([0, 1e21, 0],[np.inf, 1e24, 1]))
-                        fit_a, fit_b, fit_alpha = popt
-                        func = lambda X: np.exp(_fit_function_inv(X, fit_a, fit_b, fit_alpha))
-                        plot_function(func, ax=ax, scatter=False, logspace=True, lims= (np.min(x), np.max(x)), color=color, linestyle="--")
-                        c_mu = 2.3 #maybe 1.4
-                        c_mh = 1.67e-24
-                        c_cs = fit_a* ((c_mu*c_mh*6.674e-8)/np.pi)**(0.5)
-                        c_kb = 1.38e-16 
-                        c_T = c_cs**2*(c_mu*c_mh/c_kb)
-                        #label = rf"{label}: T={c_T:.3}K, $\sum_{{i\neq c}} n_i l_i$={fit_b:.3} cm$^{{-2}}$, $\alpha$={fit_alpha:.3}"
-                        label = rf"{label}: T={c_T:.3}K, $\alpha$={fit_alpha:.3}"
-                    else:
-                        popt, _ = curve_fit(_fit_function, binned_x, binned_y, p0=[1., 0.])
-                        fit_a, fit_b = popt
-                        func = lambda X: _fit_function(X, fit_a, fit_b)
-                        plot_function(func, ax=ax, scatter=False, logspace=True, lims= (np.min(x), np.max(x)), color=color, linestyle="--")
-                        label = label + f": {fit_a:.3}, {fit_b:.3}"
-                except:
-                    LOGGER.warn("Dense cores baseline fit failed")
+                lx = np.log10(x)
+                ly = np.log10(y)
+                slope, intercept, r_value, _, _ = linregress(lx, ly)
+                y_model = 10**(intercept + slope * lx)
+                line, = ax.plot(x,y_model,linestyle="-",color="black",lw=1)
+                label = label+r", $\alpha$"+f"={slope:.3}"
             
-            if mov_average > 0:
-                x = moving_average(x, n=mov_average)
-                densities = moving_average(densities, n=mov_average)
+            vp = ax.violinplot(y_bins, positions=x, showmeans=False, showmedians=True, widths=bin_width*np.array(x))
+            for i, body in enumerate(vp['bodies']):
+                body.set_facecolor(color)
+                body.set_alpha(0.5)
+            for part in ['cbars', 'cmins', 'cmaxes', 'cmedians']:
+                vp[part].set_edgecolor('black')
+                vp[part].set_linewidth(1.0)
+            ax.scatter(x, y, marker="o", color=color, label=label)
+            ax.set_xlim([1e3, 5e5])
+            ax.set_yscale("log")
+            ax.set_xscale("log")
+            ax.set_xlabel(r"$n_{H,c}$ [cm$^-3$]" if density_correction else r"$<n_H>_m$ [cm$^-3$]")
+            ax.set_ylabel(r"$N_H-\tilde{"+r"N_{H,bg}"+r"}$ [cm$^-2$]")
+            ax.grid()
+            ax.legend()
 
-            #ax.plot(x, densities, lw=1., color=color)
-            ax.scatter(binned_x if fit else x, binned_y if fit else densities, marker="+", color=color, label=label)
+        if derived_cores:
+            cores = self.get_cores()
+            _make_baseline(axes["VPLOT0"], np.array([c.data['average_n'] for c in cores]), self.catalog_name, "black")
 
         for i,s in enumerate(suffixes):
             if s != "" or self.prediction is None:
@@ -1059,29 +1079,9 @@ class Observation():
                 LOGGER.warn(f"No cores found in {s}.")
                 continue
             densities = np.array([c.get_center_density(correction=density_correction) for c in cores])
-            _make_baseline(densities, s.replace("_","") if forced_label is None else forced_label, colors[i] if cmap_color else None)
-        if derived_cores:
-            cores = self.get_cores()
-            _make_baseline(np.array([c.data['average_n'] for c in cores]), self.catalog_name, "black")
+            _make_baseline(axes["VPLOT"+str(i+1) if derived_cores else "VPLOT"+str(i)], densities, s.replace("_","") if forced_label is None else forced_label, colors[i] if cmap_color else None)
 
-
-        ax.set_yscale("log")
-        ax.set_xlabel("Core index")
-        ax.set_ylabel("$n_H$ [cm^-3]" if density_correction else "$<n>_m$ [cm^-3]")
-        
-
-        if x_coldens:
-            ax.set_xscale("log")
-            ax.set_xlabel("$N_H$ [cm^-2]")
-            if invert_xy:
-                ax.set_xlabel("$n_H$ [cm^-3]" if density_correction else "$<n>_m$ [cm^-3]")
-                ax.set_ylabel("$N_H$ [cm^-2]")
-        
-        ax.grid(which='both', axis='x')
-
-        ax.legend()
-
-        return fig, ax
+        return fig, axes
 
     def plot_fractal_dim(self, ax:Optional["axes.Axes"]=None, suffixes:Optional[List[str]]=None, distance:Optional[float]=None, thresholds:List[float]=[0.85], colors:Optional[List[str]]=None):
         """
@@ -1525,6 +1525,7 @@ class Observation():
         ax.axhline(0., color="red")
 
         column_densities = 10**column_densities
+        sigmas = None
         if self.network_error is not None and show_model_errors:
             bin_centers, q1, q2, means = self.network_error            
             interp_mean = np.interp(predicted_densities, bin_centers, means)
@@ -1533,16 +1534,28 @@ class Observation():
             yerr_lower = interp_mean - interp_q1
             yerr_upper = interp_q2 - interp_mean
 
-            #ax.errorbar(column_densities,residuals,yerr=[yerr_lower, yerr_upper],fmt='none', color="black",alpha=0.8)
-            ax.fill_between(column_densities, residuals-yerr_lower, yerr_upper+residuals, color="black", alpha=0.2)
-        line, = ax.plot(column_densities,residuals, marker="+", alpha=alpha, label=self.name if label is None else label, color=color, linestyle=linestyle if linestyle is not None else "-")
-        if (mov_average > 1 or log_average > 1) and show_errors:
-            ax.fill_between(column_densities,residuals-residuals_std,residuals+residuals_std, color=line.get_color(), alpha=0.2)
+            gauss_sigmas = (interp_q2-interp_q1)/(2*1.64485)
+            sigmas = gauss_sigmas
 
-        ax.set_xlabel(r"$N_{H}(\mathrm{cm}^{-2})$")
-        ax.set_ylabel(r"$\log_{10}(n_{\mathrm{neural network}})-\log_{10}(n_{\mathrm{catalog}})$")
+            #ax.fill_between(column_densities, residuals-yerr_lower, yerr_upper+residuals, color="black", alpha=0.2)
+        if (mov_average > 1 or log_average > 1) and show_errors:
+            if sigmas is None:
+                sigmas = residuals_std
+            else:
+                sigmas = np.sqrt(np.array(sigmas)**2+np.array(residuals_std)**2)
+            #ax.fill_between(column_densities,residuals-residuals_std,residuals+residuals_std, color=line.get_color(), alpha=0.2)
+
+        if sigmas is not None:
+            ax.fill_between(column_densities,residuals-sigmas,residuals+sigmas, color=color, alpha=0.2)
+            #ax.errorbar(column_densities,residuals,yerr=sigmas,fmt='none', color=color if "black" is None else color,alpha=0.8)
+        line, = ax.plot(column_densities,residuals, marker="o", alpha=alpha, label=self.name if label is None else label, color=color, linestyle=linestyle if linestyle is not None else "-")
+
+
+        ax.set_xlabel(r"$N_{H} [\mathrm{cm}^{-2}]$")
+        ax.set_ylabel(r"$\log_{10}(n_{\mathrm{NN}})-\log_{10}(n_{\mathrm{Catalog}})$")
         ax.set_xscale("log")
         ax.grid(True, which='both', axis='x')
+        ax.set_xlim([np.min(column_densities), np.max(column_densities)])
 
         ax.legend()
 

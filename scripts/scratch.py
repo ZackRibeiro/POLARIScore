@@ -34,30 +34,163 @@ from POLARIScore.networks.utils.nn_utils import open_samples_as_spectrummap
 #sim = SimulationArray(name="sim_512_A_3")
 #sim = Simulation_DC("orionMHD_lowB_0.39_512", global_size=66.0948)
 #sim = openSimulation("orionMHD_lowB_multi_", global_size=66.0948+0.12,keys=['RHO'],cache_name="orion") #offset bcs without dense cores have an offset :/
+#sim.plot_conditionnal_pdf()
 #sim.load_cores()
 #sim.get_core_volumes(indexes=0, plot=True)
 #sim.plot(plot_pdf=True, norm=LogNorm(vmin=1e21, vmax=3e24))
 #fig, ax = sim.plot_pdf(what="rho")
 #sim.plot(norm=LogNorm(vmin=1e21, vmax=3e24))
 
+#probs, edges = compute_pdf(compute_column_density(sim.data['RHO'],cell_size=sim.cell_size), density=False)
+#centers = (edges[1:]+edges[:-1])/2
+#probs_mw, edges_mw = compute_pdf(compute_mass_weighted_density(sim.data['RHO']), density=False)
+#centers_mw = (edges_mw[1:]+edges_mw[:-1])/2
+#plt.scatter(centers, probs)
+#plt.scatter(centers_mw, probs_mw)
+
+"""
+fig, axes = plt.subplot_mosaic(
+    [["cdens", "cdens_sim", "cdens_obs"],
+     ["vdens", "vdens_sim_unet", "vdens_obs_unet"],
+     ["vdens", "vdens_sim_unet", "vdens_obs_unet"],
+     ["vdens", "vdens_sim_cinn", "vdens_obs_cinn"],
+     ["rho", "vdens_sim_cinn", "vdens_obs_cinn"],
+     ["rho", "vdens_sim_ddpm", "vdens_obs_ddpm"],
+     ["rho", "vdens_sim_ddpm", "vdens_obs_ddpm"]],
+    figsize=(9,6), gridspec_kw={"hspace": 0}
+)
+
+MONTE_CARLO = 0
+BINS = 50
+for k in axes.keys():
+    axes[k].axvline(1., color="black")
+
+sim.plot_pdf(bins=BINS, ax=axes["cdens"], offset_method='none', what='cdens', color="tab:orange", fit_powerlaw=7, center=True)
+sim.plot_pdf(bins=BINS, ax=axes["vdens"], offset_method='none', what='vdens', color="tab:blue", fit_powerlaw=2.5, center=True)
+sim.plot_pdf(ax=axes["rho"], offset_method='none', what='rho', color="tab:green", fit_powerlaw=1, center=True)
+axes['rho'].set_xlabel(r"$\eta$")
+
+obs = Observation("OrionB", "column_density_map")
+obs.plot_pdf(ax=axes["cdens_obs"], bins=BINS, monte_carlo=0, what="data", color="tab:orange", fit_powerlaw=1.5)
+obs.load("_unet")
+obs.load_error("UNet")
+obs.plot_pdf(ax=axes["vdens_obs_unet"], bins=BINS, monte_carlo=MONTE_CARLO, what="prediction", color="tab:blue", fit_powerlaw=[0.5,42])
+obs.load_error("cINN")
+obs.load("_cinn")
+obs.plot_pdf(ax=axes["vdens_obs_cinn"], bins=BINS, monte_carlo=MONTE_CARLO, what="prediction", color="tab:blue", fit_powerlaw=[0.5,42])
+obs.load_error("DDPM")
+obs.load("_ddpm_16")
+obs.plot_pdf(ax=axes["vdens_obs_ddpm"], bins=BINS, monte_carlo=MONTE_CARLO, what="prediction", color="tab:blue", fit_powerlaw=[0.5,42])
+
+obs = Observation_Sim(sim, axis=0)
+obs.plot_pdf(ax=axes["cdens_sim"], bins=BINS, monte_carlo=0, what="data", color="tab:orange", fit_powerlaw=10.5)
+obs.load("_unet")
+#obs.plot(obs.prediction, norm=LogNorm(vmin=1e2, vmax=3e5))
+
+obs.load_error("UNet")
+obs.plot_pdf(ax=axes["vdens_sim_unet"], bins=BINS, monte_carlo=MONTE_CARLO, what="prediction", color="tab:blue", fit_powerlaw=2.5)
+
+obs.load_error("cINN")
+obs.load("_cinn")
+#obs.plot(obs.prediction, norm=LogNorm(vmin=1e2, vmax=3e5))
+
+obs.plot_pdf(ax=axes["vdens_sim_cinn"], bins=BINS, monte_carlo=MONTE_CARLO, what="prediction", color="tab:blue", fit_powerlaw=[2.5, 1045])
+
+obs.load_error("DDPM")
+obs.load("_ddpm")
+
+#sim.plot(axis=0, method=compute_mass_weighted_density, norm=LogNorm(vmin=1e2, vmax=3e5))
+#obs.plot(obs.prediction, norm=LogNorm(vmin=1e2, vmax=3e5), plot_cores=False)
+
+obs.plot_pdf(ax=axes["vdens_sim_ddpm"], bins=BINS, monte_carlo=MONTE_CARLO, what="prediction", color="tab:blue", fit_powerlaw=2.5)
+
+axes['vdens_obs_ddpm'].set_xlabel(r"$\eta$")
+axes['vdens_obs_unet'].set_ylabel(r"U-Net P($\eta$)")
+axes['vdens_obs_cinn'].set_ylabel(r"cINN P($\eta$)")
+axes['vdens_obs_ddpm'].set_ylabel(r"DDPM P($\eta$)")
+
+axes['vdens_sim_ddpm'].set_xlabel(r"$\eta$")
+axes['vdens_sim_unet'].set_ylabel(r"U-Net P($\eta$)")
+axes['vdens_sim_cinn'].set_ylabel(r"cINN P($\eta$)")
+axes['vdens_sim_ddpm'].set_ylabel(r"DDPM P($\eta$)")
+
+fig.align_ylabels()
+plot_rect_bg(fig, axes=[axes["cdens"],axes["vdens"],axes["rho"]], color="tab:blue", text="Simulation", show_bbox=True)
+plot_rect_bg(fig, axes=[axes["cdens_sim"],axes["vdens_sim_unet"],axes["vdens_sim_cinn"],axes["vdens_sim_ddpm"]], color="tab:green", text="NN on Sims", show_bbox=True)
+plot_rect_bg(fig, axes=[axes["cdens_obs"],axes["vdens_obs_unet"],axes["vdens_obs_cinn"],axes["vdens_obs_ddpm"]], color="tab:orange", text="NN on Orion B", show_bbox=True)
+"""
+
+pc = 3.086e18
+#CORRECTION CONSTANT RATIOs PLOT
+"""
+def contour_plot(obs:'Observation', ax=None):
+
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.figure
+
+    cores = obs.get_cores()
+    NH_cores = []
+    N_bg_cores = []
+    for c in cores:
+        if obs.convolved_data is None:
+            obs.convolved_data = obs.apply_filter(method="gaussian", factor=25, replace=False)
+        N_bg_cores.append(c.get_center_density(custom_data=obs.convolved_data))
+        NH_cores.append(c.get_center_density(column_density=True))
+
+    x_min = np.min(np.log10(NH_cores))
+    x_max = np.max(np.log10(NH_cores))
+    y_min = np.min(np.log10(N_bg_cores))
+    y_max = np.max(np.log10(N_bg_cores))
+
+
+    logNH = np.linspace(x_min,x_max,300)
+    logNH_bg = np.linspace(y_min,y_max,300)
+
+    NH = 10**logNH[None,:]
+    NH_bg = 10**logNH_bg[:,None]
+
+    f =  (NH - NH_bg)/NH
+
+    X,Y = np.meshgrid(logNH,logNH_bg)
+
+    levels = [0.1,0.2,0.4,0.6,0.8,0.9]
+
+    ax.scatter(np.log10(NH_cores), np.log10(N_bg_cores), marker="+", color="red", label="cores")
+
+    cs = ax.contour(X,Y,f,levels=levels,colors='k')
+    cs.clabel()
+
+
+    ax.set_xlabel(r'$\log_{10} N_H$ [cm$^{-2}$]')
+    ax.set_ylabel(r'$\log_{10} N_{H,bg}$ [cm$^{-2}$]')
+
+    ax.set_box_aspect(1)
+    ax.legend()
+
+contour_plot(Observation("OrionB", "column_density_map"))
+"""
+
+#Faire courbes : performance / training set size
+#Faire plot correction density, ratio constant lines with simulation cores.
+
 #sim.load_cores()
 #sim.plot_slice()
 
 
-sim = Simulation_AMR("orion_MHD_lowB_AMR", global_size=66.0948+0.12, init=False)
-sim.init(init_datacubes=False, init_yt=False)
-sim.init_datacubes(res=1024, keys=['p_RHO', 'p_VX1', 'p_VX2', 'p_VX3'])
-cores = sim.load_cores()
-cores = cores[:1]
-sim.cores = cores
-sim.plot(axis=0)
-volumes = sim.get_core_volumes(indexes=0, plot=False)
-plt.figure()
-core = cores[0]
-pos = np.array([core['pos_x'],core['pos_y'],core['pos_z']])
-x0, x1 = pos-4/2, pos+4/2
-bbox = np.array([x0,x1]).T.flatten()
-plt.imshow(np.sum(volumes[0], axis=-1), norm=LogNorm(), extent=bbox)
+#sim = Simulation_AMR("orion_MHD_lowB_AMR", global_size=66.0948+0.12, init=False)
+#sim.init(init_datacubes=False, init_yt=False)
+#sim.init_datacubes(res=1024, keys=['p_RHO', 'p_VX1', 'p_VX2', 'p_VX3'])
+#cores = sim.load_cores()
+#cores = cores[:1]
+#sim.cores = cores
+#sim.plot()
+#volumes = sim.get_core_volumes(indexes=0, plot=False)
+#plt.figure()
+#core = cores[0]
+#pos = np.array([core['pos_x'],core['pos_y'],core['pos_z']])
+#plt.imshow(np.sum(volumes[0], axis=-1).T, norm=LogNorm(), origin="lower")
 
 #sim.plot_pdf(ax=ax, what="rho")
 #sim.plot_pdf(what="vel")
@@ -246,12 +379,21 @@ ax.grid()
 #    "cdens": DATA_NORMALIZATION_CDENS,
 #    "vdens": DATA_NORMALIZATION_VDENS,
 #}
+#trainer.timesteps = 1000
+#trainer.inference_timestep = 5
+#trainer.set_scheduler(timesteps=trainer.timesteps, beta_schedule="linear",
+#                    beta_start=1e-4, beta_end=0.02)        
+#from POLARIScore.networks.utils.nn_utils import *
+#accuracy = find_error_for_batch_accuracy(trainer.get_prediction_batch(remove_residuals_baseline=True), accuracy=0.8, sigma1=10.)
 #trainer.get_validation_error()
+#trainer.plot()
+#trainer.plot_validation()
+
 #trainer.plot_residuals()
 #3.30474
 #print(obs.find_scale(3.,256,obs.distance))
-#_, error = obs.predict(trainer, method="mean", repeat=0, overlap=0.5, downsample_factor=obs.find_scale(3.,256,obs.distance), nan_value=1., apply_baseline=False, kernel="uniform", save_samples=None, skip_using_saved_samples=False, only_error=False, patch_size=(256,256))
-#obs.save("_saunet")
+#_, error = obs.predict(trainer, method="median", repeat=4, overlap=0.75, downsample_factor=obs.find_scale(3.,128,obs.distance), nan_value=1., apply_baseline=True, kernel="uniform", save_samples="pdf_orionb_cinn_16", skip_using_saved_samples=True, only_error=False, patch_size=(128,128))
+#obs.save("_cinn_16")
 #obs.prediction = compute_mass_weighted_density(sim.data['RHO'], axis=AXIS)
 #obs.load("_ddpm")
 #fig, ax = obs.plot_cores_error(show_errors=True,label="none",correction=None, log_average=30)

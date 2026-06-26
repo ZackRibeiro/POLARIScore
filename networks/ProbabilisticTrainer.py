@@ -7,13 +7,13 @@ from POLARIScore.config import *
 import matplotlib.axes
 from matplotlib.colors import Normalize, LogNorm
 from scipy.stats import lognorm
-import time 
+import time, copy
 
 class ProbabilisticTrainer(Trainer):
     def __init__(self, *args, **kwargs):
         super(ProbabilisticTrainer, self).__init__(*args, **kwargs)
 
-    def get_prediction_batch(self,force_compute=False,batch_number:int=1,sample_number=1):
+    def get_prediction_batch(self,force_compute=False,batch_number:int=1,sample_number=1, remove_residuals_baseline:bool=False):
         if not(self.prediction_batch is None or force_compute):
             return self.prediction_batch
         
@@ -38,6 +38,12 @@ class ProbabilisticTrainer(Trainer):
 
         end_time = time.time()
         self.inference_time = (end_time - start_time)/len(self.prediction_batch[0])
+
+        if remove_residuals_baseline:
+            pred_batch = copy.deepcopy(self.get_prediction_batch())
+            for j,c in enumerate(pred_batch):
+                pred_batch[j] = (c[0], self.apply_baseline(c[1], log=False))
+            return pred_batch
 
         return self.prediction_batch
     

@@ -20,6 +20,9 @@ Generate full benchmark of trained models with plots.
 Usage example:
 #python -m POLARIScore.scripts.benchmark_models --models UNet cINN DDPM --obs_name OrionB --obs_suffixes unet cinn ddpm  --name Benchmark_OrionB --toplot distribution
 
+#python -m POLARIScore.scripts.benchmark_models --models UNet DDPM --obs_name OrionB --obs_suffixes unet ddpm  --name Benchmark_test --toplot region --ds_imgs 0 1 2
+
+
 POLARIScore.scripts.benchmark_models --obs_name OrionB --obs_suffixes unet_2 cinn_2 ddpm_2 --models UNet cINN DDPM  --name Benchmark_OrionB_likeliest
 """
 
@@ -28,8 +31,12 @@ from astropy.coordinates import Angle
 REGIONS = [
 [Angle("5h50m").deg, Angle("5h45").deg, Angle("-0d19m").deg, Angle("0d53m").deg],[Angle("5h48m").deg, Angle("5h39m").deg, Angle("-3d10m").deg, Angle("-0d58m").deg]
 ]
+FIGURE_CMAP = "jet"
 
-MONTE_CARLO = 20
+MONTE_CARLO = 30
+
+INPUT_LABEL = r"$N_H(cm^{-2})$"
+TARGET_LABEL = r"$<n_H>_m(cm^{-3})$"
 
 start_time = time.process_time()
 def _format_time(seconds:float)->str:
@@ -56,12 +63,24 @@ parser.add_argument("--ds_imgs", required=False, nargs="+", default=[], help="In
 parser.add_argument("--format", required=False, default="jpg", help="Image format (default: jpg)")
 parser.add_argument("--density_correction", required=False, default="fixed", help="Apply two mediums approx to go from the mass-weighted density to core volume density.")
 
+parser.add_argument("--figures", required=False, default="no", help="If you wants to save each figure in a extra folder.")
+parser.add_argument("--figures_cbar", required=False, default="yes", help="If you wants to enable cbar for individual figures.")
+
 parser.add_argument("--name", required=False, default=str(uuid.uuid1()), help="Name of the benchmark (default: uuid1)")
 parser.add_argument("--output", required=False, default=EXPORT_FOLDER, help="Benchmark will be generate in this folder (default POLARIScore export folder).")
 args = parser.parse_args()
 
 if(str.lower(args.density_correction) in ["false","no","n"]):
     args.density_correction = None
+
+if(str.lower(args.figures) in ["yes","y","true"]):
+    args.figures = True
+else:
+    args.figures = False
+if(str.lower(args.figures_cbar) in ["yes","y","true"]):
+    args.figures_cbar = True
+else:
+    args.figures_cbar = False
 
 if args.trainers is None:
     auto_list = []
@@ -91,6 +110,11 @@ if os.path.exists(BENCHMARK_PATH):
     LOGGER.warn(f"Benchmark folder already exists, if you have bugs delete it. ({BENCHMARK_PATH})")
 else:
     os.mkdir(BENCHMARK_PATH)
+EXTRA_FIGURES_PATH=None
+if args.figures:
+    EXTRA_FIGURES_PATH = os.path.join(BENCHMARK_PATH, "independant_figures")
+    if not(os.path.exists(EXTRA_FIGURES_PATH)):
+        os.mkdir(EXTRA_FIGURES_PATH)
 
 F_DCMF_PATH = os.path.join(BENCHMARK_PATH, "dcmfs")
 if not(os.path.exists(F_DCMF_PATH)):
@@ -114,7 +138,6 @@ if not(os.path.exists(F_CORRELATION_PATH)):
 global_axes = {
     "core_residuals": None,
     "core_hists": None,
-    "core_relations": None,
     "density_dists": None,
     "density_dists_wout_ncol": None,
     "core_diffs": None,
@@ -124,8 +147,24 @@ global_axes = {
 
 in_files = []
 
-accuracy_fig = plt.figure()
-accuracy_ax_total = plt.subplot2grid((3, len(trainers)), (0, 0), rowspan=2, colspan=3, fig=accuracy_fig)
+accuracy_fig, accuracy_axes = plt.subplot_mosaic(
+    [["TOTAL" for _ in range(len(trainers))],
+     ["TOTAL" for _ in range(len(trainers))],
+        ["PLOT"+str(i) for i in range(len(trainers))]],
+    figsize=(len(trainers)*3,6), gridspec_kw={"hspace": 0, "wspace": 0}
+)
+accuracy_axes["TOTAL"].tick_params(top=True, labeltop=True, bottom=False, labelbottom=False)
+for i in range(len(trainers)-1):
+    accuracy_axes["PLOT"+str(i+1)].tick_params(left=False, labelleft=False)
+
+if len(args.obs_suffixes) > 0:
+    dcmf_fig, dcmf_axes = plt.subplot_mosaic(
+        [["PLOT"+str(i) for i in range(len(args.obs_suffixes))]],
+        figsize=(len(args.obs_suffixes)*6,4), gridspec_kw={"hspace": 0, "wspace": 0}
+    )
+    for i in range(len(trainers)-1):
+        dcmf_axes["PLOT"+str(i+1)].tick_params(left=False, labelleft=False)
+
 
 if len(REGIONS) > 0:
     region_axes = [[None for _ in range(1+len(args.obs_suffixes if args.obs_suffixes is not None else [])+len(args.extra_suffixes if args.extra_suffixes is not None else []))] for i in range(len(REGIONS))]
@@ -167,26 +206,20 @@ def make_obs_benchmark(suffix,model_name=None,i=0):
         #Figures with all models:
         if ("c_residual" in args.toplot or "all" in args.toplot) and not("-c_residual" in args.toplot):
             _, ax = observation.plot_cores_error(ax=global_axes["core_residuals"], 
-                                                mov_average=0, log_average=50, show_errors=False, show_model_errors=False,
-                                                correction=args.density_correction, color="black", linestyle=linestyles[i], label=m)
+                                                mov_average=0, log_average=50, show_errors=False, show_model_errors=True,
+                                                correction=args.density_correction, color=colors[i], label=m)
             global_axes["core_residuals"] = ax
 
         if ("c_hist" in args.toplot or "all" in args.toplot) and not("-c_hist" in args.toplot):
             _, ax = observation.plot_cores_hist(ax=global_axes["core_hists"], plot_catalog=global_axes["core_hists"] is None, label=m, correction=args.density_correction)
             global_axes["core_hists"] = ax
 
-        if ("c_relation" in args.toplot or "all" in args.toplot) and not("-c_relation" in args.toplot):
-            if global_axes["core_relations"] is None:
-                _, global_axes["core_relations"] = observation.plot_cores_baseline(ax=global_axes["core_relations"], suffixes=[], derived_cores=True, density_correction=args.density_correction, invert_xy=True, x_coldens=True, mov_average=1, fit=True, forced_label=m)
-            _, ax = observation.plot_cores_baseline(ax=global_axes["core_relations"], derived_cores=False, density_correction=args.density_correction, invert_xy=True, x_coldens=True, mov_average=1, fit=True, cmap_color=False, forced_label=m)
-            global_axes["core_relations"] = ax
-
         if ("distribution" in args.toplot or "all" in args.toplot) and not("-distribution" in args.toplot):
             if global_axes["density_dists"] is None:
-                _, ax = observation.plot_density_distributions(ax=global_axes["density_dists"], monte_carlo=0, color="black", label="$N_H$", offset_method="max", what="data")
+                _, ax = observation.plot_pdf(ax=global_axes["density_dists"], monte_carlo=0, color="black", label="$N_H$", offset_method="max", what="data")
                 global_axes["density_dists"] = ax
-            _, ax = observation.plot_density_distributions(ax=global_axes["density_dists"], monte_carlo=MONTE_CARLO, color=colors[i], label=m+r" $<n_H>_m$", offset_method="max")
-            _, ax2 = observation.plot_density_distributions(ax=global_axes["density_dists_wout_ncol"], monte_carlo=MONTE_CARLO, color=colors[i], label=m+r" $<n_H>_m$")
+            _, ax = observation.plot_pdf(ax=global_axes["density_dists"], monte_carlo=MONTE_CARLO, color=colors[i], label=m+r" $<n_H>_m$", offset_method="max")
+            _, ax2 = observation.plot_pdf(ax=global_axes["density_dists_wout_ncol"], monte_carlo=MONTE_CARLO, color=colors[i], label=m+r" $<n_H>_m$")
             global_axes["density_dists"] = ax
             global_axes["density_dists_wout_ncol"] = ax2
             global_axes["density_dists"].set_xlim([5e-1, 8])
@@ -215,15 +248,13 @@ def make_obs_benchmark(suffix,model_name=None,i=0):
             fig, _ = observation.plot_dcmf(method="constant", monte_carlo=MONTE_CARLO, fit=False, bins=15, correction=args.density_correction, color=colors[i])
             fig.savefig(os.path.join(F_DCMF_PATH,"dcmf_"+m+"."+args.format))
             plt.close(fig)
+            _, t_ax = observation.plot_dcmf(ax=dcmf_axes["PLOT"+str(i)] ,method="constant", monte_carlo=MONTE_CARLO, fit=False, bins=15, correction=args.density_correction, color=colors[i])
+            if i != 0:
+                t_ax.set_ylabel("")
 
         if ("c_hist" in args.toplot or "all" in args.toplot) and not("-c_hist" in args.toplot):
             fig, _ = observation.plot_cores_hist(label=m, correction=args.density_correction)
             fig.savefig(os.path.join(F_CORE_HISTS,"core_hist_"+m+"."+args.format))
-            plt.close(fig)
-
-        if ("c_relation" in args.toplot or "all" in args.toplot) and not("-c_relation" in args.toplot):
-            fig, _ = observation.plot_cores_baseline(derived_cores=True, density_correction=args.density_correction, invert_xy=True, x_coldens=True, mov_average=1, fit=True, forced_label=m)
-            fig.savefig(os.path.join(F_CORE_RELATIONS,"core_relations_"+m+"."+args.format))
             plt.close(fig)
 
         if ("voldens" in args.toplot or "all" in args.toplot) and not("-voldens" in args.toplot):
@@ -238,14 +269,23 @@ def make_obs_benchmark(suffix,model_name=None,i=0):
         if ("region" in args.toplot or "all" in args.toplot) and not("-region" in args.toplot):
             for j,r in enumerate(REGIONS):
                 if observation.get_skeleton() is not None:
-                    fig, _ = observation.plot(data=observation.prediction, crop=r, norm=LogNorm(vmin=1e2,vmax=3e5), plot_cores=False, force_vol=True, plot_skeleton=True)
+                    fig, _ = observation.plot(data=observation.prediction, crop=r, norm=LogNorm(vmin=1e2,vmax=3e5), plot_cores=False, force_vol=True, plot_skeleton=True, cmap=FIGURE_CMAP)
                     fig.savefig(os.path.join(F_CLOUDS,f"voldens_skeleton_r{str(j)}_"+m+"."+args.format))
                     plt.close(fig)
                 region_ax = plt.subplot2grid((2, len(region_axes[0])),(0, i+1), fig=region_figs[j], projection=observation.wcs)
                 _, region_ax = observation.plot(data=observation.prediction, crop=r, ax=region_ax, norm=LogNorm(vmin=50,vmax=3e5), plot_cores=False, force_vol=True,
                                 cbar=False, sbar=2., sbar_transparent=False,
-                                show_ax_labels=False, toplabel=m
+                                show_ax_labels=False, toplabel=m, cmap=FIGURE_CMAP
                                 )
+                if args.figures:
+                    fig, _ = observation.plot(data=observation.prediction, crop=r, norm=LogNorm(vmin=50,vmax=3e5), plot_cores=False, force_vol=True,
+                        cbar=args.figures_cbar, sbar=2., sbar_transparent=False,
+                        show_ax_labels=True, toplabel=m
+                        )
+                    fig.tight_layout(pad=0)
+                    fig.savefig(os.path.join(EXTRA_FIGURES_PATH,f"region{str(j)}_"+m+"."+args.format))
+                    plt.close(fig)
+                    
                 region_axes[j][i+1] = region_ax
             
 from POLARIScore.networks import INNTrainer,DDPTrainer,Trainer
@@ -299,7 +339,7 @@ for i,t,m in zip(range(len(trainers)),trainers, args.models):
         validation_batch = [p[1] for p in trainer.get_prediction_batch()]
         for j,img in enumerate(args.ds_imgs):
             img = int(img)
-            validation_pair = validation_set.get(img)
+            validation_pair = validation_set.get(list(validation_set.batch.keys())[img])
             if i == 0:
                 ds_ax_coldens = plt.subplot2grid((2, 1+len(args.models)),(1, 0), fig=ds_figs[j])
                 ds_ax_voldens = plt.subplot2grid((2, 1+len(args.models)),(0, 0), fig=ds_figs[j])
@@ -308,29 +348,37 @@ for i,t,m in zip(range(len(trainers)),trainers, args.models):
 
                 vmin = np.min(validation_pair[validation_set.get_element_index('vdens')])
                 vmax = np.max(validation_pair[validation_set.get_element_index('vdens')])
+                
                 ds_lims.append((vmin, vmax))
 
-                im_coldens = plot_map(validation_pair[validation_set.get_element_index('cdens')], ax=ds_ax_coldens, norm=LogNorm(), cmap="rainbow", show_ax_labels=False)
-                im_voldens = plot_map(validation_pair[validation_set.get_element_index('vdens')], ax=ds_ax_voldens, norm=LogNorm(vmin=vmin,vmax=vmax), cmap="rainbow", show_ax_labels=False, toplabel="Sim")
+                im_coldens = plot_map(validation_pair[validation_set.get_element_index('cdens')],
+                                       ax=ds_ax_coldens, norm=LogNorm(), cmap=FIGURE_CMAP, show_ax_labels=False, toplabel="Sim", clabel=INPUT_LABEL,
+                                       save=os.path.join(EXTRA_FIGURES_PATH,f"ds{str(j)}_sim_cdens."+args.format) if args.figures else None)
+                im_voldens = plot_map(validation_pair[validation_set.get_element_index('vdens')],
+                                       ax=ds_ax_voldens, norm=LogNorm(vmin=vmin,vmax=vmax), cmap=FIGURE_CMAP, show_ax_labels=False, toplabel="Sim", clabel=TARGET_LABEL,
+                                       save=os.path.join(EXTRA_FIGURES_PATH,f"ds{str(j)}_sim_vdens."+args.format) if args.figures else None)
                 
                 ds_figs[j].colorbar(im_coldens,ax=[ds_ax_coldens],orientation="vertical",
-                    location="left",fraction=0.03, pad=0.02, label=r"$N_H(cm^{-2})$"
+                    location="left",fraction=0.03, pad=0.02, label=INPUT_LABEL
                 )
+
             vmin, vmax = ds_lims[j]
 
             ds_ax = plt.subplot2grid((2, 1+len(args.models)),(0, i+1), fig=ds_figs[j])
-            im = plot_map(validation_batch[img], ax=ds_ax, cmap="rainbow", norm=LogNorm(vmin=vmin,vmax=vmax), show_ax_labels=False, toplabel=m)
+            im = plot_map(validation_batch[img], ax=ds_ax, cmap=FIGURE_CMAP, norm=LogNorm(vmin=vmin,vmax=vmax), show_ax_labels=False, toplabel=m,
+                          clabel=TARGET_LABEL, save=os.path.join(EXTRA_FIGURES_PATH,f"ds{str(j)}_"+m+"_vdens."+args.format) if args.figures else None)
 
 
             ds_ax_error = plt.subplot2grid((2, 1+len(args.models)),(1, i+1), fig=ds_figs[j])
             im_error = plot_map(np.clip(np.log10(validation_batch[img])-np.log10(validation_pair[validation_set.get_element_index('vdens')]),-.5,.5)
-                                ,ax=ds_ax_error, cmap="coolwarm", norm=CenteredNorm(), show_ax_labels=False, toplabel=m+"-sim")
+                                ,ax=ds_ax_error, cmap="coolwarm", norm=CenteredNorm(), show_ax_labels=False, toplabel=m+"-sim",
+                                clabel=r"clipped diff in log10", save=os.path.join(EXTRA_FIGURES_PATH,f"ds{str(j)}_"+m+"_error."+args.format) if args.figures else None)
             ds_axes_error[j][i] = ds_ax_error
             ds_axes[j][i] = ds_ax
 
             if i == len(args.models)-1:
                 ds_figs[j].colorbar(im,ax=[ds_ax],orientation="vertical",
-                    location="right",fraction=0.03, pad=0.02, label=r"$<n_H>_m(cm^{-3})$"
+                    location="right",fraction=0.03, pad=0.02, label=TARGET_LABEL
                 )
                 ds_figs[j].colorbar(im_error,ax=[ds_ax_error],orientation="vertical",
                     location="right",fraction=0.03, pad=0.02, label=r"clipped diff in log10"
@@ -340,9 +388,8 @@ for i,t,m in zip(range(len(trainers)),trainers, args.models):
 
 
         if ("accuracy" in args.toplot or "all" in args.toplot) and not("-accuracy" in args.toplot):
-            Trainer.plot_accuracy([trainer], ax=accuracy_ax_total, linestyle=linestyles[i], color=colors[i], xlabel="")
-            acc_ax = plt.subplot2grid((3, len(trainers)), (2, i), rowspan=1, colspan=1, fig=accuracy_fig)
-            Trainer.plot_accuracy([trainer], ax=acc_ax, bins=[0,2.3,4,7], use_linestyles=True, color=colors[i], legend=False, xlabel="Error allowed (in log10)" if i == int(len(trainers)/2) else "", ylabel="Accuracy" if i==0 else "")
+            Trainer.plot_accuracy([trainer], ax=accuracy_axes["TOTAL"], linestyle=linestyles[i], color=colors[i], xlabel="", marker="o")
+            Trainer.plot_accuracy([trainer], ax=accuracy_axes["PLOT"+str(i)], bins=[0,2.3,4,7], use_linestyles=True, color=colors[i], legend=False, xlabel=r"Error allowed $\sigma$ (log10)" if i == int(len(trainers)/2) else "", ylabel="Accuracy" if i==0 else "")
 
         in_files.append({
             "model_name": m,
@@ -358,7 +405,7 @@ for i,t,m in zip(range(len(trainers)),trainers, args.models):
     del trainer
 
 for i in range(len(args.ds_imgs)):
-    plot_rect_bg(ds_figs[i], axes=ds_axes_error[i], color="tab:orange", text="NN Errors")
+    plot_rect_bg(ds_figs[i], axes=ds_axes_error[i], color="tab:orange", text="Erros: "+r"log$_{10}$$\left( \frac{<n_{H,nn}>_m}{<n_{H,sim}>_m} \right)$")
     plot_rect_bg(ds_figs[i], axes=ds_axes_sim[i], color="tab:green", text="Simulation")
     plot_rect_bg(ds_figs[i], axes=ds_axes[i], color="tab:blue", text="Predictions by NNs")
     ds_figs[i].savefig(os.path.join(BENCHMARK_PATH,f"ds_{str(args.ds_imgs[i])}."+args.format))
@@ -368,15 +415,25 @@ for i in range(len(args.ds_imgs)):
 if observation is not None:
     if args.extra_suffixes is not None:
         for i,s in enumerate(args.extra_suffixes):
-            make_obs_benchmark(suffix=s, i=len(trainers)+i)        
+            make_obs_benchmark(suffix=s, i=len(trainers)+i)
+
+    if ("c_relation" in args.toplot or "all" in args.toplot) and not("-c_relation" in args.toplot):
+        fig, _ = observation.plot_cores_density_relation(suffixes=["_"+s for s in args.obs_suffixes], fit=True, derived_cores=True, colors=colors)
+        fig.savefig(os.path.join(BENCHMARK_PATH,"core_relations."+args.format))
+        plt.close(fig)
 
     if ("region" in args.toplot or "all" in args.toplot) and not("-region" in args.toplot):
         if len(REGIONS) > 0:
             for i,r in enumerate(REGIONS):
                 region_ax = plt.subplot2grid((2, len(region_axes[0])),(0, 0), fig=region_figs[i], projection=observation.wcs)
                 _, region_ax = observation.plot(data=observation.data, crop=r, ax=region_ax, norm=LogNorm(vmin=1e21,vmax=None), plot_cores=False, force_col=True, cbar=False, sbar=2., sbar_transparent=False,
-                                show_ax_labels=False, toplabel="$N_H$"
-                                )
+                                show_ax_labels=False, toplabel="$N_H$", cmap=FIGURE_CMAP)
+                if args.figures:
+                    f_add , _ = observation.plot(data=observation.data, crop=r, norm=LogNorm(vmin=1e21,vmax=None), plot_cores=False, force_col=True, cbar=args.figures_cbar, sbar=2., sbar_transparent=False,
+                                show_ax_labels=True, toplabel="$N_H$", cmap=FIGURE_CMAP)
+                    f_add.tight_layout(pad=0)
+                    f_add.savefig(os.path.join(EXTRA_FIGURES_PATH,f"region{str(i)}_cdens."+args.format))
+                    plt.close(f_add)
                 region_axes[i][0] = region_ax
 
                 if(len(args.models) == 3):
@@ -390,6 +447,13 @@ if observation is not None:
                     observation.plot(data=rgb,
                                     crop=r, ax=rgb_ax, plot_cores=False, force_col=True, cbar=False, sbar=2., sbar_transparent=False,
                                     show_ax_labels=False, toplabel="$RGB$")
+                    if args.figures:
+                        f_add, _ = observation.plot(data=rgb,
+                                    crop=r, plot_cores=False, force_col=True, cbar=args.figures_cbar, sbar=2., sbar_transparent=False,
+                                    show_ax_labels=True, toplabel="$RGB$")
+                        f_add.tight_layout(pad=0)
+                        f_add.savefig(os.path.join(EXTRA_FIGURES_PATH,f"region{str(i)}_rgb."+args.format))
+                        plt.close(f_add)
 
                 _length = len(args.models)
                 sub_axes = []
@@ -400,16 +464,23 @@ if observation is not None:
                     observation.plot(np.clip(np.log10(np.nan_to_num(predictions[idx2], nan=1.))-np.log10(np.nan_to_num(predictions[idx1], nan=1.)),-.5,.5), ax=ax, crop=r,
                                     cmap="coolwarm", norm=CenteredNorm(), plot_cores=False, show_ax_labels=False, cbar=False, sbar=2., sbar_transparent=False, cores_color="purple",
                                     toplabel=f"{args.models[idx2]}-{args.models[idx1]}")
+                    if args.figures:
+                        f_add, ax_add = observation.plot(np.clip(np.log10(np.nan_to_num(predictions[idx2], nan=1.))-np.log10(np.nan_to_num(predictions[idx1], nan=1.)),-.5,.5), ax=None, crop=r,
+                            cmap="coolwarm", norm=CenteredNorm(), plot_cores=False, show_ax_labels=True, cbar=args.figures_cbar, sbar=2., sbar_transparent=False, cores_color="purple",
+                            toplabel=f"{args.models[idx2]}-{args.models[idx1]}")
+                        f_add.tight_layout(pad=0)
+                        f_add.savefig(os.path.join(EXTRA_FIGURES_PATH,f"region{str(i)}_{str(j)}."+args.format))
+                        plt.close(f_add)
                     sub_axes.append(ax)
 
                 region_figs[i].colorbar(region_axes[i][0].images[0],ax=[region_axes[i][0]],orientation="vertical",location="left",fraction=0.03, pad=0.02, label=r"$N_H(cm^{-2})$")
                 region_figs[i].colorbar(region_axes[i][1].images[0],ax=region_axes[i][1:][-1],orientation="vertical",location="right",fraction=0.03,pad=0.02, label=r"$<n_H>_m(cm^{-3})$")
                 region_figs[i].colorbar(sub_axes[0].images[0],ax=sub_axes[-1],orientation="vertical",location="right",fraction=0.03,pad=0.02, label=r"clipped diff in log10")
 
-                plot_rect_bg(region_figs[i], axes=sub_axes, color="tab:orange", text="Differences between NN")
+                plot_rect_bg(region_figs[i], axes=sub_axes, color="tab:orange", text="Differences between NNs: "+ r"log$_{10}$$\left( \frac{<n_{H,nn1}>_m}{<n_{H,nn2}>_m} \right)$")
                 plot_rect_bg(region_figs[i],
                              axes=region_axes[i][1:(len(region_axes[i])-len(args.extra_suffixes))] if args.extra_suffixes is not None else region_axes[i][1:(len(region_axes[i]))]
-                             , color="tab:blue", text="Predictions by NN")
+                             , color="tab:blue", text="Predictions: "+ r"$<n_H>_m$")
 
                 region_figs[i].savefig(os.path.join(BENCHMARK_PATH,f"region_{str(i)}."+args.format))
 
@@ -432,6 +503,10 @@ if observation is not None:
 if ("accuracy" in args.toplot or "all" in args.toplot) and not("-accuracy" in args.toplot):
     accuracy_fig.savefig(os.path.join(BENCHMARK_PATH,"accuracy."+args.format))
     plt.close(accuracy_fig)
+
+if ("dcmf" in args.toplot or "all" in args.toplot) and not("-dcmf" in args.toplot):
+    dcmf_fig.savefig(os.path.join(BENCHMARK_PATH,"dcmfs."+args.format))
+    plt.close(dcmf_fig)
 
 if ("residual" in args.toplot or "all" in args.toplot) and not ("-residual" in args.toplot):
     fig, _ = Trainer.plot_models_residuals_extended(trainers=full_trainers, colors=colors)

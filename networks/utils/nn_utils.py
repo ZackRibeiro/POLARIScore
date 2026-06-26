@@ -84,11 +84,11 @@ def compute_batch_accuracy(batch:List[Tuple[np.ndarray,np.ndarray]], sigma:float
         ]
     return (np.nanmean(acc), np.nanstd(acc))
 
-def find_error_for_batch_accuracy(batch, accuracy=0.8, epsilon=0.01):
+def find_error_for_batch_accuracy(batch, accuracy=0.8, epsilon=0.01, sigma1=1.):
     acc = epsilon+1.
     ite = 0
     sigma0 = 0.
-    sigma1 = 1.
+    sigma1 = sigma1
     acc0 = compute_batch_accuracy(batch, sigma=sigma0)[0]-accuracy
     while abs(acc) > epsilon and ite < 100:
         ite += 1

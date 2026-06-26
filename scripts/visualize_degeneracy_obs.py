@@ -16,7 +16,7 @@ OBS_NAME = "OrionB"
 MODEL_NAME = "DDPM"
 SAMPLES_NAME = "pdf_orionb_ddpm_16"
 PREDICTION_NAME = "ddpm_16"
-METRICS = ["variance", "entropy", "peaks"]
+METRICS = ["variance", "entropy"]
 from astropy.coordinates import Angle
 REGIONS = [
     [Angle("5h50m").deg, Angle("5h45").deg, Angle("-0d19m").deg, Angle("0d53m").deg],[Angle("5h48m").deg, Angle("5h39m").deg, Angle("-3d10m").deg, Angle("-0d58m").deg]
@@ -100,6 +100,7 @@ def _plot_curve(x,y,ax=None, label=None, color=None, linestyle=None, log_average
 cores = obs.get_cores()
 
 colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+axes_metrics = []
 for j,m in enumerate(args.metrics):
 
     axes_metric = []
@@ -138,7 +139,19 @@ for j,m in enumerate(args.metrics):
                       contour=np.log10(np.clip(region_x_data, np.nanpercentile(region_x_data, 5), np.nanpercentile(region_x_data, 95))),
                         cmap="viridis", contour_sigma=3,
             contour_levels=3, norm=Normalize(vmin=np.nanpercentile(region_degeneracy, 2),vmax=np.nanpercentile(region_degeneracy, 98)))
-    
-    plot_rect_bg(fig, axes_metric, colors[j], text=m.upper(), show_bbox=True, text_offset=0.04)
+
+    axes_metrics.append(axes_metric)
+
+fig.tight_layout()
+for j,m in enumerate(args.metrics):
+    text_label = m.upper() + ": "
+    print(m.lower())
+    if "variance" in m.lower():
+        print("test")
+        text_label += r"$\sum\left((p_{\mathrm{\langle n\rangle,pred}}(\log_{10}\langle n\rangle-\sum p_{\mathrm{\langle n\rangle,pred}}\times\langle n\rangle))/\sigma_{\mathrm{nn,val}}\right)^2$"
+    elif "entropy" in m.lower():
+        text_label += r"$H_{x,y}$ = exp($-\sum p_{\mathrm{<n>,pred}}(x,y)\mathrm{log}(p_{\mathrm{<n>,pred}}(x,y))$)"
+
+    plot_rect_bg(fig, axes_metrics[j], colors[j], text=text_label, show_bbox=True, text_offset=0.04)
 
 plt.show()

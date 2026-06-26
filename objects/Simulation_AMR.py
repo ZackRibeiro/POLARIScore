@@ -89,7 +89,7 @@ def fill_zeros_idw(arr, k=8, power=2):
     return out
 
 
-def amr_leaf_to_datacube(points,sizes,values,bbox,res,dtype=np.float64,log:bool=True, volume_weighted:bool=True, out_file:Optional[str]="cached_amr_cube.mem"):
+def amr_leaf_to_datacube(points,sizes,values,bbox,res,dtype=np.float64,log:bool=True, out_file:Optional[str]="cached_amr_cube.mem"):
     if isinstance(res, int):
         res = (res, res, res)
 
@@ -174,47 +174,7 @@ def amr_leaf_to_datacube(points,sizes,values,bbox,res,dtype=np.float64,log:bool=
         iy1 = max(0, min(ny, iy1))
         iz1 = max(0, min(nz, iz1))
 
-        #if val < 0:
-        #    LOGGER.warn(f"Negative value: {val}")        
-        
-        """
-        amr_vol = h**3
-
-        for ix in range(ix0, ix1):
-            vx0 = xmin + ix * dx
-            vx1 = vx0 + dx
-
-            ox = max(0.0, min(x1, vx1) - max(x0, vx0))
-            if ox == 0:
-                continue
-
-            for iy in range(iy0, iy1):
-                vy0 = ymin + iy * dy #cm
-                vy1 = vy0 + dy #cm
-
-                oy = max(0.0, min(y1, vy1) - max(y0, vy0))
-                if oy == 0:
-                    continue
-
-                for iz in range(iz0, iz1):
-                    vz0 = zmin + iz * dz
-                    vz1 = vz0 + dz
-
-                    oz = max(0.0, min(z1, vz1) - max(z0, vz0))
-                    if oz == 0:
-                        continue
-
-                    overlap_vol = ox * oy * oz
-
-                    if volume_weighted:
-                        cube[ix, iy, iz] += val * overlap_vol / amr_vol #maybe this is the inverse of this
-                    else:
-                        cube[ix, iy, iz] += val
-        """
         cube[ix0:ix1, iy0:iy1, iz0:iz1] = val / (h**3)
-
-    if volume_weighted and False:
-        cube /= (dx*dy*dz)
 
     return cube
 
@@ -390,16 +350,17 @@ class Simulation_AMR(Simulation_DC):
                 bbox[i] = [*self.bbox[i]]
         bbox = np.array(bbox)
         bbox *= PC_TO_CM
-        t = [*bbox[1]]
-        bbox[1] = bbox[0]
-        bbox[0] = t
+        #t = [*bbox[1]]
+        #bbox[1] = bbox[0]
+        #bbox[0] = t
 
         if isinstance(res, (int, float)):
             res = [int(res),int(res),int(res)]
         else:
-            tr = res[1]
-            res[1] = res[0]
-            res[0] = tr
+            pass
+            #tr = res[1]
+            #res[1] = res[0]
+            #res[0] = tr
 
         if (key[0] == "p" and key[1] == "_"):
             query_key = "p_"+key[2:].upper()
@@ -418,8 +379,8 @@ class Simulation_AMR(Simulation_DC):
                 return self.data[key.upper()]
 
         assert query_key in self.data, LOGGER.error(f"Can't construct datacube from {query_key} -> No such key loaded in data.")
-        bbox[0,:] = self.global_size*PC_TO_CM-bbox[0,:]
-        bbox[0,:] = np.sort(bbox[0,:])
+        #bbox[0,:] = self.global_size*PC_TO_CM-bbox[0,:]
+        #bbox[0,:] = np.sort(bbox[0,:])
 
         if key in self.data and not(force) and self.data[key].shape[0] == res[0]:
             return self.data[key]
@@ -477,12 +438,12 @@ class Simulation_AMR(Simulation_DC):
             grid_axis = 0
 
         is_a_cube=False
-        if len(bbox == 4):
+        if len(bbox) == 4:
             bbox=[[bbox[0], bbox[1]], [bbox[2], bbox[3]]]
             bbox.insert(insert_axis, None)
             rres = [res,res]
             rres.insert(insert_axis, 1024)
-        elif len(bbox == 6):
+        elif len(bbox) == 6:
             bbox=[[bbox[0], bbox[1]], [bbox[2], bbox[3]], [bbox[4], bbox[5]]]
             rres = [res,res,res]
             is_a_cube = True
@@ -493,11 +454,13 @@ class Simulation_AMR(Simulation_DC):
                                 filling_method=amr_leaf_to_datacube, smoothing=0., force=True, log=False, out_file=None)
         
         if not(is_a_cube):
-            data = np.moveaxis(data, grid_axis, -1)
+            print(data.shape)
+            data = np.moveaxis(data, insert_axis, -1)
+            print(data.shape)
         data += 1e-1
         return data
     
-    def _get_core_volume(self, core:Dict, use_datacube:bool=False, res=256, amr_method=amr_leaf_to_datacube, box_size=4.):
+    def _get_core_volume(self, core:Dict, use_datacube:bool=False, res=256, amr_method=amr_leaf_to_datacube, box_size=8.):
         if use_datacube:
             return super()._get_core_volume(core)
         

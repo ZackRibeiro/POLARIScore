@@ -447,7 +447,7 @@ class DDPTrainer(ProbabilisticTrainer):
         #Truth map
         target_tensor, _ = self.norms["vdens"][0](self.get_prediction_batch(sample_number=1)[-1])
         axes["True"].imshow(target_tensor, label="Truth", norm=Normalize(vmin=-0.5, vmax=0.5), cmap=cmap)
-        axes["True"].set_xlabel("Truth / Simulation")
+        axes["True"].set_xlabel("Truth (Simulation)")
         #plot_map(target_tensor, ax=axes["True"], cmap=cmap, norm=Normalize(vmin=-0.5, vmax=0.5), toplabel="Truth")
 
         #Trajectory
